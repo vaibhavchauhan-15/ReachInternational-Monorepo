@@ -16,13 +16,15 @@
 --   9. Complete fresh personnel state returned in a single JSONB payload (eliminating follow-up queries)
 --   10. Advisory locks preventing race conditions and duplicate submissions under concurrency
 
--- Ensure prerequisite immutable range functions exist
+-- Ensure prerequisite immutable range functions exist with NULL guards
 CREATE OR REPLACE FUNCTION public.shift_to_ranges(p_start TIME, p_end TIME)
 RETURNS int4range[]
 LANGUAGE sql
 IMMUTABLE
 AS $$
   SELECT CASE
+    WHEN p_start IS NULL OR p_end IS NULL THEN
+      ARRAY[]::int4range[]
     WHEN p_end > p_start THEN
       ARRAY[
         int4range(
@@ -51,12 +53,17 @@ RETURNS BOOLEAN
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM unnest(public.shift_to_ranges(p_start1, p_end1)) r1,
-         unnest(public.shift_to_ranges(p_start2, p_end2)) r2
-    WHERE r1 && r2
-  );
+  SELECT CASE
+    WHEN p_start1 IS NULL OR p_end1 IS NULL OR p_start2 IS NULL OR p_end2 IS NULL THEN
+      FALSE
+    ELSE
+      EXISTS (
+        SELECT 1
+        FROM unnest(public.shift_to_ranges(p_start1, p_end1)) r1,
+             unnest(public.shift_to_ranges(p_start2, p_end2)) r2
+        WHERE r1 && r2
+      )
+  END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.do_shifts_overlap(TIME, TIME, TIME, TIME) TO authenticated, service_role, anon;
@@ -82,6 +89,7 @@ DECLARE
   v_op_elem            JSONB;
   v_op_id              UUID;
   v_shift_code         TEXT;
+  v_shift_code_norm    TEXT;
   v_shift_start        TIME;
   v_shift_end          TIME;
   v_notes              TEXT;
@@ -90,6 +98,7 @@ DECLARE
   v_has_log_today      BOOLEAN;
   v_close_date         DATE;
   v_new_assignment_id  UUID;
+  v_ended_today_id     UUID;
   v_unique_op_ids      UUID[] := '{}';
   v_final_sups         UUID[];
   v_supervisors_json   JSONB  := '[]'::jsonb;
@@ -247,18 +256,19 @@ BEGIN
         );
       END IF;
 
-      v_shift_code := UPPER(TRIM(COALESCE(v_op_elem->>'shiftCode', v_op_elem->>'shift_code', 'S1')));
+      v_shift_code := TRIM(COALESCE(v_op_elem->>'shiftCode', v_op_elem->>'shift_code', 'S1'));
+      v_shift_code_norm := UPPER(TRIM(REGEXP_REPLACE(v_shift_code, '^shift\s*', '', 'i')));
       v_notes := COALESCE(v_op_elem->>'notes', 'Assigned via personnel dialog');
 
       -- Check duplicate shift codes on this machine
-      IF v_shift_code = ANY(v_seen_shifts) THEN
+      IF v_shift_code_norm = ANY(v_seen_shifts) THEN
         RETURN jsonb_build_object(
           'success', false,
           'code', 'DUPLICATE_SHIFT_CODE',
           'error', 'Shift ' || v_shift_code || ' is assigned multiple times. Each operator assignment on this machine must have a distinct shift.'
         );
       END IF;
-      v_seen_shifts := array_append(v_seen_shifts, v_shift_code);
+      v_seen_shifts := array_append(v_seen_shifts, v_shift_code_norm);
 
       -- Resolve authoritative client shift timings
       v_shift_start := NULL;
@@ -271,9 +281,8 @@ BEGIN
         WHERE client_id = v_machine.client_id
           AND is_active = true
           AND (
-            lower(trim(code)) = lower(trim(v_shift_code))
-            OR lower(trim(name)) = lower(trim(v_shift_code))
-            OR lower(trim(code)) = lower(trim(regexp_replace(v_shift_code, '^shift\s*', '', 'i')))
+            UPPER(TRIM(REGEXP_REPLACE(code, '^shift\s*', '', 'i'))) = v_shift_code_norm
+            OR UPPER(TRIM(REGEXP_REPLACE(name, '^shift\s*', '', 'i'))) = v_shift_code_norm
           )
         ORDER BY display_order ASC
         LIMIT 1;
@@ -294,13 +303,13 @@ BEGIN
           v_shift_end   := (v_op_elem->>'shift_end_time')::time;
         ELSE
           -- Fallback default shifts
-          IF v_shift_code IN ('S1', 'A') THEN
+          IF v_shift_code_norm IN ('S1', 'A') THEN
             v_shift_start := '06:00:00'::time;
             v_shift_end   := '14:00:00'::time;
-          ELSIF v_shift_code IN ('S2', 'B') THEN
+          ELSIF v_shift_code_norm IN ('S2', 'B') THEN
             v_shift_start := '14:00:00'::time;
             v_shift_end   := '22:00:00'::time;
-          ELSIF v_shift_code IN ('S3', 'C') THEN
+          ELSIF v_shift_code_norm IN ('S3', 'C') THEN
             v_shift_start := '22:00:00'::time;
             v_shift_end   := '06:00:00'::time;
           ELSE
@@ -322,6 +331,7 @@ BEGIN
         'operatorId', v_op_id,
         'operatorName', v_user_record.full_name,
         'shiftCode', v_shift_code,
+        'shiftCodeNorm', v_shift_code_norm,
         'shiftStart', v_shift_start,
         'shiftEnd', v_shift_end,
         'notes', v_notes
@@ -399,177 +409,212 @@ BEGIN
           RETURN jsonb_build_object(
             'success', false,
             'code', 'SHIFT_OVERLAP_CONFLICT',
-            'error', (v_op_elem->>'operatorName') || '''s Shift ' || v_shift_code || ' (' || to_char(v_shift_start, 'HH12:MI AM') || '–' || to_char(v_shift_end, 'HH12:MI AM') || ') collides with active shift on ' || COALESCE(v_other_assignment.other_machine_code, 'another machine') || ' (' || to_char(v_other_assignment.shift_start_time, 'HH12:MI AM') || '–' || to_char(v_other_assignment.shift_end_time, 'HH12:MI AM') || ').'
+            'error', format('%s''s Shift %s (%s–%s) collides with active shift on %s (%s–%s). Please relieve them from %s before assigning them to this machine.',
+              v_op_elem->>'operatorName',
+              v_shift_code,
+              to_char(v_shift_start, 'HH12:MI AM'),
+              to_char(v_shift_end, 'HH12:MI AM'),
+              COALESCE(v_other_assignment.other_machine_code, 'another machine'),
+              to_char(v_other_assignment.shift_start_time, 'HH12:MI AM'),
+              to_char(v_other_assignment.shift_end_time, 'HH12:MI AM'),
+              COALESCE(v_other_assignment.other_machine_code, 'the other unit')
+            )
           );
         END IF;
       END LOOP;
     END LOOP;
 
-  -- 7. RECONCILIATION: Relieve removed assignments
-  FOR v_curr IN (
-    SELECT id, operator_id, shift_code, valid_from
-    FROM public.operator_machine_assignments
-    WHERE machine_id = p_machine_id
-      AND is_active = true
-      AND valid_from <= v_today_ist
-      AND (valid_to IS NULL OR valid_to >= v_today_ist)
-  )
-  LOOP
-    -- Check if present in new payload
-    IF NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(v_normalized_ops) elem
-      WHERE (elem->>'operatorId')::uuid = v_curr.operator_id
-        AND UPPER(TRIM(elem->>'shiftCode')) = UPPER(TRIM(v_curr.shift_code))
-    ) THEN
-      -- Determine close date: yesterday if valid_from < today and no log today
-      SELECT EXISTS (
-        SELECT 1 FROM public.machine_hour_logs
-        WHERE assignment_id = v_curr.id AND log_date = v_today_ist
-      ) INTO v_has_log_today;
+    -- 7. RECONCILIATION: Relieve removed assignments
+    FOR v_curr IN (
+      SELECT id, operator_id, shift_code, valid_from
+      FROM public.operator_machine_assignments
+      WHERE machine_id = p_machine_id
+        AND is_active = true
+        AND valid_from <= v_today_ist
+        AND (valid_to IS NULL OR valid_to >= v_today_ist)
+    )
+    LOOP
+      -- Check if present in new payload (using normalized shift codes)
+      IF NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(v_normalized_ops) elem
+        WHERE (elem->>'operatorId')::uuid = v_curr.operator_id
+          AND UPPER(TRIM(REGEXP_REPLACE(elem->>'shiftCode', '^shift\s*', '', 'i'))) = UPPER(TRIM(REGEXP_REPLACE(v_curr.shift_code, '^shift\s*', '', 'i')))
+      ) THEN
+        -- Determine close date: yesterday if valid_from < today and no log today
+        SELECT EXISTS (
+          SELECT 1 FROM public.machine_hour_logs
+          WHERE assignment_id = v_curr.id AND log_date = v_today_ist
+        ) INTO v_has_log_today;
 
-      IF v_curr.valid_from < v_today_ist AND NOT v_has_log_today THEN
-        v_close_date := v_yesterday_ist;
-      ELSE
-        v_close_date := v_today_ist;
-      END IF;
+        IF v_curr.valid_from < v_today_ist AND NOT v_has_log_today THEN
+          v_close_date := v_yesterday_ist;
+        ELSE
+          v_close_date := v_today_ist;
+        END IF;
 
-      UPDATE public.operator_machine_assignments
-      SET valid_to = v_close_date,
-          is_active = false,
-          ended_at = NOW(),
-          ended_by = v_caller_id,
-          end_reason = 'removed',
-          updated_at = NOW()
-      WHERE id = v_curr.id;
-
-      INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, metadata, details, created_at)
-      VALUES (
-        v_caller_id,
-        'assignment.range_ended',
-        'operator_machine_assignment',
-        v_curr.id,
-        jsonb_build_object(
-          'assignmentId', v_curr.id,
-          'operatorId', v_curr.operator_id,
-          'machineId', p_machine_id,
-          'shiftCode', v_curr.shift_code,
-          'validFrom', v_curr.valid_from,
-          'validTo', v_close_date,
-          'endReason', 'removed'
-        ),
-        jsonb_build_object(
-          'assignmentId', v_curr.id,
-          'operatorId', v_curr.operator_id,
-          'machineId', p_machine_id,
-          'shiftCode', v_curr.shift_code,
-          'validFrom', v_curr.valid_from,
-          'validTo', v_close_date,
-          'endReason', 'removed'
-        ),
-        NOW()
-      );
-    END IF;
-  END LOOP;
-
-  -- 8. RECONCILIATION: Activate or update target assignments
-  FOR v_op_elem IN (SELECT * FROM jsonb_array_elements(v_normalized_ops))
-  LOOP
-    v_op_id := (v_op_elem->>'operatorId')::uuid;
-    v_shift_code := v_op_elem->>'shiftCode';
-    v_shift_start := (v_op_elem->>'shiftStart')::time;
-    v_shift_end := (v_op_elem->>'shiftEnd')::time;
-    v_notes := v_op_elem->>'notes';
-
-    IF NOT (v_op_id = ANY(v_unique_op_ids)) THEN
-      v_unique_op_ids := array_append(v_unique_op_ids, v_op_id);
-    END IF;
-
-    -- Check if active assignment with same operator & shift already exists on this machine covering today
-    SELECT id, shift_start_time, shift_end_time
-    INTO v_existing_ass
-    FROM public.operator_machine_assignments
-    WHERE machine_id = p_machine_id
-      AND operator_id = v_op_id
-      AND UPPER(TRIM(shift_code)) = UPPER(TRIM(v_shift_code))
-      AND is_active = true
-      AND valid_from <= v_today_ist
-      AND (valid_to IS NULL OR valid_to >= v_today_ist)
-    LIMIT 1;
-
-    IF FOUND THEN
-      -- Update timings if changed
-      IF v_existing_ass.shift_start_time <> v_shift_start
-         OR v_existing_ass.shift_end_time <> v_shift_end THEN
         UPDATE public.operator_machine_assignments
-        SET shift_start_time = v_shift_start,
-            shift_end_time = v_shift_end,
+        SET valid_to = v_close_date,
+            is_active = false,
+            ended_at = NOW(),
+            ended_by = v_caller_id,
+            end_reason = 'removed',
             updated_at = NOW()
-        WHERE id = v_existing_ass.id;
+        WHERE id = v_curr.id;
+
+        INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, metadata, details, created_at)
+        VALUES (
+          v_caller_id,
+          'assignment.range_ended',
+          'operator_machine_assignment',
+          v_curr.id,
+          jsonb_build_object(
+            'assignmentId', v_curr.id,
+            'operatorId', v_curr.operator_id,
+            'machineId', p_machine_id,
+            'shiftCode', v_curr.shift_code,
+            'validFrom', v_curr.valid_from,
+            'validTo', v_close_date,
+            'endReason', 'removed'
+          ),
+          jsonb_build_object(
+            'assignmentId', v_curr.id,
+            'operatorId', v_curr.operator_id,
+            'machineId', p_machine_id,
+            'shiftCode', v_curr.shift_code,
+            'validFrom', v_curr.valid_from,
+            'validTo', v_close_date,
+            'endReason', 'removed'
+          ),
+          NOW()
+        );
       END IF;
-    ELSE
-      -- Insert fresh assignment range starting today
-      INSERT INTO public.operator_machine_assignments (
-        machine_id,
-        operator_id,
-        shift_code,
-        shift_start_time,
-        shift_end_time,
-        is_active,
-        assigned_by,
-        assigned_at,
-        valid_from,
-        valid_to,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        p_machine_id,
-        v_op_id,
-        v_shift_code,
-        v_shift_start,
-        v_shift_end,
-        true,
-        v_caller_id,
-        NOW(),
-        v_today_ist,
-        NULL,
-        NOW(),
-        NOW()
-      )
-      RETURNING id INTO v_new_assignment_id;
+    END LOOP;
 
-      INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, metadata, details, created_at)
-      VALUES (
-        v_caller_id,
-        'assignment.created',
-        'operator_machine_assignment',
-        v_new_assignment_id,
-        jsonb_build_object(
-          'assignmentId', v_new_assignment_id,
-          'operatorId', v_op_id,
-          'machineId', p_machine_id,
-          'shiftCode', v_shift_code,
-          'validFrom', v_today_ist,
-          'notes', v_notes
-        ),
-        jsonb_build_object(
-          'assignmentId', v_new_assignment_id,
-          'operatorId', v_op_id,
-          'machineId', p_machine_id,
-          'shiftCode', v_shift_code,
-          'validFrom', v_today_ist
-        ),
-        NOW()
-      );
-    END IF;
-  END LOOP;
+    -- 8. RECONCILIATION: Activate or update target assignments
+    FOR v_op_elem IN (SELECT * FROM jsonb_array_elements(v_normalized_ops))
+    LOOP
+      v_op_id := (v_op_elem->>'operatorId')::uuid;
+      v_shift_code := v_op_elem->>'shiftCode';
+      v_shift_code_norm := v_op_elem->>'shiftCodeNorm';
+      v_shift_start := (v_op_elem->>'shiftStart')::time;
+      v_shift_end := (v_op_elem->>'shiftEnd')::time;
+      v_notes := v_op_elem->>'notes';
 
-  -- 9. Update machine record with synchronized operator IDs
-  UPDATE public.machines
-  SET operator_ids = v_unique_op_ids,
-      current_operator_id = v_unique_op_ids[1],
-      updated_at = NOW()
-  WHERE id = p_machine_id;
+      IF NOT (v_op_id = ANY(v_unique_op_ids)) THEN
+        v_unique_op_ids := array_append(v_unique_op_ids, v_op_id);
+      END IF;
+
+      -- Check if active assignment with same operator & shift already exists on this machine covering today
+      SELECT id, shift_start_time, shift_end_time
+      INTO v_existing_ass
+      FROM public.operator_machine_assignments
+      WHERE machine_id = p_machine_id
+        AND operator_id = v_op_id
+        AND UPPER(TRIM(REGEXP_REPLACE(shift_code, '^shift\s*', '', 'i'))) = v_shift_code_norm
+        AND is_active = true
+        AND valid_from <= v_today_ist
+        AND (valid_to IS NULL OR valid_to >= v_today_ist)
+      LIMIT 1;
+
+      IF v_existing_ass.id IS NOT NULL THEN
+        -- Update timings if changed
+        IF v_existing_ass.shift_start_time <> v_shift_start
+           OR v_existing_ass.shift_end_time <> v_shift_end THEN
+          UPDATE public.operator_machine_assignments
+          SET shift_start_time = v_shift_start,
+              shift_end_time = v_shift_end,
+              updated_at = NOW()
+          WHERE id = v_existing_ass.id;
+        END IF;
+      ELSE
+        -- Check if an assignment for this operator & shift on this machine was closed TODAY or YESTERDAY
+        -- that can be safely reactivated rather than creating an overlapping duplicate
+        SELECT id INTO v_ended_today_id
+        FROM public.operator_machine_assignments
+        WHERE machine_id = p_machine_id
+          AND operator_id = v_op_id
+          AND UPPER(TRIM(REGEXP_REPLACE(shift_code, '^shift\s*', '', 'i'))) = v_shift_code_norm
+          AND is_active = false
+          AND (valid_to = v_today_ist OR valid_to = v_yesterday_ist)
+        ORDER BY updated_at DESC
+        LIMIT 1;
+
+        IF v_ended_today_id IS NOT NULL THEN
+          UPDATE public.operator_machine_assignments
+          SET is_active = true,
+              valid_to = NULL,
+              ended_at = NULL,
+              ended_by = NULL,
+              end_reason = NULL,
+              shift_start_time = v_shift_start,
+              shift_end_time = v_shift_end,
+              updated_at = NOW()
+          WHERE id = v_ended_today_id;
+        ELSE
+          -- Insert fresh assignment range starting today
+          INSERT INTO public.operator_machine_assignments (
+            machine_id,
+            operator_id,
+            shift_code,
+            shift_start_time,
+            shift_end_time,
+            is_active,
+            assigned_by,
+            assigned_at,
+            valid_from,
+            valid_to,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            p_machine_id,
+            v_op_id,
+            v_shift_code,
+            v_shift_start,
+            v_shift_end,
+            true,
+            v_caller_id,
+            NOW(),
+            v_today_ist,
+            NULL,
+            NOW(),
+            NOW()
+          )
+          RETURNING id INTO v_new_assignment_id;
+
+          INSERT INTO public.audit_logs (user_id, action, entity_type, entity_id, metadata, details, created_at)
+          VALUES (
+            v_caller_id,
+            'assignment.created',
+            'operator_machine_assignment',
+            v_new_assignment_id,
+            jsonb_build_object(
+              'assignmentId', v_new_assignment_id,
+              'operatorId', v_op_id,
+              'machineId', p_machine_id,
+              'shiftCode', v_shift_code,
+              'validFrom', v_today_ist,
+              'notes', v_notes
+            ),
+            jsonb_build_object(
+              'assignmentId', v_new_assignment_id,
+              'operatorId', v_op_id,
+              'machineId', p_machine_id,
+              'shiftCode', v_shift_code,
+              'validFrom', v_today_ist
+            ),
+            NOW()
+          );
+        END IF;
+      END IF;
+    END LOOP;
+
+    -- 9. Update machine record with synchronized operator IDs
+    UPDATE public.machines
+    SET operator_ids = v_unique_op_ids,
+        current_operator_id = v_unique_op_ids[1],
+        updated_at = NOW()
+    WHERE id = p_machine_id;
   ELSE
     v_unique_op_ids := v_machine.operator_ids;
   END IF;
@@ -635,7 +680,7 @@ EXCEPTION
     RETURN jsonb_build_object(
       'success', false,
       'code', 'SHIFT_OVERLAP_CONFLICT',
-      'error', 'Shift window overlapping error: The selected shift timings overlap with an existing active assignment.'
+      'error', 'Shift window overlapping error: The selected shift timings overlap with an existing active assignment for this operator or machine.'
     );
   WHEN OTHERS THEN
     RETURN jsonb_build_object(

@@ -21200,3 +21200,20 @@ On user registration, 3 separate "Document Initial Verification" approval reques
    - `node scripts/run-all-tests.mjs`: 27/27 suites passed.
    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
 
+
+## [2026-11-19] - Approvals Page UI Standardization & Document Action Buttons Overlap Fix
+- **Document Action Buttons**: Converted document Approve/Reject buttons in `AttachedDocCard` (`ApprovalRow.tsx`) to icon-only (`<X size={13} strokeWidth={2.5} />` and `<Check size={13} strokeWidth={2.5} />`), completely eliminating button wrapping and overlap in narrow card containers.
+- **Card UI Identical Standardization Across All Types**: Unified every approval request type (`registration`, `document_verify`, `document_replace`, `profile_change`, `account_deletion`, `shift_conflict`, custom) into the exact same UI card structure, container background, header layout, identity metadata row, content box, and bottom action bar.
+- **Cross-Platform Zero Drift**: Updated both `ApprovalRow.tsx` (Web) and `MobileApprovalCard.tsx` (Mobile) with 100% parity across colors, hierarchy, touch targets, and typography.
+- **Verification**: `pnpm typecheck` passed (0 errors across 7 packages), `check-typography.mjs` passed (0 violations), `test-touch-haptics.mjs` passed (100%), and 29/29 monorepo test suites passed.
+
+## [2026-11-20] - Operator Shift Assignment Overlap & Machine Roster Resilience Remediation
+- **Migration 222 Rollback Neutralization**: Neutralized `222_rollback_operations_roster_performance_optimization.sql` to a safe no-op forward migration so sequential migration runners do not drop `save_machine_roster_atomic`.
+- **Migration 223 Added (`223_fix_operator_shift_assignment_overlap_and_roster.sql`)**:
+  - Scoped exclusion constraint `oma_no_active_operator_shift_overlap` strictly to `WHERE (is_active = true)` and normalized shift codes with `regexp_replace(shift_code, '^shift\s*', '', 'i')`, preventing historical/ended assignments and today's transition boundaries from falsely triggering `23P01`.
+  - Added NULL guards to `shift_to_ranges(TIME, TIME)` (returns `ARRAY[]::int4range[]`) and `do_shifts_overlap` (returns `FALSE`), preventing unbounded 24h range pollution.
+  - Recreated and hardened `public.save_machine_roster_atomic()` RPC with same-day assignment re-activation (`v_ended_today_id`), shift normalization, and PostgREST schema cache reload.
+  - Cleaned and resynced `operator_shift_ranges` table.
+  - Hardened `assign_operator_machine_atomic()` with in-place updates, same-day re-activation, and consistent normalization.
+- **Web Server Action Hardening (`apps/web/app/actions/machines.ts`)**: Enhanced `executeResilientPersonnelUpdateFallback` with same-day assignment re-activation and explicit error handling.
+- **Verification**: Verified against Dev DB (`vlmxciuogczumumrwyot`), `pnpm typecheck` passed (7/7 packages clean, 0 errors), `node apps/mobile/run-tests.mjs` passed (357/357 tests), `node scripts/check-typography.mjs` clean, `node scripts/test-touch-haptics.mjs` clean, `pnpm --filter @reachinternational/permissions test` passed (25/25 tests).

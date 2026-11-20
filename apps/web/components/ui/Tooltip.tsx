@@ -4,9 +4,40 @@ import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Info } from "lucide-react";
 
-export const TooltipProvider = TooltipPrimitive.Provider;
+const TooltipProviderContext = React.createContext<boolean>(false);
 
-export const Tooltip = TooltipPrimitive.Root;
+export function TooltipProvider({
+  children,
+  delayDuration = 200,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Provider>) {
+  return (
+    <TooltipPrimitive.Provider delayDuration={delayDuration} {...props}>
+      <TooltipProviderContext.Provider value={true}>
+        {children}
+      </TooltipProviderContext.Provider>
+    </TooltipPrimitive.Provider>
+  );
+}
+TooltipProvider.displayName = TooltipPrimitive.Provider.displayName || "TooltipProvider";
+
+export function Tooltip({
+  children,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Root>) {
+  const hasProvider = React.useContext(TooltipProviderContext);
+
+  if (!hasProvider) {
+    return (
+      <TooltipPrimitive.Provider delayDuration={200}>
+        <TooltipPrimitive.Root {...props}>{children}</TooltipPrimitive.Root>
+      </TooltipPrimitive.Provider>
+    );
+  }
+
+  return <TooltipPrimitive.Root {...props}>{children}</TooltipPrimitive.Root>;
+}
+Tooltip.displayName = TooltipPrimitive.Root.displayName || "Tooltip";
 
 export const TooltipTrigger = TooltipPrimitive.Trigger;
 

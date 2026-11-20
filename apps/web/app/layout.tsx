@@ -86,6 +86,7 @@ export const metadata: Metadata = {
 
 import dynamic from "next/dynamic";
 import { ToastProvider } from "@/components/ui/Toast";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 import { WebOfflineBanner } from "@/components/ui/WebOfflineBanner";
 import { QueryClientProvider } from "@/components/providers/QueryClientProvider";
 
@@ -131,12 +132,14 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryClientProvider>
             <ToastProvider>
-              <WebOfflineBanner />
-              {children}
-              <AgentationWrapper />
-              <CookieConsent />
-              <GoogleAnalytics />
-              {process.env.VERCEL ? <Analytics /> : null}
+              <TooltipProvider delayDuration={200}>
+                <WebOfflineBanner />
+                {children}
+                <AgentationWrapper />
+                <CookieConsent />
+                <GoogleAnalytics />
+                {process.env.VERCEL ? <Analytics /> : null}
+              </TooltipProvider>
             </ToastProvider>
           </QueryClientProvider>
         </ThemeProvider>

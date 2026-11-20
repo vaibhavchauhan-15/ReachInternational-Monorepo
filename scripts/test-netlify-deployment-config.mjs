@@ -18,16 +18,24 @@ function pass(desc) {
   console.log(`  \x1b[32m✔\x1b[0m [Check ${checkCount}] ${desc}`);
 }
 
-// 1. Verify root netlify.toml
+// 1. Verify root netlify.toml and Node 22 version specification (.nvmrc & .node-version)
 const rootNetlifyPath = path.join(ROOT_DIR, 'netlify.toml');
 assert(fs.existsSync(rootNetlifyPath), 'root netlify.toml must exist');
 const rootNetlifyContent = fs.readFileSync(rootNetlifyPath, 'utf8');
 assert(rootNetlifyContent.includes('publish = "apps/web/.next"'), 'root netlify.toml must point to apps/web/.next');
 assert(rootNetlifyContent.includes('base = "."'), 'root netlify.toml must have base = "."');
 assert(rootNetlifyContent.includes('command = "node scripts/build-dispatcher.js"'), 'root netlify.toml must invoke build dispatcher');
-assert(rootNetlifyContent.includes('NODE_VERSION = "20"'), 'root netlify.toml must declare Node.js 20');
+assert(rootNetlifyContent.includes('NODE_VERSION = "22"'), 'root netlify.toml must declare Node.js 22 (required for pnpm v11 & node:sqlite)');
 assert(rootNetlifyContent.includes('PNPM_VERSION = "11.21.0"'), 'root netlify.toml must declare PNPM 11.21.0');
-pass('Root netlify.toml exists with valid base, publish, command, and runtime versions.');
+
+const nvmrcPath = path.join(ROOT_DIR, '.nvmrc');
+assert(fs.existsSync(nvmrcPath), '.nvmrc must exist at root');
+assert(fs.readFileSync(nvmrcPath, 'utf8').trim() === '22', '.nvmrc must specify 22');
+
+const nodeVersionPath = path.join(ROOT_DIR, '.node-version');
+assert(fs.existsSync(nodeVersionPath), '.node-version must exist at root');
+assert(fs.readFileSync(nodeVersionPath, 'utf8').trim() === '22', '.node-version must specify 22');
+pass('Root netlify.toml, .nvmrc, and .node-version enforce Node.js 22 LTS for pnpm v11 & node:sqlite.');
 
 // 2. Verify apps/web/netlify.toml (Subdirectory fallback)
 const webNetlifyPath = path.join(ROOT_DIR, 'apps/web/netlify.toml');

@@ -1923,6 +1923,8 @@ async function executeResilientPersonnelUpdateFallback(
 
           if (!rpcErr && rpcRes && (rpcRes as any).success !== false) {
             assigned = true;
+          } else if (rpcRes && (rpcRes as any).success === false) {
+            return { error: (rpcRes as any).error || "Failed to update operator assignment." };
           } else if (rpcErr && !rpcErr.message?.includes("not find") && rpcErr.code !== "PGRST202") {
             const msg = rpcErr.message || "";
             if (msg.includes("MAX_OPERATOR_SHIFTS_REACHED") || rpcErr.code === "P0002") {
@@ -1961,45 +1963,77 @@ async function executeResilientPersonnelUpdateFallback(
               })
               .eq("id", existingAss.id);
           } else {
-            const { data: newAss, error: insertErr } = await supabaseAdmin
+            // Check if there is an assignment ended TODAY on this machine that can be safely re-activated
+            const { data: endedTodayAss } = await supabaseAdmin
               .from("operator_machine_assignments")
-              .insert({
-                machine_id: machineId,
-                operator_id: a.operatorId,
-                shift_code: a.shiftCode,
-                shift_start_time: a.shiftStart,
-                shift_end_time: a.shiftEnd,
-                is_active: true,
-                assigned_by: caller.id,
-                assigned_at: new Date().toISOString(),
-                valid_from: todayIst,
-                valid_to: null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              })
               .select("id")
-              .single();
+              .eq("machine_id", machineId)
+              .eq("operator_id", a.operatorId)
+              .eq("shift_code", a.shiftCode)
+              .eq("is_active", false)
+              .or(`valid_to.eq.${todayIst},valid_to.eq.${yesterdayIst}`)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-            if (insertErr) {
-              console.error("[executeResilientPersonnelUpdateFallback] Direct insert failed:", insertErr);
-              return { error: insertErr.message || "Failed to create operator assignment." };
-            }
+            if (endedTodayAss) {
+              await supabaseAdmin
+                .from("operator_machine_assignments")
+                .update({
+                  is_active: true,
+                  valid_to: null,
+                  ended_at: null,
+                  ended_by: null,
+                  end_reason: null,
+                  shift_start_time: a.shiftStart,
+                  shift_end_time: a.shiftEnd,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", endedTodayAss.id);
+            } else {
+              const { data: newAss, error: insertErr } = await supabaseAdmin
+                .from("operator_machine_assignments")
+                .insert({
+                  machine_id: machineId,
+                  operator_id: a.operatorId,
+                  shift_code: a.shiftCode,
+                  shift_start_time: a.shiftStart,
+                  shift_end_time: a.shiftEnd,
+                  is_active: true,
+                  assigned_by: caller.id,
+                  assigned_at: new Date().toISOString(),
+                  valid_from: todayIst,
+                  valid_to: null,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .select("id")
+                .single();
 
-            if (newAss) {
-              await logAudit({
-                user_id: caller.id,
-                action: "assignment.created",
-                entity_type: "operator_machine_assignment",
-                entity_id: newAss.id,
-                metadata: {
-                  assignmentId: newAss.id,
-                  machineId,
-                  operatorId: a.operatorId,
-                  shiftCode: a.shiftCode,
-                  validFrom: todayIst,
-                  notes: a.notes,
-                },
-              });
+              if (insertErr) {
+                if (insertErr.code === "23P01") {
+                  return { error: "Shift window overlapping: The selected shift timings overlap with an existing active assignment for this operator or machinery unit." };
+                }
+                console.error("[executeResilientPersonnelUpdateFallback] Direct insert failed:", insertErr);
+                return { error: insertErr.message || "Failed to create operator assignment." };
+              }
+
+              if (newAss) {
+                await logAudit({
+                  user_id: caller.id,
+                  action: "assignment.created",
+                  entity_type: "operator_machine_assignment",
+                  entity_id: newAss.id,
+                  metadata: {
+                    assignmentId: newAss.id,
+                    machineId,
+                    operatorId: a.operatorId,
+                    shiftCode: a.shiftCode,
+                    validFrom: todayIst,
+                    notes: a.notes,
+                  },
+                });
+              }
             }
           }
         }

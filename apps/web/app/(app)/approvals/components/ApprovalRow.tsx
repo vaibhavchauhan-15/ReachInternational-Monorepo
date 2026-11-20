@@ -108,6 +108,7 @@ interface AttachedDocCardProps {
   ) => void;
   onVerifyDocument?: (docId: string, userId?: string) => Promise<void> | void;
   onRejectDocumentPrompt?: (doc: AttachedDocumentSummary, userId?: string) => void;
+  isCurrentActive?: boolean;
 }
 
 function AttachedDocCard({
@@ -120,6 +121,7 @@ function AttachedDocCard({
   onOpenDocumentLightbox,
   onVerifyDocument,
   onRejectDocumentPrompt,
+  isCurrentActive = false,
 }: AttachedDocCardProps) {
   const isDocPending = doc.verification_status === "pending";
   const isDocVerified = doc.verification_status === "verified";
@@ -151,8 +153,15 @@ function AttachedDocCard({
         {doc.label}
       </span>
 
-      {/* Either show Approve/Reject action buttons OR show the verified/rejected status badge */}
-      {canDecide && isDocPending && onVerifyDocument && onRejectDocumentPrompt ? (
+      {/* Either show icon-only Approve/Reject action buttons OR show the verified/rejected/active status badge */}
+      {isCurrentActive ? (
+        <div className="w-full pt-1 border-t border-[var(--color-border)]/60 flex justify-center">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+            <CheckCircle2 size={11} className="shrink-0" />
+            <span>Active</span>
+          </span>
+        </div>
+      ) : canDecide && isDocPending && onVerifyDocument && onRejectDocumentPrompt ? (
         <div className="flex items-center gap-1.5 w-full pt-1 border-t border-[var(--color-border)]/60 justify-center">
           <button
             type="button"
@@ -161,11 +170,11 @@ function AttachedDocCard({
               onRejectDocumentPrompt(doc, userId);
             }}
             disabled={isActionLoading || isRejectLoading}
-            className="flex-1 h-7 rounded-md bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/60 flex items-center justify-center gap-1 text-[11px] font-semibold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 h-7 rounded-md bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             title={`Reject ${doc.label}`}
+            aria-label={`Reject ${doc.label}`}
           >
-            <X size={12} strokeWidth={2.5} className="shrink-0" />
-            <span className="truncate">Reject</span>
+            <X size={13} strokeWidth={2.5} className="shrink-0" />
           </button>
           <button
             type="button"
@@ -174,11 +183,11 @@ function AttachedDocCard({
               onVerifyDocument(doc.id, userId);
             }}
             disabled={isActionLoading || isRejectLoading}
-            className="flex-1 h-7 rounded-md bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center gap-1 text-[11px] font-semibold transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 h-7 rounded-md bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white flex items-center justify-center transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             title={`Approve ${doc.label}`}
+            aria-label={`Approve ${doc.label}`}
           >
-            <Check size={12} strokeWidth={2.5} className="shrink-0" />
-            <span className="truncate">Approve</span>
+            <Check size={13} strokeWidth={2.5} className="shrink-0" />
           </button>
         </div>
       ) : (
@@ -354,14 +363,14 @@ export const ApprovalRow = React.memo(function ApprovalRow({
         </div>
       </div>
 
-      {/* ── Type-Specific Content Section (Feedback 6: Handle all approval types) ── */}
+      {/* ── Type-Specific Content Section: All Approval Cards Use Identical Container & Layout ── */}
 
       {/* 1. Document Initial Verification (Single Document or Multi-Document Bound Card) */}
       {isDocVerify && (
         documents.length > 1 ? (
           <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
             <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
                 <FileCheck2 size={12} className="text-sky-500" />
                 Documents for Verification ({documents.length})
               </span>
@@ -385,147 +394,132 @@ export const ApprovalRow = React.memo(function ApprovalRow({
             </div>
           </div>
         ) : singleDocTarget ? (
-          <div className="p-2.5 sm:p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() =>
-                  onOpenDocumentLightbox?.(
-                    singleDocTarget,
-                    fullName,
-                    payload.user_id || item.requested_by || item.subject_id
-                  )
-                }
-                className="relative w-16 sm:w-20 h-12 sm:h-14 rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-canvas)] cursor-pointer group shrink-0 shadow-2xs"
-                title={`Click to inspect ${singleDocTarget.label}`}
-              >
-                <DocumentThumbnail
-                  src={singleDocTarget.thumb_signed_url || singleDocTarget.signed_url}
-                  alt={singleDocTarget.label}
-                />
-                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                  <Eye size={14} />
-                </div>
-              </button>
+          <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+            <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
+                <FileCheck2 size={12} className="text-sky-500" />
+                Documents for Verification ({documents.length || 1})
+              </span>
+            </div>
 
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs sm:text-sm font-semibold text-[var(--color-ink)] truncate">
-                    {singleDocTarget.label}
-                  </span>
-                  {singleDocTarget.verification_status === "verified" ? (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      <CheckCircle2 size={10} />
-                      Verified
-                    </span>
-                  ) : singleDocTarget.verification_status === "rejected" ? (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
-                      <XCircle size={10} />
-                      Rejected
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <Clock size={10} />
-                      Pending
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-[var(--color-ink-muted)] truncate mt-0.5">
-                  Statutory KYC document pending review
-                </p>
-              </div>
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+              <AttachedDocCard
+                key={singleDocTarget.id}
+                doc={singleDocTarget}
+                fullName={fullName}
+                userId={payload.user_id || item.requested_by || item.subject_id}
+                canDecide={canDecide}
+                isActionLoading={isActionLoading}
+                isRejectLoading={isRejectLoading}
+                onOpenDocumentLightbox={onOpenDocumentLightbox}
+                onVerifyDocument={onVerifyDocument}
+                onRejectDocumentPrompt={onRejectDocumentPrompt}
+              />
             </div>
           </div>
         ) : (
-          <div className="p-2.5 sm:p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-border)] flex items-center justify-center text-sky-500 shrink-0">
-              <FileCheck2 size={18} />
+          <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+            <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
+                <FileCheck2 size={12} className="text-sky-500" />
+                Document Verification
+              </span>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs sm:text-sm font-semibold text-[var(--color-ink)] truncate">
-                {item.subject_label || (payload.document_type_code || "").replace(/_/g, " ") || "Document Verification"}
-              </div>
-              <p className="text-[11px] text-[var(--color-ink-muted)] truncate">
-                Statutory KYC document pending administrative review
-              </p>
+            <div className="p-2.5 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)]/40 flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
+              <FileText size={13} className="text-[var(--color-mute)] shrink-0" />
+              <span>Statutory KYC document pending administrative review</span>
             </div>
           </div>
         )
       )}
 
-      {/* 2. Document Replacement (Only Document Approval) */}
+      {/* 2. Document Replacement */}
       {isDocReplace && (
-        <div className="p-2.5 sm:p-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            {singleDocTarget ? (
+        <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] text-[var(--color-ink-muted)] font-medium">
+            <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
+              <RefreshCw size={12} className="text-sky-500" />
+              Replacement: {(payload.document_type_code || singleDocTarget?.label || "Document").replace(/_/g, " ")}
+            </span>
+            {activeDocBeingReplaced && (
               <button
                 type="button"
                 onClick={() =>
                   onOpenDocumentLightbox?.(
-                    singleDocTarget,
-                    fullName,
+                    activeDocBeingReplaced,
+                    `${fullName} (Current Active)`,
                     payload.user_id || item.requested_by || item.subject_id
                   )
                 }
-                className="relative w-16 sm:w-20 h-12 sm:h-14 rounded-lg overflow-hidden border border-indigo-500/30 bg-[var(--color-canvas)] cursor-pointer group shrink-0 shadow-2xs"
-                title="Click to inspect replacement"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+                title="Click to view current active approved document"
               >
-                <DocumentThumbnail
-                  src={singleDocTarget.thumb_signed_url || singleDocTarget.signed_url}
-                  alt="Replacement document"
-                  fallbackIcon={<RefreshCw size={16} className="text-indigo-500" />}
-                />
-                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                  <Eye size={14} />
-                </div>
+                <Eye size={12} />
+                <span>View Current Active</span>
               </button>
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                <RefreshCw size={18} />
-              </div>
             )}
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs sm:text-sm font-semibold text-[var(--color-ink)] truncate">
-                  Replacing: {(payload.document_type_code || singleDocTarget?.label || "Document").replace(/_/g, " ")}
-                </span>
-                <span className="inline-block px-1.5 py-0.2 rounded-full text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                  Staged
-                </span>
-              </div>
-              <p className="text-[11px] text-[var(--color-ink-muted)] truncate mt-0.5">
-                Overwrites statutory file upon admin approval
-              </p>
-            </div>
           </div>
 
-          {activeDocBeingReplaced && (
-            <button
-              type="button"
-              onClick={() =>
-                onOpenDocumentLightbox?.(
-                  activeDocBeingReplaced,
-                  `${fullName} (Current Active)`,
-                  payload.user_id || item.requested_by || item.subject_id
-                )
-              }
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-2.5 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 cursor-pointer shrink-0 transition-colors hover:bg-indigo-500/15"
-              title="Click to view current active approved document"
-            >
-              <Eye size={12} />
-              <span>View Current Active</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+            {replacementDocTarget ? (
+              <AttachedDocCard
+                key={replacementDocTarget.id}
+                doc={{
+                  ...replacementDocTarget,
+                  label: replacementDocTarget.label?.includes("(Replacement)")
+                    ? replacementDocTarget.label
+                    : `${replacementDocTarget.label || (payload.document_type_code || "Document").replace(/_/g, " ")} (Replacement)`,
+                }}
+                fullName={fullName}
+                userId={payload.user_id || item.requested_by || item.subject_id}
+                canDecide={canDecide}
+                isActionLoading={isActionLoading}
+                isRejectLoading={isRejectLoading}
+                onOpenDocumentLightbox={onOpenDocumentLightbox}
+                onVerifyDocument={onVerifyDocument}
+                onRejectDocumentPrompt={onRejectDocumentPrompt}
+              />
+            ) : singleDocTarget ? (
+              <AttachedDocCard
+                key={singleDocTarget.id}
+                doc={singleDocTarget}
+                fullName={fullName}
+                userId={payload.user_id || item.requested_by || item.subject_id}
+                canDecide={canDecide}
+                isActionLoading={isActionLoading}
+                isRejectLoading={isRejectLoading}
+                onOpenDocumentLightbox={onOpenDocumentLightbox}
+                onVerifyDocument={onVerifyDocument}
+                onRejectDocumentPrompt={onRejectDocumentPrompt}
+              />
+            ) : null}
+
+            {activeDocBeingReplaced && (
+              <AttachedDocCard
+                key={activeDocBeingReplaced.id}
+                doc={{
+                  ...activeDocBeingReplaced,
+                  label: `${activeDocBeingReplaced.label || (payload.document_type_code || "Document").replace(/_/g, " ")} (Active)`,
+                }}
+                fullName={fullName}
+                userId={payload.user_id || item.requested_by || item.subject_id}
+                canDecide={false}
+                isActionLoading={false}
+                isRejectLoading={false}
+                onOpenDocumentLightbox={onOpenDocumentLightbox}
+                isCurrentActive={true}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {/* 3. Profile Change (No Document Approval) */}
+      {/* 3. Profile Change */}
       {isProfileChange && (
-        <div className="p-2.5 sm:p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+        <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--color-ink)]">
             <span className="flex items-center gap-1.5">
-              <UserCog size={13} className="text-sky-500" />
+              <UserCog size={12} className="text-sky-500" />
               Profile Modifications Requested
             </span>
             {payload.reason && (
@@ -575,30 +569,30 @@ export const ApprovalRow = React.memo(function ApprovalRow({
         </div>
       )}
 
-      {/* 4. Account Deletion Request (No Document Approval) */}
+      {/* 4. Account Deletion Request */}
       {isAccountDeletion && (
-        <div className="p-2.5 sm:p-3 rounded-xl border border-red-500/25 bg-red-500/5 space-y-1">
-          <div className="flex items-center justify-between text-xs font-semibold text-red-600 dark:text-red-400">
+        <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-semibold text-[var(--color-ink)]">
             <span className="flex items-center gap-1.5">
-              <ShieldAlert size={14} className="shrink-0" />
+              <ShieldAlert size={13} className="text-red-500 shrink-0" />
               Account Deletion Request
             </span>
             <span className="text-[9px] font-semibold uppercase px-1.5 py-0.2 rounded-full bg-red-500/10 text-red-600 border border-red-500/20">
               7-day grace
             </span>
           </div>
-          <p className="text-xs text-[var(--color-ink)]">
+          <div className="p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-border)] text-xs text-[var(--color-ink)]">
             Reason: &ldquo;{payload.reason || item.summary || "Permanent deletion requested by user"}&rdquo;
-          </p>
+          </div>
         </div>
       )}
 
-      {/* 5. Shift Conflict (No Document Approval) */}
+      {/* 5. Shift Conflict */}
       {isShiftConflict && (
-        <div className="p-2.5 sm:p-3 rounded-xl border border-amber-500/25 bg-amber-500/5 space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-semibold text-amber-600 dark:text-amber-400">
+        <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-semibold text-[var(--color-ink)]">
             <span className="flex items-center gap-1.5">
-              <AlertTriangle size={14} className="shrink-0" />
+              <AlertTriangle size={13} className="text-amber-500 shrink-0" />
               Shift Conflict / Override
             </span>
           </div>
@@ -624,12 +618,12 @@ export const ApprovalRow = React.memo(function ApprovalRow({
         </div>
       )}
 
-      {/* 6. Registration KYC Documents (Multiple Attached Documents or Empty Placeholder) */}
+      {/* 6. Registration KYC Documents */}
       {isRegistration && (
         documents.length > 0 ? (
           <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
             <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
                 <FileText size={12} className="text-sky-500" />
                 Attached Documents ({documents.length})
               </span>
@@ -653,9 +647,17 @@ export const ApprovalRow = React.memo(function ApprovalRow({
             </div>
           </div>
         ) : (
-          <div className="p-2.5 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)]/40 flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
-            <FileText size={13} className="text-[var(--color-mute)] shrink-0" />
-            <span>No KYC statutory documents attached yet</span>
+          <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+            <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
+                <FileText size={12} className="text-sky-500" />
+                Attached Documents
+              </span>
+            </div>
+            <div className="p-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-canvas)]/40 flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
+              <FileText size={13} className="text-[var(--color-mute)] shrink-0" />
+              <span>No KYC statutory documents attached yet</span>
+            </div>
           </div>
         )
       )}
@@ -665,7 +667,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
         documents.length > 0 ? (
           <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
             <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
                 <FileText size={12} className="text-sky-500" />
                 Attached Documents ({documents.length})
               </span>
@@ -688,8 +690,16 @@ export const ApprovalRow = React.memo(function ApprovalRow({
             </div>
           </div>
         ) : item.summary ? (
-          <div className="p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/50 text-xs text-[var(--color-ink-muted)]">
-            {item.summary}
+          <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5">
+            <div className="flex items-center text-[11px] text-[var(--color-ink-muted)] font-medium">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--color-ink)]">
+                <FileText size={12} className="text-sky-500" />
+                Request Details
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-border)] text-xs text-[var(--color-ink-muted)]">
+              {item.summary}
+            </div>
           </div>
         ) : null
       )}

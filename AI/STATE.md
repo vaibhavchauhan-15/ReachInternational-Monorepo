@@ -1,10 +1,78 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Production Bug Fix & Schema Cache Resilience — save_machine_roster_atomic Missing in Production DB
-- **Status**: 🟢 Clean / Verified & Production Ready (Root cause isolated, zero-downtime resilient fallback implemented across Web and Mobile, Migration 221 hardened with self-contained functions, 0 typecheck errors, all 29 monorepo test suites passing)
+- **Current Task**: Deep Analysis & Remediation of Operator Shift Assignment Overlap Bug in Production DB
+- **Status**: 🟢 Clean / Verified & Production Ready (Root cause isolated: migration 222 rollback drop + flawed oma_no_active_operator_shift_overlap exclusion constraint + NULL range hazard; Migration 223 deployed & verified on Dev DB; Migration 222 neutralized to safe no-op; Web resilient fallback hardened; 0 typecheck errors; 357/357 mobile tests passing)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
-- **Last Verified**: 2026-11-19
+- **Last Verified**: 2026-11-20
+- **Operator Shift Assignment Overlap Issue Resolution**:
+  - `User Report`: Running migrations 221 and 222 in production caused operator assignment to throw: "Shift window overlapping error: The selected shift timings overlap with an existing active assignment."
+  - `Root Causes Identified & Resolved`:
+    1. **Migration 222 Rollback Pitfall**: File `222_rollback_operations_roster_performance_optimization.sql` was numbered as a sequential forward migration. Executing it in production dropped `save_machine_roster_atomic`.
+    2. **Fallback Execution to `assign_operator_machine_atomic`**: Missing RPC caused fallback to `assign_operator_machine_atomic` which triggered `SQLSTATE '23P01'` on `INSERT INTO public.operator_machine_assignments`.
+    3. **Flawed Exclusion Constraint `oma_no_active_operator_shift_overlap` (from migration 184)**: The constraint used `WHERE (is_active = true OR valid_to IS NULL OR valid_from < valid_to)` with closed `[]` daterange bounds. Inactive/ended assignments remained in the GiST index, and assignments ending today collided with new assignments starting today on the boundary date.
+    4. **NULL Range Hazard**: `shift_to_ranges(NULL, NULL)` returned unbounded 24h ranges, triggering `23P01` on `operator_shift_ranges`.
+  - `Fixes Applied`:
+    1. Created `supabase/migrations/223_fix_operator_shift_assignment_overlap_and_roster.sql`:
+       - Scopes `oma_no_active_operator_shift_overlap` strictly to `WHERE (is_active = true)` with normalized shift codes.
+       - Added NULL guards to `shift_to_ranges` and `do_shifts_overlap`.
+       - Cleaned and resynced `operator_shift_ranges` table.
+       - Recreated and hardened `save_machine_roster_atomic` with same-day assignment re-activation (`v_ended_today_id`), shift normalization, and PostgREST schema cache reload.
+       - Hardened `assign_operator_machine_atomic` with identical shift normalization and re-activation resilience.
+    2. Neutralized `222_rollback_operations_roster_performance_optimization.sql` to a safe no-op forward migration.
+    3. Hardened web fallback in `apps/web/app/actions/machines.ts` with same-day ended assignment re-activation and explicit error handling.
+  - `Verification Evidence`:
+    - Dev DB (`vlmxciuogczumumrwyot`): Constraint updated and verified; `save_machine_roster_atomic` deployed and verified.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors).
+    - `node apps/mobile/run-tests.mjs`: 357/357 passed (100%).
+    - `node scripts/check-typography.mjs`: Clean.
+    - `node scripts/test-touch-haptics.mjs`: Clean.
+    - `pnpm --filter @reachinternational/permissions test`: 25/25 passed (100%).
+- **Netlify Deploy Node.js Version Remediation**:
+  - `User Report`: Netlify build failed with `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`. pnpm v11.21.0 requires Node.js v22.13 or higher, but Netlify ran with Node.js v20.20.2.
+  - `Root Cause`: Netlify's build container defaults to Node 20 unless a `.nvmrc` or `.node-version` file instructs `mise` to select Node 22, and `netlify.toml` specified `NODE_VERSION = "20"`. `pnpm@11` utilizes the new native `node:sqlite` module which was introduced in Node.js 22.5.0+.
+  - `Fixes Applied`:
+    1. Created `.nvmrc` at root containing `22`.
+    2. Created `.node-version` at root containing `22`.
+    3. Updated `netlify.toml` `[build.environment]` setting `NODE_VERSION = "22"`.
+    4. Updated `apps/web/netlify.toml` setting `NODE_VERSION = "22"`.
+    5. Updated `scripts/test-netlify-deployment-config.mjs` verifying `.nvmrc`, `.node-version`, and `NODE_VERSION = "22"`.
+  - `Verification Evidence`:
+    - `node scripts/test-netlify-deployment-config.mjs`: 10/10 passed (100%).
+    - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passed (100%).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+- **TooltipProvider Missing Error Resolution**:
+  - `User Request`: "## Error Type: Console Error ## Error Message: `Tooltip` must be used within `TooltipProvider` at ... Next.js version: 16.2.12 (Turbopack)"
+  - `Root Causes Identified & Resolved`:
+    1. **Missing Provider in Root Layout (`apps/web/app/layout.tsx`)**: In commit `df00170`, `<TooltipProvider delayDuration={200}>` was relocated from the root `layout.tsx` to `apps/web/app/(app)/layout.tsx`. As a result, non-`(app)` routes (e.g. marketing pages, login `/login`, signup `/signup`, onboarding `/onboarding`, privacy `/privacy`, terms `/terms`, error/not-found pages) lacked a provider. Any component on those pages using `Tooltip`, `TooltipWrapper`, `ThemeToggle`, `Dialog`, `IconButton`, `ExportButton`, or `RefreshButton` failed on render.
+    2. **Self-Healing Fallback Added (`apps/web/components/ui/Tooltip.tsx`)**: Engineered `TooltipProviderContext`. If a `Tooltip` is ever mounted outside of an active `TooltipProvider` (isolated test, portal, or custom page), it automatically wraps itself with `<TooltipPrimitive.Provider delayDuration={200}>`, guaranteeing it will never throw.
+  - `Verification Evidence`:
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node tests/ui/test-tooltip-provider-resilience.mjs`: 5/5 tests passed.
+    - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passing (100%).
+- **Approvals Page UI Card Standardization & Document Button Fix**:
+  - `User Request`: "in the THE APPROVAL PAGE see the document aprove/reject btn are overlapping each other just use only icon for approve/reject also use same card components for other type of the approval reqest instead of using seprate card for every different type of the approvals also make sure make the identical all the approval ui cards just change the info accoding to the requested approvals cards implement this"
+  - `Root Causes Identified & Resolved`:
+    1. **Overlapping Document Action Buttons Fixed**: In `AttachedDocCard` (`ApprovalRow.tsx`), buttons previously contained both icons and text spans (`<span>Reject</span>`, `<span>Approve</span>`). In narrow card containers (`w-28 sm:w-32`), the text overflowed horizontally and overlapped into the neighboring button. Replaced with clean, centered **icon-only** buttons (`<X size={13} strokeWidth={2.5} />` and `<Check size={13} strokeWidth={2.5} />`) with `flex-1 h-7`, rounded corners, accessible tooltips/aria-labels, soft red hover and emerald filled states, completely eradicating overlap.
+    2. **Unified, Identical Card Structure Across ALL Approval Types**: Previously, each approval type rendered separate, disparate sub-cards with clashing background colors (indigo, red, amber) and mismatched layouts. Standardized every card across `registration`, `document_verify`, `document_replace`, `profile_change`, `account_deletion`, `shift_conflict`, and custom requests into the **EXACT SAME component and layout**:
+       - Identical outer elevated card container, padding, and subtle hover borders.
+       - Identical top header row (Type badge, Status badge, Role badge, High Priority badge, relative timestamp with Clock).
+       - Identical requester identity & context metadata row (Name, Employee ID badge, Email, Phone, Fleet/Machine).
+       - Identical unified content box (`rounded-xl border border-[var(--color-border)] bg-[var(--color-canvas)]/60 space-y-1.5`) featuring standard icon + title header.
+       - Document requests (`registration`, `document_verify`, `document_replace`) render the exact same `AttachedDocCard` carousel with thumbnail and icon-only verify/reject controls. For replacements, both the new replacement and active existing document are presented side by side using the same card pattern.
+       - Non-document requests (`profile_change`, `account_deletion`, `shift_conflict`) render neat, structured neutral chips inside that same container.
+       - Identical bottom action bar with `[Reject]` (outline red) and `[Approve]` (solid emerald) buttons.
+    3. **Web & Native Mobile 100% Zero-Drift Parity**: Replicated the identical structure in `MobileApprovalCard.tsx` (`apps/mobile/components/approvals/MobileApprovalCard.tsx`), ensuring identical visual hierarchy, token usage, touch targets >= 44px, and 0 raw typography property violations.
+  - `Verification Evidence`:
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/check-typography.mjs`: 0 raw typography property violations across `apps/mobile`.
+    - `node scripts/test-touch-haptics.mjs`: 100% compliant.
+    - `node apps/mobile/test/test-unified-approval-engine.mjs`: 53/53 tests passed.
+    - `node tests/approvals/test-approval-engine-exhaustive.mjs`: 44/44 tests passed.
+    - `node tests/approvals/test-admin-only-approvals.mjs`: 20/20 tests passed.
+    - `node tests/approvals/test-native-signup-approvals-and-documents.mjs`: 35/35 tests passed.
+    - `node apps/mobile/run-tests.mjs`: 357/357 verification scenarios passed.
+    - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passing (100%).
 - **Production Schema Cache Missing RPC Bug Fix**:
   - `User Request`: "Could not find the function public.save_machine_roster_atomic(p_activate_machine, p_caller_id, p_machine_id, p_operators, p_supervisor_ids) in the schema cache in the production db when i assing the operator it show this error first read the root cause and fix the bugs"
   - `Root Causes Identified & Resolved`:

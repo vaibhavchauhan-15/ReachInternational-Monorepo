@@ -92,14 +92,30 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
   const isShiftConflict = item.type_key === "shift_conflict";
 
   // Target document resolution for document-specific approval types
-  const singleDocTarget =
-    documents.find(
-      (d) =>
-        d.id === item.subject_id ||
-        d.document_type_code === payload.document_type_code
-    ) ||
-    documents[0] ||
-    null;
+  const replacementDocTarget = isDocReplace
+    ? documents.find((d) => d.id === item.id || d.label?.includes("(Replacement)")) ||
+      documents.find((d) => d.id === item.subject_id) ||
+      documents[0] ||
+      null
+    : null;
+
+  const activeDocBeingReplaced = isDocReplace
+    ? documents.find(
+        (d) =>
+          d !== replacementDocTarget &&
+          d.document_type_code === payload.document_type_code
+      ) || null
+    : null;
+
+  const singleDocTarget = isDocReplace
+    ? replacementDocTarget
+    : documents.find(
+        (d) =>
+          d.id === item.subject_id ||
+          d.document_type_code === payload.document_type_code
+      ) ||
+      documents[0] ||
+      null;
 
   const handleCardPress = () => {
     haptics.select();
@@ -403,100 +419,158 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         ) : singleDocTarget ? (
           <View
             style={[
-              styles.showcaseCard,
+              styles.docsContainer,
               {
                 backgroundColor: colors.canvas,
                 borderColor: colors.hairline,
               },
             ]}
           >
-            <View style={styles.showcaseContent}>
-              <Pressable
-                onPress={() => handleDocThumbPress(singleDocTarget)}
-                style={styles.showcaseThumbContainer}
-                accessibilityRole="button"
-                accessibilityLabel={`Inspect ${singleDocTarget.label}`}
-              >
-                {singleDocTarget.thumb_signed_url || singleDocTarget.signed_url ? (
-                  <Image
-                    source={{
-                      uri: (singleDocTarget.thumb_signed_url || singleDocTarget.signed_url)!,
-                    }}
-                    style={styles.showcaseThumbImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.showcaseThumbFallback}>
-                    <FileText size={20} color={colors.mute} />
-                  </View>
-                )}
-                <View style={styles.showcaseThumbOverlay}>
-                  <Eye size={12} color="#ffffff" />
-                </View>
-              </Pressable>
-
-              <View style={styles.showcaseInfo}>
-                <View style={styles.showcaseLabelRow}>
-                  <Text variant="label" numberOfLines={1} style={{ color: colors.ink }}>
-                    {singleDocTarget.label}
-                  </Text>
-                  <View
-                    style={[
-                      styles.docStatusPill,
-                      {
-                        backgroundColor:
-                          singleDocTarget.verification_status === "verified"
-                            ? "rgba(16, 185, 129, 0.12)"
-                            : singleDocTarget.verification_status === "rejected"
-                            ? "rgba(239, 68, 68, 0.12)"
-                            : "rgba(245, 158, 11, 0.12)",
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="micro"
-                      style={{
-                        color:
-                          singleDocTarget.verification_status === "verified"
-                            ? "#10b981"
-                            : singleDocTarget.verification_status === "rejected"
-                            ? "#ef4444"
-                            : "#d97706",
-                      }}
-                    >
-                      {singleDocTarget.verification_status.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-                <Text variant="caption" style={{ color: colors.mute, marginTop: 2 }}>
-                  Statutory document verification pending review
+            <View style={styles.docsHeader}>
+              <View style={styles.docsHeaderLeft}>
+                <FileCheck2 size={13} color="#0284c7" />
+                <Text variant="label" style={{ color: colors.ink }}>
+                  Documents for Verification ({documents.length || 1})
                 </Text>
               </View>
             </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.docsScroll}
+            >
+              {(() => {
+                const doc = singleDocTarget;
+                const docUrl = doc.thumb_signed_url || doc.signed_url;
+                const isDocPending = doc.verification_status === "pending";
+                const isVerified = doc.verification_status === "verified";
+                const isRejected = doc.verification_status === "rejected";
+
+                return (
+                  <View
+                    key={doc.id}
+                    style={[
+                      styles.docCard,
+                      {
+                        backgroundColor: colors.canvasElevated,
+                        borderColor: colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Pressable
+                      onPress={() => handleDocThumbPress(doc)}
+                      style={styles.docThumbContainer}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${doc.label} document`}
+                    >
+                      {docUrl ? (
+                        <Image
+                          source={{ uri: docUrl }}
+                          style={styles.docThumbImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.docThumbFallback}>
+                          <FileText size={20} color={colors.mute} />
+                        </View>
+                      )}
+                      <View style={styles.docThumbOverlay}>
+                        <Eye size={12} color="#ffffff" />
+                      </View>
+                    </Pressable>
+
+                    <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
+                      {doc.label}
+                    </Text>
+
+                    {canDecide && isDocPending && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
+                      <View
+                        style={[
+                          styles.docActionRow,
+                          { borderTopColor: colors.hairline },
+                        ]}
+                      >
+                        <Pressable
+                          onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
+                          disabled={isActionLoading || isRejectLoading}
+                          style={({ pressed }) => [
+                            styles.docActionBtn,
+                            styles.docRejectBtn,
+                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Reject ${doc.label}`}
+                        >
+                          <X size={15} color="#ef4444" strokeWidth={2.5} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
+                          disabled={isActionLoading || isRejectLoading}
+                          style={({ pressed }) => [
+                            styles.docActionBtn,
+                            styles.docApproveBtn,
+                            { backgroundColor: pressed ? "#059669" : "#10b981" },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Verify ${doc.label}`}
+                        >
+                          <Check size={15} color="#ffffff" strokeWidth={2.5} />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.docStatusPill,
+                          {
+                            backgroundColor: isVerified
+                              ? "rgba(16, 185, 129, 0.12)"
+                              : isRejected
+                              ? "rgba(239, 68, 68, 0.12)"
+                              : "rgba(245, 158, 11, 0.12)",
+                          },
+                        ]}
+                      >
+                        <Text
+                          variant="micro"
+                          style={{
+                            color: isVerified
+                              ? "#10b981"
+                              : isRejected
+                              ? "#ef4444"
+                              : "#d97706",
+                          }}
+                        >
+                          {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
+            </ScrollView>
           </View>
         ) : (
           <View
             style={[
-              styles.showcaseFallback,
+              styles.docsContainer,
               {
                 backgroundColor: colors.canvas,
                 borderColor: colors.hairline,
               },
             ]}
           >
-            <View
-              style={[
-                styles.iconBadgeBox,
-                { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
-              ]}
-            >
-              <FileCheck2 size={18} color="#0284c7" />
+            <View style={styles.docsHeader}>
+              <View style={styles.docsHeaderLeft}>
+                <FileCheck2 size={13} color="#0284c7" />
+                <Text variant="label" style={{ color: colors.ink }}>
+                  Document Verification
+                </Text>
+              </View>
             </View>
-            <View style={styles.showcaseInfo}>
-              <Text variant="label" numberOfLines={1}>
-                {item.subject_label || (payload.document_type_code || "").replace(/_/g, " ") || "Document Verification"}
-              </Text>
-              <Text variant="caption" style={{ color: colors.mute, marginTop: 2 }}>
+            <View style={[styles.dashedEmptyCard, { borderColor: colors.hairline }]}>
+              <FileText size={14} color={colors.mute} />
+              <Text variant="caption" style={{ color: colors.mute, marginLeft: 6 }}>
                 Statutory KYC document pending administrative review
               </Text>
             </View>
@@ -508,64 +582,175 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
       {isDocReplace && (
         <View
           style={[
-            styles.showcaseCard,
+            styles.docsContainer,
             {
-              backgroundColor: "rgba(99, 102, 241, 0.05)",
-              borderColor: "rgba(99, 102, 241, 0.25)",
+              backgroundColor: colors.canvas,
+              borderColor: colors.hairline,
             },
           ]}
         >
-          <View style={styles.showcaseContent}>
-            {singleDocTarget && (singleDocTarget.thumb_signed_url || singleDocTarget.signed_url) ? (
-              <Pressable
-                onPress={() => handleDocThumbPress(singleDocTarget)}
-                style={styles.showcaseThumbContainer}
-              >
-                <Image
-                  source={{
-                    uri: (singleDocTarget.thumb_signed_url || singleDocTarget.signed_url)!,
-                  }}
-                  style={styles.showcaseThumbImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.showcaseThumbOverlay}>
-                  <Eye size={12} color="#ffffff" />
-                </View>
-              </Pressable>
-            ) : (
-              <View
-                style={[
-                  styles.iconBadgeBox,
-                  { backgroundColor: "rgba(99, 102, 241, 0.1)", borderColor: "rgba(99, 102, 241, 0.2)" },
-                ]}
-              >
-                <RefreshCw size={18} color="#6366f1" />
-              </View>
-            )}
-
-            <View style={styles.showcaseInfo}>
-              <View style={styles.showcaseLabelRow}>
-                <Text variant="label" numberOfLines={1} style={{ color: colors.ink }}>
-                  Replacing: {(payload.document_type_code || singleDocTarget?.label || "Document").replace(/_/g, " ")}
-                </Text>
-                <View
-                  style={[
-                    styles.docStatusPill,
-                    {
-                      backgroundColor: "rgba(99, 102, 241, 0.12)",
-                    },
-                  ]}
-                >
-                  <Text variant="micro" style={{ color: "#6366f1" }}>
-                    STAGED
-                  </Text>
-                </View>
-              </View>
-              <Text variant="caption" style={{ color: colors.mute, marginTop: 2 }}>
-                Overwrites statutory file upon admin approval
+          <View style={styles.docsHeader}>
+            <View style={styles.docsHeaderLeft}>
+              <RefreshCw size={13} color="#0284c7" />
+              <Text variant="label" style={{ color: colors.ink }}>
+                Replacement: {(payload.document_type_code || singleDocTarget?.label || "Document").replace(/_/g, " ")}
               </Text>
             </View>
           </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.docsScroll}
+          >
+            {replacementDocTarget ? (
+              <View
+                style={[
+                  styles.docCard,
+                  {
+                    backgroundColor: colors.canvasElevated,
+                    borderColor: colors.hairline,
+                  },
+                ]}
+              >
+                <Pressable
+                  onPress={() => handleDocThumbPress(replacementDocTarget)}
+                  style={styles.docThumbContainer}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${replacementDocTarget.label || "Replacement"} document`}
+                >
+                  {replacementDocTarget.thumb_signed_url || replacementDocTarget.signed_url ? (
+                    <Image
+                      source={{ uri: (replacementDocTarget.thumb_signed_url || replacementDocTarget.signed_url)! }}
+                      style={styles.docThumbImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.docThumbFallback}>
+                      <FileText size={20} color={colors.mute} />
+                    </View>
+                  )}
+                  <View style={styles.docThumbOverlay}>
+                    <Eye size={12} color="#ffffff" />
+                  </View>
+                </Pressable>
+
+                <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
+                  {replacementDocTarget.label?.includes("(Replacement)")
+                    ? replacementDocTarget.label
+                    : `${replacementDocTarget.label || (payload.document_type_code || "Document").replace(/_/g, " ")} (Replacement)`}
+                </Text>
+
+                {canDecide && replacementDocTarget.verification_status === "pending" && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
+                  <View style={[styles.docActionRow, { borderTopColor: colors.hairline }]}>
+                    <Pressable
+                      onPress={() => onRejectDocumentPrompt?.(replacementDocTarget, payload.user_id || item.requested_by)}
+                      disabled={isActionLoading || isRejectLoading}
+                      style={({ pressed }) => [
+                        styles.docActionBtn,
+                        styles.docRejectBtn,
+                        { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Reject ${replacementDocTarget.label}`}
+                    >
+                      <X size={15} color="#ef4444" strokeWidth={2.5} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => onVerifyDocument?.(replacementDocTarget.id, payload.user_id || item.requested_by)}
+                      disabled={isActionLoading || isRejectLoading}
+                      style={({ pressed }) => [
+                        styles.docActionBtn,
+                        styles.docApproveBtn,
+                        { backgroundColor: pressed ? "#059669" : "#10b981" },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Approve ${replacementDocTarget.label}`}
+                    >
+                      <Check size={15} color="#ffffff" strokeWidth={2.5} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View
+                    style={[
+                      styles.docStatusPill,
+                      {
+                        backgroundColor:
+                          replacementDocTarget.verification_status === "verified"
+                            ? "rgba(16, 185, 129, 0.12)"
+                            : replacementDocTarget.verification_status === "rejected"
+                            ? "rgba(239, 68, 68, 0.12)"
+                            : "rgba(245, 158, 11, 0.12)",
+                      },
+                    ]}
+                  >
+                    <Text
+                      variant="micro"
+                      style={{
+                        color:
+                          replacementDocTarget.verification_status === "verified"
+                            ? "#10b981"
+                            : replacementDocTarget.verification_status === "rejected"
+                            ? "#ef4444"
+                            : "#d97706",
+                      }}
+                    >
+                      {replacementDocTarget.verification_status.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+
+            {activeDocBeingReplaced ? (
+              <View
+                style={[
+                  styles.docCard,
+                  {
+                    backgroundColor: colors.canvasElevated,
+                    borderColor: colors.hairline,
+                  },
+                ]}
+              >
+                <Pressable
+                  onPress={() => handleDocThumbPress(activeDocBeingReplaced)}
+                  style={styles.docThumbContainer}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${activeDocBeingReplaced.label || "Current Active"} document`}
+                >
+                  {activeDocBeingReplaced.thumb_signed_url || activeDocBeingReplaced.signed_url ? (
+                    <Image
+                      source={{ uri: (activeDocBeingReplaced.thumb_signed_url || activeDocBeingReplaced.signed_url)! }}
+                      style={styles.docThumbImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.docThumbFallback}>
+                      <FileText size={20} color={colors.mute} />
+                    </View>
+                  )}
+                  <View style={styles.docThumbOverlay}>
+                    <Eye size={12} color="#ffffff" />
+                  </View>
+                </Pressable>
+
+                <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
+                  {`${activeDocBeingReplaced.label || (payload.document_type_code || "Document").replace(/_/g, " ")} (Active)`}
+                </Text>
+
+                <View
+                  style={[
+                    styles.docStatusPill,
+                    { backgroundColor: "rgba(2, 132, 199, 0.12)" },
+                  ]}
+                >
+                  <Text variant="micro" style={{ color: "#0284c7" }}>
+                    ACTIVE
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </ScrollView>
         </View>
       )}
 
@@ -573,15 +758,15 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
       {isProfileChange && (
         <View
           style={[
-            styles.typeSectionBox,
+            styles.docsContainer,
             {
               backgroundColor: colors.canvas,
               borderColor: colors.hairline,
             },
           ]}
         >
-          <View style={styles.typeHeaderRow}>
-            <View style={styles.typeHeaderLeft}>
+          <View style={styles.docsHeader}>
+            <View style={styles.docsHeaderLeft}>
               <UserCog size={13} color="#0284c7" />
               <Text variant="label" style={{ color: colors.ink }}>
                 Profile Modifications Requested
@@ -651,15 +836,15 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
       {isAccountDeletion && (
         <View
           style={[
-            styles.typeSectionBox,
+            styles.docsContainer,
             {
-              backgroundColor: "rgba(239, 68, 68, 0.05)",
-              borderColor: "rgba(239, 68, 68, 0.25)",
+              backgroundColor: colors.canvas,
+              borderColor: colors.hairline,
             },
           ]}
         >
-          <View style={styles.typeHeaderRow}>
-            <View style={styles.typeHeaderLeft}>
+          <View style={styles.docsHeader}>
+            <View style={styles.docsHeaderLeft}>
               <ShieldAlert size={14} color="#ef4444" />
               <Text variant="label" style={{ color: "#ef4444" }}>
                 Account Deletion Request
@@ -676,9 +861,20 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               </Text>
             </View>
           </View>
-          <Text variant="caption" style={{ color: colors.ink, marginTop: 4 }}>
-            Reason: &ldquo;{payload.reason || item.summary || "Permanent deletion requested by user"}&rdquo;
-          </Text>
+          <View
+            style={[
+              styles.diffRow,
+              {
+                backgroundColor: colors.canvasElevated,
+                borderColor: colors.hairline,
+                marginTop: 4,
+              },
+            ]}
+          >
+            <Text variant="caption" style={{ color: colors.ink }}>
+              Reason: &ldquo;{payload.reason || item.summary || "Permanent deletion requested by user"}&rdquo;
+            </Text>
+          </View>
         </View>
       )}
 
@@ -686,15 +882,15 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
       {isShiftConflict && (
         <View
           style={[
-            styles.typeSectionBox,
+            styles.docsContainer,
             {
-              backgroundColor: "rgba(245, 158, 11, 0.05)",
-              borderColor: "rgba(245, 158, 11, 0.25)",
+              backgroundColor: colors.canvas,
+              borderColor: colors.hairline,
             },
           ]}
         >
-          <View style={styles.typeHeaderRow}>
-            <View style={styles.typeHeaderLeft}>
+          <View style={styles.docsHeader}>
+            <View style={styles.docsHeaderLeft}>
               <AlertTriangle size={14} color="#f59e0b" />
               <Text variant="label" style={{ color: "#d97706" }}>
                 Shift Conflict / Override
@@ -730,7 +926,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
             </View>
           </View>
           {item.summary ? (
-            <Text variant="caption" numberOfLines={1} style={{ color: colors.mute, marginTop: 4 }}>
+            <Text variant="caption" numberOfLines={1} style={{ color: colors.mute, marginTop: 6 }}>
               {item.summary}
             </Text>
           ) : null}

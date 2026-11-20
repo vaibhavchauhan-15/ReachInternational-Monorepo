@@ -14,8 +14,8 @@
   publish = "apps/web/.next"
 
 [build.environment]
-  # Node.js 20 LTS runtime matching modern Next.js 16 App Router requirements
-  NODE_VERSION = "20"
+  # Node.js 22 LTS runtime (required for pnpm v11 & node:sqlite built-in module)
+  NODE_VERSION = "22"
   # Authoritative monorepo package manager version (matching package.json & pnpm-workspace.yaml)
   PNPM_VERSION = "11.21.0"
   # Netlify environment marker
