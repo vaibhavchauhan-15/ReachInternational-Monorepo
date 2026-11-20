@@ -1,13 +1,14 @@
 # ==============================================================================
-# ReachInternational Web — Netlify Subdirectory Base Configuration
+# ReachInternational Web — Netlify Monorepo & Subdirectory Configuration
 # ==============================================================================
-# Used when Netlify UI "Base directory" is explicitly set to "apps/web".
-# When building from monorepo root, the root netlify.toml is used instead.
+# Seamless Next.js 16 App Router deployment on Netlify via pnpm & Turborepo.
+# In Netlify monorepos with root base directory, publish points to apps/web/.next.
+# Vercel (vercel.json) and Cloudflare (wrangler.jsonc) configurations remain intact.
 # ==============================================================================
 
 [build]
   command = "pnpm build"
-  publish = ".next"
+  publish = "apps/web/.next"
 
 [build.environment]
   NODE_VERSION = "22"
@@ -24,6 +25,28 @@
   PUSH_ENABLED = "true"
   VAPID_SUBJECT = "mailto:support@reachinternational.co.in"
 
+# ------------------------------------------------------------------------------
+# Scheduled Cron Functions (100% Parity with Vercel & Cloudflare Crons)
+# ------------------------------------------------------------------------------
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Daily 02:00 UTC - Purge unreferenced doc_staging sessions older than 24h
+[functions."cleanup-staging"]
+  schedule = "0 2 * * *"
+
+# Daily 03:00 UTC - Purge orphaned superseded user_documents older than 90d
+[functions."cleanup-superseded"]
+  schedule = "0 3 * * *"
+
+# Daily 00:00 UTC - Close expired job postings
+[functions."close-expired-jobs"]
+  schedule = "0 0 * * *"
+
+# ------------------------------------------------------------------------------
+# Static Assets & Service Worker Caching Rules
+# ------------------------------------------------------------------------------
 [[headers]]
   for = "/sw.js"
   [headers.values]

@@ -50,5 +50,5 @@ For EVERY task involving code, styling, API, database, or configuration changes,
 1. **Zero Untested Completions**: Never declare an implementation complete without running the relevant typecheck, lint, and test scripts.
 2. **Never Fabricate Test Results**: Never claim a test passed without running it. Report `NOT RUN` with clear justification if an environment constraint prevents execution.
 3. **Separate Android from iOS**: Never claim iOS tests passed when only Android tests were run.
-4. **Development Database Isolation**: All database and migration tests MUST target the **Development Project** (`vlmxciuogczumumrwyot`). Never target Production (`dhbbgfzbyatzvqafnsqp`).
+4. **Development Database Isolation**: All database and migration tests MUST target the **Development Project** (`vlmxciuogczumumrwyot`). Never run mutating tests against Production (`dhbbgfzbyatzvqafnsqp`) (read-only inspection of production is permitted anytime; writes require explicit user instruction).
 5. **Web & Mobile 100% Parity**: Any operational change on Web MUST be accompanied by synchronized tests and validation on Mobile across all 8 parity dimensions.

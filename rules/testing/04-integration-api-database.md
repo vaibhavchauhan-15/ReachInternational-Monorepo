@@ -54,8 +54,8 @@ All API route handlers must be tested against 5 canonical response scenarios:
 
 ### MANDATORY SUPABASE ENVIRONMENT ISOLATION
 - **Development Project (TARGET)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
-- **Production Project (PROTECTED)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**
-- All integration tests, migration validations, and test scripts MUST strictly connect to the Development project.
+- **Production Project (PROTECTED)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — Read-only inspection permitted anytime; write operations require explicit user instruction
+- All integration tests, migration validations, and mutation test scripts MUST strictly target the Development project.
 
 ```text
 [ ARRANGE TEST USER SESSION ]

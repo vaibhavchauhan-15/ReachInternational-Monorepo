@@ -37,12 +37,19 @@ assert(fs.existsSync(nodeVersionPath), '.node-version must exist at root');
 assert(fs.readFileSync(nodeVersionPath, 'utf8').trim() === '22', '.node-version must specify 22');
 pass('Root netlify.toml, .nvmrc, and .node-version enforce Node.js 22 LTS for pnpm v11 & node:sqlite.');
 
-// 2. Verify apps/web/netlify.toml (Subdirectory fallback)
+// 2. Verify apps/web/netlify.toml (Subdirectory & Monorepo alignment)
 const webNetlifyPath = path.join(ROOT_DIR, 'apps/web/netlify.toml');
 assert(fs.existsSync(webNetlifyPath), 'apps/web/netlify.toml must exist');
 const webNetlifyContent = fs.readFileSync(webNetlifyPath, 'utf8');
-assert(webNetlifyContent.includes('publish = ".next"'), 'apps/web/netlify.toml must publish .next');
-pass('Subdirectory apps/web/netlify.toml exists as a resilient fallback for subfolder base setups.');
+assert(
+  webNetlifyContent.includes('publish = "apps/web/.next"'),
+  'apps/web/netlify.toml must specify apps/web/.next for monorepo publish path'
+);
+assert(webNetlifyContent.includes('NODE_VERSION = "22"'), 'apps/web/netlify.toml must declare Node.js 22');
+assert(webNetlifyContent.includes('cleanup-staging'), 'apps/web/netlify.toml must register cleanup-staging cron');
+assert(webNetlifyContent.includes('cleanup-superseded'), 'apps/web/netlify.toml must register cleanup-superseded cron');
+assert(webNetlifyContent.includes('close-expired-jobs'), 'apps/web/netlify.toml must register close-expired-jobs cron');
+pass('apps/web/netlify.toml aligns with monorepo root publish directory (apps/web/.next) and scheduled functions.');
 
 // 3. Verify Scheduled Functions (Parity with Vercel and Cloudflare)
 const scheduledFunctions = [

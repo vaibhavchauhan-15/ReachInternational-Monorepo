@@ -356,12 +356,14 @@ Never rely only on frontend validation for critical business rules.
 ### Web-to-Mobile Synchronization
 **MANDATORY ZERO-DRIFT RULE**: Whenever ANY change is added or modified in `apps/web`, every AI agent MUST apply and synchronize the same change in `apps/mobile` with mobile-compatible adaptations (touch cards, bottom sheets, scrollable filter strips, min 44px touch targets) in the same session. Web and Mobile MUST NEVER drift out of sync.
 
-### Supabase Environment Isolation
+### Supabase Environment Isolation & Production Database Access Policy
 - **Organization**: `ljzofzlvjtfiqoffaaua`
-- **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
-- **Production Project (PROTECTED)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**
-- Every AI agent MUST **ONLY USE the Development project** for migrations, SQL, seeding, or testing.
-- When using Supabase MCP tools (`execute_sql`, `apply_migration`, etc.), agents MUST explicitly set and verify `project_id: "vlmxciuogczumumrwyot"`.
+- **Development Project (Default Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
+- **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`)
+- **READ-ONLY ANYTIME IN PRODUCTION**: AI agents can ALWAYS execute READ-ONLY operations (e.g., `SELECT` queries, inspecting schemas, tables, columns, constraints, RPC definitions, triggers, RLS policies, migrations, and querying logs via Supabase CLI or MCP) in the Production DB (`dhbbgfzbyatzvqafnsqp`) at ANY TIME without restriction.
+- **WRITE OPERATIONS REQUIRE EXPLICIT USER INSTRUCTION**: AI agents can ONLY perform WRITE operations (e.g., `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP`, `CREATE`, applying migrations, deploying edge functions, DDL/DML mutations) in the Production DB (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP **WHEN THE USER EXPLICITLY INSTRUCTS TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB**. Without explicit user instruction, write operations to production are strictly forbidden.
+- **Development Default for Writes & Testing**: For normal feature development, testing, schema experimentation, and seeding, all write operations and migrations MUST default to the Development project (`vlmxciuogczumumrwyot`).
+- When using Supabase MCP tools (`execute_sql`, `apply_migration`, etc.), agents MUST explicitly verify the target `project_id`: default to `"vlmxciuogczumumrwyot"` for development writes, and target `"dhbbgfzbyatzvqafnsqp"` for read-only inspection or when explicitly directed by the user for production modifications.
 
 ---
 

@@ -1,3 +1,26 @@
+## [2026-11-20] - Monorepo Policy Update: Production Supabase DB Access & AI Agent Instructions
+- **Scope**: Monorepo-wide AI agent rules, instructions, security baselines, and testing documentation.
+- **Policy Changes Enshrined**:
+  1. **Production Read-Only Allowed Anytime**: AI agents are explicitly permitted to execute READ-ONLY operations (SELECT queries, inspecting schemas, tables, columns, constraints, foreign keys, triggers, RPC definitions, querying logs, checking live data) on the Production database (`dhbbgfzbyatzvqafnsqp`) at ANY TIME via Supabase CLI or MCP.
+  2. **Production Writes Conditioned on Explicit User Instruction**: AI agents can ONLY execute WRITE / MUTATION operations (INSERT, UPDATE, DELETE, ALTER, DROP, CREATE, migrations, DDL, RPC updates, edge function deployments, seeding/backfills) in the Production database (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP WHEN THE USER EXPLICITLY INSTRUCTS TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB.
+  3. **Development Default for Writes & Testing**: For normal development, testing, schema experimentation, local/dev migrations, and seed data, all mutations continue to default to the Development project (`vlmxciuogczumumrwyot`).
+- **Files Synchronized**:
+  - AGENTS.md
+  - supabase/AGENTS.md
+  - .agents/rules/mandatory_rules_reading_and_enforcement.md
+  - AI/RULES/SECURITY.md
+  - AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md
+  - AI/RULES/ARCHITECTURE.md
+  - security/SECURITY-RULES.md
+  - security/SECURITY-TESTING.md
+  - rules/testing/README.md & .agents/rules/testing/README.md & README-test.md
+  - rules/testing/04-integration-api-database.md & .agents/rules/testing/04-integration-api-database.md
+  - rules/testing/08-security-testing.md & .agents/rules/testing/08-security-testing.md
+  - .agents/rules/testing_standards_and_enforcement.md
+  - AI/PROJECT_MEMORY.md
+  - AI/STATE.md
+  - AI/CURRENT_TASK.md
+
 ## [2026-11-19] - End-to-End Performance Optimization — Operations Module (Web + Native App)
 - **Scope**: Operations module on Web (`apps/web`) and Native Mobile (`apps/mobile`), prioritizing critical path **Assign Personnel -> Save Roster**.
 - **Key Bottlenecks Solved**:
@@ -21217,3 +21240,17 @@ On user registration, 3 separate "Document Initial Verification" approval reques
   - Hardened `assign_operator_machine_atomic()` with in-place updates, same-day re-activation, and consistent normalization.
 - **Web Server Action Hardening (`apps/web/app/actions/machines.ts`)**: Enhanced `executeResilientPersonnelUpdateFallback` with same-day assignment re-activation and explicit error handling.
 - **Verification**: Verified against Dev DB (`vlmxciuogczumumrwyot`), `pnpm typecheck` passed (7/7 packages clean, 0 errors), `node apps/mobile/run-tests.mjs` passed (357/357 tests), `node scripts/check-typography.mjs` clean, `node scripts/test-touch-haptics.mjs` clean, `pnpm --filter @reachinternational/permissions test` passed (25/25 tests).
+
+
+## [2026-11-20] - Fix Netlify Monorepo Publish Directory Path Resolution (.next -> apps/web/.next)
+- **Problem**: Netlify deploy failed at line 312 with `Error: Your publish directory was not found at: /opt/build/repo/.next.` because `apps/web/netlify.toml` specified `publish = ".next"`. When Netlify executed from the monorepo root (`/opt/build/repo`), `@netlify/plugin-nextjs` resolved `.next` relative to `/opt/build/repo`, whereas the compiled Next.js output is at `apps/web/.next`.
+- **Solution**:
+  - Updated `apps/web/netlify.toml` to set `publish = "apps/web/.next"`.
+  - Added scheduled cron functions block (`[functions]`) to `apps/web/netlify.toml` to preserve cron execution regardless of which config Netlify prioritizes.
+  - Updated `scripts/test-netlify-deployment-config.mjs` with assertions for monorepo publish path, Node 22 LTS, and cron functions in `apps/web/netlify.toml`.
+  - Updated `docs/NETLIFY_DEPLOYMENT.md` documenting Netlify Package Directory settings.
+- **Verification**:
+  - `node scripts/test-netlify-deployment-config.mjs`: 10/10 checks passed.
+  - `node scripts/run-all-tests.mjs`: 29/29 suites passed (100% clean).
+  - `pnpm typecheck`: Clean across 7/7 packages (0 errors).
+  - Cloudflare (`wrangler.jsonc`) & Vercel (`vercel.json`) configurations 100% UNCHANGED.

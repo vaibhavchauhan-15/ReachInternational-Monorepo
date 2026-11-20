@@ -64,7 +64,7 @@
 2. **Never Disable RLS**: Disabling RLS on any table in development or production is an emergency-level security violation.
 3. **Explicit Query Projections**: Never use `SELECT *` in production queries or DAL functions. Always specify exact required columns to prevent accidental exposure of sensitive fields (e.g. `aadhaar_number`, `bank_account_number`).
 4. **Admin Client Scoping**: The Supabase service-role client (`createSupabaseAdminClient()`) bypasses RLS. It may ONLY be used in server-side modules (`apps/web/lib/supabase/admin.ts`, `apps/web/lib/dal.ts`, `apps/web/lib/audit.ts`) for system operations. Never pass the admin client to client components or invoke it without prior role verification.
-5. **Development Isolation**: All database migrations, SQL queries, and seed scripts executed by AI agents MUST target the Development project (`vlmxciuogczumumrwyot`). Operations against Production (`dhbbgfzbyatzvqafnsqp`) during development are strictly forbidden.
+5. **Development Isolation & Production Access Policy**: All development database migrations, mutation scripts, test suites, and seed data executed by AI agents MUST default to the Development project (`vlmxciuogczumumrwyot`). In Production (`dhbbgfzbyatzvqafnsqp`), read-only operations (SELECT queries, schema inspection, log auditing) are permitted anytime; write operations, DDL, or data modifications in Production are STRICTLY FORBIDDEN unless explicitly instructed by the user via Supabase CLI or MCP.
 
 ---
 

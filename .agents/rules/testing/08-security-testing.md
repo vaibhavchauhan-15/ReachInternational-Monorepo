@@ -25,7 +25,7 @@ The purpose of ReachInternational's Security Testing standards is to ensure that
 
 ### A. Environment Isolation (MANDATORY)
 - **Target Environment**: All security testing, payload fuzzing, and negative tests MUST run against the **Development Project** (`vlmxciuogczumumrwyot`).
-- **Production Protection**: Running fuzzing, negative tests, or schema mutations against Production (`dhbbgfzbyatzvqafnsqp`) is **STRICTLY PROHIBITED**.
+- **Production Protection**: Running fuzzing, negative tests, or schema mutations against Production (`dhbbgfzbyatzvqafnsqp`) is **STRICTLY PROHIBITED** (read-only inspection of production state is permitted anytime; write operations require explicit user instruction).
 
 ### B. Core Security Verification Categories (OWASP ASVS)
 1. **Authentication & Session Integrity**:

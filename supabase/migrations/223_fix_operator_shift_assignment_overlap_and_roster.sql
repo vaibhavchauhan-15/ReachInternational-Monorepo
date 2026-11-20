@@ -74,9 +74,13 @@ $$;
 GRANT EXECUTE ON FUNCTION public.do_shifts_overlap(TIME, TIME, TIME, TIME) TO authenticated, service_role, anon;
 
 -- ==============================================================================
--- 2. Harden Exclusion Constraint on operator_machine_assignments
+-- 2. Harden Exclusion Constraint and Ensure Columns on operator_machine_assignments
 -- ==============================================================================
 CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- Ensure notes column exists on operator_machine_assignments
+ALTER TABLE public.operator_machine_assignments
+  ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT NULL;
 
 DO $$
 BEGIN
@@ -668,15 +672,20 @@ BEGIN
   -- 10. Assemble and return complete verified snapshot
   SELECT COALESCE(jsonb_agg(
     jsonb_build_object(
-      'id', oma.id,
+      'id', u.id,
+      'assignment_id', oma.id,
       'operator_id', oma.operator_id,
-      'machine_id', oma.machine_id,
+      'full_name', u.full_name,
+      'employee_id', u.employee_id,
+      'phone', u.phone,
+      'email', u.email,
       'shift_code', oma.shift_code,
       'shift_name', 'Shift ' || oma.shift_code,
       'shift_start_time', oma.shift_start_time::text,
       'shift_end_time', oma.shift_end_time::text,
       'shift_time', to_char(oma.shift_start_time, 'HH12:MI AM') || ' - ' || to_char(oma.shift_end_time, 'HH12:MI AM'),
-      'role', 'operator'
+      'role', 'operator',
+      'notes', oma.notes
     )
     ORDER BY oma.shift_code
   ), '[]'::jsonb)

@@ -22,17 +22,18 @@ Netlify reads the root [`netlify.toml`](file:///c:/Users/Reach%20International/P
 
 ---
 
-## 2. Alternative Setup (Subdirectory Base `apps/web`)
+## 2. Package Directory Setup (`packagePath: apps/web`)
 
-If you configure the Netlify site with **Base directory** set to `apps/web`:
+If Netlify UI has **Package directory** set to `apps/web` (or if configuring through Netlify monorepo detection):
 
-| Setting | Value |
-| :--- | :--- |
-| **Base directory** | `apps/web` |
-| **Build command** | `pnpm build` |
-| **Publish directory** | `.next` |
+| Setting | Value | Description |
+| :--- | :--- | :--- |
+| **Base directory** | Leave empty (repository root) | Allows pnpm workspace lockfile resolution across all packages. |
+| **Package directory** | `apps/web` | Directs Netlify to the web application folder and its `netlify.toml`. |
+| **Build command** | `pnpm build` | Executes `scripts/build-dispatcher.js` or Turborepo web build. |
+| **Publish directory** | `apps/web/.next` | Location of the compiled Next.js output relative to the repository root. |
 
-Netlify will read [`apps/web/netlify.toml`](file:///c:/Users/Reach%20International/Projects/ReachInternational-Monorepo/apps/web/netlify.toml) automatically.
+Both the root [`netlify.toml`](file:///c:/Users/Reach%20International/Projects/ReachInternational-Monorepo/netlify.toml) and [`apps/web/netlify.toml`](file:///c:/Users/Reach%20International/Projects/ReachInternational-Monorepo/apps/web/netlify.toml) explicitly declare `publish = "apps/web/.next"`, preventing any monorepo path resolution mismatch in `@netlify/plugin-nextjs`.
 
 ---
 

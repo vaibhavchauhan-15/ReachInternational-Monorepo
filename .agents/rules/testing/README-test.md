@@ -90,6 +90,6 @@ Every AI agent and subagent operating in this repository MUST follow this sequen
 
 1. **Zero Untested Completions**: No task is complete until affected modules have executed relevant tests and passed with exit code 0.
 2. **Never Disable Checks to Pass**: Never silence TypeScript with `any`, never skip tests with `.skip()`, never remove Zod validations, and never disable Supabase RLS.
-3. **Environment Isolation**: All database tests, migrations, and mutation tests MUST target the **Development Project** (`vlmxciuogczumumrwyot`). The Production Project (`dhbbgfzbyatzvqafnsqp`) is strictly protected.
+3. **Environment Isolation**: All database tests, migrations, and mutation tests MUST target the **Development Project** (`vlmxciuogczumumrwyot`). The Production Project (`dhbbgfzbyatzvqafnsqp`) is strictly protected from test mutations (read-only inspection is permitted anytime; write operations require explicit user instruction).
 4. **100% Web & Mobile Parity**: Any operational change on Web MUST be accompanied by synchronized tests and validation on Mobile across all 8 parity dimensions.
 5. **No Fabricated Results**: Agents must never claim "Tested successfully" unless commands were actually executed and outputs verified. If a test cannot be executed, it must be reported as `NOT RUN` with the explicit reason.

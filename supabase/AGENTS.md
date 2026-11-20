@@ -9,20 +9,29 @@
 
 ---
 
-## Environment Isolation (CRITICAL)
+## Environment Isolation & Production Access Policy (CRITICAL)
 
 | Environment | Project ID | Status |
 |---|---|---|
-| **Development** | `vlmxciuogczumumrwyot` | ✅ Target for all dev work |
-| **Production** | `dhbbgfzbyatzvqafnsqp` | 🔒 STRICTLY PROTECTED |
+| **Development** | `vlmxciuogczumumrwyot` | ✅ Default target for dev work, migrations, testing & mutations |
+| **Production** | `dhbbgfzbyatzvqafnsqp` | 👁️ READ-ONLY ANYTIME &nbsp;\|&nbsp; ✍️ WRITES REQUIRE EXPLICIT USER INSTRUCTION |
 | **Organization** | `ljzofzlvjtfiqoffaaua` | — |
 
-### ABSOLUTE RULES:
+### ABSOLUTE RULES FOR AI AGENTS:
 
-1. **ALL** migrations, SQL executions, seeding, RPC testing, and schema changes target **ONLY** the Development project.
-2. When using Supabase MCP tools (`execute_sql`, `apply_migration`, etc.), **ALWAYS** explicitly set and verify `project_id: "vlmxciuogczumumrwyot"`.
-3. **NEVER** run any destructive or mutating operation against Production (`dhbbgfzbyatzvqafnsqp`).
-4. Before executing any MCP tool call, **pause and verify** the `project_id` parameter.
+1. **Read-Only Operations Allowed Anytime on Production (`dhbbgfzbyatzvqafnsqp`)**:
+   - AI agents are ALWAYS permitted to execute READ-ONLY operations against the Production database at any time.
+   - Permitted anytime: `SELECT` queries, inspecting table schemas, columns, types, defaults, constraints, foreign keys, reviewing RPC functions, inspecting triggers, querying logs, checking table contents, verifying migration history, and diagnosing live issues via Supabase CLI or Supabase MCP (`execute_sql` with `SELECT`, `list_tables`, `query_logs`, `list_migrations`, `get_edge_function`, etc.).
+   - No explicit user confirmation is needed for read-only inspection.
+2. **Production Writes Require Explicit User Instruction**:
+   - AI agents can ONLY execute WRITE / MUTATION operations (e.g., `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP`, `CREATE`, applying migrations via `apply_migration` or CLI, modifying schemas, deploying edge functions, altering RPCs, triggers, or RLS policies, or seeding/backfilling data) in the Production DB (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP **WHEN THE USER EXPLICITLY INSTRUCTS TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB**.
+   - In the absence of an explicit prompt/command from the user to modify the production database, write operations to Production are STRICTLY FORBIDDEN.
+3. **Development is Default for Writes & Testing**:
+   - ALL feature development migrations, schema prototyping, seed scripts, RPC mutation tests, and automated integration suites MUST default to the Development project (`vlmxciuogczumumrwyot`).
+4. **Pause and Verify `project_id`**:
+   - Before executing any Supabase MCP tool call (`execute_sql`, `apply_migration`, `deploy_edge_function`) or CLI command, verify the target `project_id`.
+   - Default to `"vlmxciuogczumumrwyot"` for development writes and tests.
+   - Target `"dhbbgfzbyatzvqafnsqp"` for read-only inspection anytime, or for write operations ONLY when explicitly instructed by the user.
 
 ---
 
@@ -155,7 +164,7 @@ Before ANY database change, inspect:
 
 ### 10. Database-Specific Prohibitions
 
-- **NEVER** execute SQL against Production during development.
+- **NEVER** execute write operations, DDL, migrations, or data mutations against Production without explicit user instruction. (Read-only inspection, log queries, and SELECT queries on Production are permitted anytime).
 - **NEVER** disable RLS, even temporarily, without a migration to re-enable it.
 - **NEVER** use `TRUNCATE` or `DROP TABLE` without explicit user approval.
 - **NEVER** store passwords or secrets in database columns.
@@ -170,13 +179,14 @@ Before ANY database change, inspect:
 
 Immediately **STOP** and report if:
 
+- An operation would perform unrequested write operations, DDL, or data mutations against Production without explicit user instruction.
 - A migration would drop a table or column with existing data.
 - An RLS policy change could expose data to unauthorized roles.
 - A trigger removal could break data consistency.
 - A constraint removal could allow invalid data.
 - An RPC change could break existing client behavior.
 - A schema change conflicts with an existing migration.
-- Production data could be affected in any way.
+- Production data could be modified or corrupted without explicit user authorization.
 
 ### 12. Verification Commands
 

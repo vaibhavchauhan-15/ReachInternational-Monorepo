@@ -74,14 +74,15 @@ ENVIRONMENT     PURPOSE & DB BOUNDARY                      CONFIG & SECRET SOURC
 • Production    Reach International Production (dhbbgfzbyatzvqafnsqp) Prod DB (Protected)
 ```
 
-### Authoritative Supabase Project Isolation Rule:
+### Authoritative Supabase Project Isolation & Access Policy:
 - **Organization**: `ljzofzlvjtfiqoffaaua`
-- **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
-- **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**.
+- **Development Project (Default Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
+- **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`)
 
-1. **Development Boundary**: ALL migrations, schema edits, SQL executions, table creation, seed data scripts, RPC updates, and testing MUST ONLY target the **Development Project (`vlmxciuogczumumrwyot`)**.
-2. **Production Protection**: The Production project (`dhbbgfzbyatzvqafnsqp`) is **STRICTLY PROTECTED**. AI agents are **FORBIDDEN** from modifying, running migrations, executing SQL mutations, or altering data on the Production project during development tasks.
-3. **MCP Tool Enforcement**: Any invocation of Supabase MCP tools (`execute_sql`, `apply_migration`, etc.) MUST explicitly verify that `project_id: "vlmxciuogczumumrwyot"`.
+1. **Read-Only Inspection Allowed Anytime**: AI agents are ALWAYS permitted to execute READ-ONLY operations against the Production database (`dhbbgfzbyatzvqafnsqp`) at any time (e.g., `SELECT` queries, inspecting schemas, reviewing tables/columns/constraints, checking RPC definitions, reviewing triggers, auditing logs, and checking live table state via Supabase CLI or MCP).
+2. **Production Writes Require Explicit User Instruction**: AI agents can ONLY execute WRITE / MUTATION operations (e.g., `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP`, `CREATE`, migrations, DDL, RPC updates, edge function deployments, seeding) against the Production database (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP **WHEN THE USER EXPLICITLY INSTRUCTS TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB**. Without explicit user instruction, write operations to Production are strictly forbidden.
+3. **Development Boundary for Dev Mutations**: ALL development migrations, schema edits, SQL mutations, table creation, seed data scripts, RPC updates, and testing MUST default to the **Development Project (`vlmxciuogczumumrwyot`)**.
+4. **MCP Tool Enforcement**: Any invocation of Supabase MCP tools (`execute_sql`, `apply_migration`, etc.) MUST explicitly verify `project_id`. Default to `"vlmxciuogczumumrwyot"` for development writes and tests; target `"dhbbgfzbyatzvqafnsqp"` for read-only inspection anytime, or for write operations ONLY when explicitly requested by the user.
 
 ---
 

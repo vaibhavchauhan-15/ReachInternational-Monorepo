@@ -7,7 +7,7 @@
 
 ## 1. Testing Principles & Authorized Environments
 
-1. **Test Environment Isolation (Mandatory)**: All security test suites, integration tests, and migration validations MUST target the **Development Project** (`vlmxciuogczumumrwyot`). Running security tests or fuzzing against Production (`dhbbgfzbyatzvqafnsqp`) is **STRICTLY PROHIBITED**.
+1. **Test Environment Isolation (Mandatory)**: All security test suites, integration tests, and migration validations MUST target the **Development Project** (`vlmxciuogczumumrwyot`). Running security tests, payload fuzzing, or automated test mutations against Production (`dhbbgfzbyatzvqafnsqp`) is **STRICTLY PROHIBITED** (read-only inspection of production state is permitted anytime; write operations in production require explicit user instruction).
 2. **Negative Testing Mandate**: Every feature enforcing authorization or validation MUST include negative test cases verifying that invalid inputs and unauthorized roles are rejected. Testing only happy paths is considered incomplete engineering.
 3. **Never Disable Checks to Pass Tests**: Test code must never mock away authentication, disable RLS policies, or bypass validation checks to achieve a passing status.
 

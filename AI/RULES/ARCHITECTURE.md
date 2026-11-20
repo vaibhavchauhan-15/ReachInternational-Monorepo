@@ -123,10 +123,11 @@ AI agents MUST NOT invent or resurrect legacy roles.
 
 1. **Target Development Environment**:
    - Development Project: `vlmxciuogczumumrwyot` (`Reach International Dev`).
-   - All migrations, SQL queries, procedures, and tests MUST strictly target `vlmxciuogczumumrwyot`.
-2. **Production Protection**:
+   - Default target for all development migrations, SQL mutations, procedures, and tests.
+2. **Production Database Access Policy**:
    - Production Project: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`).
-   - Modifying or executing migrations against Production during development is **STRICTLY PROHIBITED**.
+   - **Read-Only Anytime**: AI agents can execute read-only queries (`SELECT`, schema inspection, RPC inspection, log queries) against Production at any time.
+   - **Writes Require User Instruction**: Modifying schemas, executing migrations, or performing write/mutation operations against Production is permitted **ONLY when explicitly instructed by the user** via Supabase CLI or MCP. In all other scenarios, write operations against Production are strictly prohibited.
 3. **Row Level Security (RLS)**:
    - RLS is mandatory on 100% of public tables. Never bypass RLS or expose service-role keys in client components.
 

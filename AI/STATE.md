@@ -1,10 +1,17 @@
 # AI State
 
 ## Monorepo Health & Status
-- **Current Task**: Deep Analysis & Remediation of Operator Shift Assignment Overlap Bug in Production DB
-- **Status**: 🟢 Clean / Verified & Production Ready (Root cause isolated: migration 222 rollback drop + flawed oma_no_active_operator_shift_overlap exclusion constraint + NULL range hazard; Migration 223 deployed & verified on Dev DB; Migration 222 neutralized to safe no-op; Web resilient fallback hardened; 0 typecheck errors; 357/357 mobile tests passing)
+- **Current Task**: Update Production Supabase Database Rule & AI Agent Instruction
+- **Status**: 🟢 Clean / Verified & Production Ready (Updated Supabase environment isolation and access policy monorepo-wide: Production read-only allowed anytime, production writes strictly conditioned on explicit user instructions; 95/95 rule tests passing, 0 typecheck errors)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-20
+- **Production Supabase DB Access Policy Update**:
+  - `User Request`: "modify the production supabase db rule and instruction for the ai agents always ai agents can ready only anythime in the production db and when i say to make some changes in the production db or modify something in the production db via supabase cli or mcp so then only ai agents can write operation in the production db"
+  - `Rules Enshrined`:
+    1. **Production Read-Only Anytime**: AI agents are ALWAYS permitted to execute READ-ONLY operations (`SELECT` queries, inspecting schemas, tables, columns, constraints, foreign keys, triggers, RPC definitions, querying logs, checking live data) on the Production database (`dhbbgfzbyatzvqafnsqp`) at ANY TIME via Supabase CLI or MCP.
+    2. **Production Writes Conditioned on User Request**: AI agents can ONLY execute WRITE / MUTATION operations (`INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP`, `CREATE`, migrations, DDL, RPC updates, edge function deployments, seeding/backfills) in the Production database (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP WHEN THE USER EXPLICITLY INSTRUCTS OR TELLS THE AGENT TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB.
+    3. **Development Default for Writes & Testing**: For normal development, testing, schema experimentation, local/dev migrations, and seed data, all mutations continue to default to the Development project (`vlmxciuogczumumrwyot`).
+  - `Files Synchronized`: `AGENTS.md`, `supabase/AGENTS.md`, `.agents/rules/mandatory_rules_reading_and_enforcement.md`, `AI/RULES/SECURITY.md`, `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`, `AI/RULES/ARCHITECTURE.md`, `security/SECURITY-RULES.md`, `security/SECURITY-TESTING.md`, `rules/testing/README.md`, `.agents/rules/testing/README.md`, `.agents/rules/testing/README-test.md`, `rules/testing/04-integration-api-database.md`, `.agents/rules/testing/04-integration-api-database.md`, `rules/testing/08-security-testing.md`, `.agents/rules/testing/08-security-testing.md`, `.agents/rules/testing_standards_and_enforcement.md`, `AI/PROJECT_MEMORY.md`.
 - **Operator Shift Assignment Overlap Issue Resolution**:
   - `User Report`: Running migrations 221 and 222 in production caused operator assignment to throw: "Shift window overlapping error: The selected shift timings overlap with an existing active assignment."
   - `Root Causes Identified & Resolved`:
@@ -28,19 +35,25 @@
     - `node scripts/check-typography.mjs`: Clean.
     - `node scripts/test-touch-haptics.mjs`: Clean.
     - `pnpm --filter @reachinternational/permissions test`: 25/25 passed (100%).
-- **Netlify Deploy Node.js Version Remediation**:
-  - `User Report`: Netlify build failed with `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`. pnpm v11.21.0 requires Node.js v22.13 or higher, but Netlify ran with Node.js v20.20.2.
-  - `Root Cause`: Netlify's build container defaults to Node 20 unless a `.nvmrc` or `.node-version` file instructs `mise` to select Node 22, and `netlify.toml` specified `NODE_VERSION = "20"`. `pnpm@11` utilizes the new native `node:sqlite` module which was introduced in Node.js 22.5.0+.
+- **Netlify Deploy Node.js Version & Publish Directory Remediation**:
+  - `User Report 1`: Netlify build failed with `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`. pnpm v11.21.0 requires Node.js v22.13 or higher, but Netlify ran with Node.js v20.20.2.
+  - `User Report 2`: Netlify build failed at line 312: `Error: Your publish directory was not found at: /opt/build/repo/.next.` `@netlify/plugin-nextjs` looked for `.next` at `/opt/build/repo/.next` because `apps/web/netlify.toml` specified `publish = ".next"`.
+  - `Root Causes`:
+    1. Node Version Mismatch: Netlify's build container defaults to Node 20 unless `.nvmrc` or `.node-version` instructs `mise` to select Node 22, and `pnpm@11` requires native `node:sqlite` (Node >= 22.5.0).
+    2. Monorepo Publish Path Resolution: When Netlify runs the build from `/opt/build/repo` (the repository root), all paths in `netlify.toml` (even when located inside `apps/web/netlify.toml`) are evaluated relative to the root base directory. Having `publish = ".next"` in `apps/web/netlify.toml` caused `@netlify/plugin-nextjs` to look for `/opt/build/repo/.next` rather than the actual Next.js Turbopack output at `/opt/build/repo/apps/web/.next`.
   - `Fixes Applied`:
-    1. Created `.nvmrc` at root containing `22`.
-    2. Created `.node-version` at root containing `22`.
-    3. Updated `netlify.toml` `[build.environment]` setting `NODE_VERSION = "22"`.
-    4. Updated `apps/web/netlify.toml` setting `NODE_VERSION = "22"`.
-    5. Updated `scripts/test-netlify-deployment-config.mjs` verifying `.nvmrc`, `.node-version`, and `NODE_VERSION = "22"`.
+    1. Created `.nvmrc` and `.node-version` at repository root containing `22`.
+    2. Updated root `netlify.toml` and `apps/web/netlify.toml` to declare `NODE_VERSION = "22"`.
+    3. Updated `apps/web/netlify.toml` setting `publish = "apps/web/.next"`.
+    4. Configured `[functions]` in `apps/web/netlify.toml` with the 3 scheduled cron functions (`cleanup-staging`, `cleanup-superseded`, `close-expired-jobs`) pointing to `netlify/functions` so that cron schedules remain active whichever config Netlify loads.
+    5. Updated `scripts/test-netlify-deployment-config.mjs` to assert `publish = "apps/web/.next"`, Node 22 LTS, and cron functions in `apps/web/netlify.toml`.
+    6. Updated `docs/NETLIFY_DEPLOYMENT.md` explaining the monorepo publish path.
   - `Verification Evidence`:
     - `node scripts/test-netlify-deployment-config.mjs`: 10/10 passed (100%).
     - `node scripts/run-all-tests.mjs`: 29/29 monorepo test suites passed (100%).
     - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `npx wrangler deploy --dry-run`: 340 assets read, 12 bindings verified (Cloudflare intact).
+    - `node scripts/test-vercel-cron-hobby-compliance.mjs`: 100% compliant (Vercel intact).
 - **TooltipProvider Missing Error Resolution**:
   - `User Request`: "## Error Type: Console Error ## Error Message: `Tooltip` must be used within `TooltipProvider` at ... Next.js version: 16.2.12 (Turbopack)"
   - `Root Causes Identified & Resolved`:
