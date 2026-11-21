@@ -34,7 +34,7 @@ export function AssignmentActions({
   const isButtonDisabled = disabled || isSaving;
 
   return (
-    <div className={cn("space-y-3 pt-3 border-t border-[var(--color-hairline)]", className)}>
+    <div className={cn("space-y-3", className)}>
       {/* Inline Error Notice */}
       {errorMessage && (
         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-medium">

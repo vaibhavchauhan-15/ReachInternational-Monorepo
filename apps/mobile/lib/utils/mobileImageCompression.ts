@@ -407,12 +407,20 @@ export async function compressMobileImageForUpload(asset: string | {
     );
   }
 
-  // Final Gate: Reject if > 2.5 MB (after all 3 passes)
+  // Final Gate: Reject if > 2.5 MB (after all 3 passes) or if degenerate (< 5 KB)
   if (sizeBytes > DOC_UPLOAD.maxBytes) {
     throw new UploadError(
       'IMAGE_TOO_LARGE',
       `Photo is still too large (${(sizeBytes / 1024).toFixed(0)} KB) after compression. Please use a photo under 2.5 MB or take a new one in better lighting.`,
       false
+    );
+  }
+
+  if (sizeBytes < 5_000) {
+    throw new UploadError(
+      'COMPRESSION_FAILED',
+      'The photo could not be processed clearly. Please take a clearer photo and try again.',
+      true
     );
   }
 

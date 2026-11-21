@@ -201,9 +201,15 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     }
   }, [dateContext]);
 
-  // Lazy loading queries: ONLY fetch all fleet machines/clients on-demand when user opens dropdown or if unassigned
-  const shouldFetchMachines = !currentContext?.machine?.id || hasOpenedMachineSelect;
-  const shouldFetchClients = !currentContext?.client?.id || hasOpenedClientSelect;
+  const isSupervisorOrAdmin = ['super_admin', 'admin', 'manager', 'supervisor'].includes(user?.role || '');
+
+  // Lazy loading queries: ONLY fetch all fleet machines/clients on-demand for supervisors or when opened
+  const shouldFetchMachines = isSupervisorOrAdmin
+    ? (!currentContext?.machine?.id || hasOpenedMachineSelect)
+    : hasOpenedMachineSelect;
+  const shouldFetchClients = isSupervisorOrAdmin
+    ? (!currentContext?.client?.id || hasOpenedClientSelect)
+    : hasOpenedClientSelect;
   const { data: lazyMachines, isLoading: isLoadingMachines } = useOperationsMachinesLazy(shouldFetchMachines);
   const { data: lazyClients, isLoading: isLoadingClients } = useOperationsClientsLazy(shouldFetchClients);
 
@@ -694,6 +700,19 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
     }
 
     const effectiveMachine = activeMachine || currentContext?.machine;
+
+    // Strict Unassigned Past Date Guard for Operators
+    if (!isSupervisorOrAdmin && (!effectiveMachine?.id || assignedShiftCodes.length === 0)) {
+      haptics.reject();
+      const err = {
+        title: 'Not Assigned On This Date',
+        message: `You were not assigned to any equipment or shift on ${formatDate(logDate)}. Operators cannot submit shift logs for dates without an active assignment.`,
+      };
+      postNotification({ category: 'log_entry', title: err.title, body: err.message, severity: 'error' });
+      toast('error', err.title, err.message);
+      return;
+    }
+
     if (!effectiveMachine?.id) {
       haptics.reject();
       const err = { title: 'No Machine Assigned', message: 'No machine assigned to your account.' };
@@ -835,9 +854,15 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         return;
       }
 
+      // Resolve shift-matched assignment ID to prevent multi-shift collision on same machine
+      const selectedNorm = (selectedShiftCode || '').replace(/^shift\s*/i, '').trim().toUpperCase();
+      const matchedAss = currentContext?.assigned_shifts?.find(
+        (s: any) => (s.shift_code || '').replace(/^shift\s*/i, '').trim().toUpperCase() === selectedNorm
+      );
+      const effectiveAssignmentId = matchedAss?.assignment_id || currentContext?.assignment_id || entryContext?.assignment_id || null;
+
       const rpcParams = {
-        // Pass assignment_id: p_assignment_id: entryContext?.assignment_id
-        p_assignment_id: currentContext?.assignment_id || entryContext?.assignment_id || null,
+        p_assignment_id: effectiveAssignmentId,
         p_machine_id: effectiveMachine.id,
         p_operator_id: effectiveOperatorId,
         p_client_id: effectiveClient?.id || null,
@@ -866,7 +891,7 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
       };
 
       logPayload = {
-        assignment_id: currentContext?.assignment_id || entryContext?.assignment_id || null,
+        assignment_id: effectiveAssignmentId,
         machine_id: effectiveMachine.id,
         shift_code: selectedShiftCode,
         client_id: effectiveClient?.id || null,
@@ -1033,11 +1058,11 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
         const { error: insertErr } = await supabase.from('machine_hour_logs').insert(logPayload);
         if (insertErr) throw insertErr;
 
-        // Update machine hour_meter and health_status
+        // Update machine hour_meter (NON-REGRESSING GREATEST) and health_status
         await supabase
           .from('machines')
           .update({
-            hour_meter: endNum,
+            hour_meter: Math.max(Number((effectiveMachine as any)?.hour_meter) || 0, endNum),
             current_operator_id: effectiveOperatorId,
             health_status: isBreakdown ? 'breakdown' : 'active',
             updated_at: new Date().toISOString(),
@@ -1594,6 +1619,34 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
             onSelect={handleSelectShift}
           />
 
+          {/* Warning if operator has no assignment on selected work date */}
+          {!isSupervisorOrAdmin && (!currentContext?.machine?.id || assignedShiftCodes.length === 0) && (
+            <View
+              style={[
+                styles.unassignedWarningBanner,
+                {
+                  backgroundColor: isDark ? '#451a03' : '#fffbeb',
+                  borderColor: isDark ? '#92400e' : '#fde68a',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 8,
+                },
+              ]}
+            >
+              <AlertTriangle size={14} color={isDark ? '#fbbf24' : '#d97706'} />
+              <Text
+                variant="micro"
+                style={{
+                  color: isDark ? '#fbbf24' : '#92400e',
+                  flex: 1,
+                }}
+              >
+                No active assignment on {formatDate(logDate)}. Operators cannot submit shift logs for unassigned dates.
+              </Text>
+            </View>
+          )}
+
           {/* Warning if unassigned shift selected */}
           {isCurrentShiftUnassigned && (
             <View
@@ -1815,8 +1868,11 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = R
           variant="fab"
           haptic={false}
           onPress={handleSubmit}
-          disabled={isSubmitting}
-          style={styles.submitBtn}
+          disabled={isSubmitting || (!isSupervisorOrAdmin && (!currentContext?.machine?.id || assignedShiftCodes.length === 0))}
+          style={[
+            styles.submitBtn,
+            (!isSupervisorOrAdmin && (!currentContext?.machine?.id || assignedShiftCodes.length === 0)) && { opacity: 0.5 },
+          ]}
         >
           {isSubmitting ? (
             <ActivityIndicator size="small" color="#ffffff" />

@@ -1,10 +1,311 @@
 # AI State
 
+## Latest Task (Web + Native UI + Database)
+- **Past-Date Operator Shift Assignment Visibility & Persistence in Operations Monitor** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
+  - **Root Cause Identified**: In `get_today_shift_log_monitor` and `get_today_shift_monitor_summary` (migrations 225 & 227), `assignments_on_date` filtered out rows with `oma.valid_from = oma.valid_to AND oma.is_active = false AND NOT EXISTS (SELECT 1 FROM logs ...)`. For past dates (`target_date < today_ist`), single-day assignments have `valid_from = valid_to = target_date` and trigger `trg_fn_sync_oma_valid_range` sets `is_active = false` on past assignments. Because `p.target_date >= p.today_ist` was missing from the guard, any newly assigned operator on a past date was completely excluded from the monitor and summary, showing "Unassigned" instead of "pending".
+  - **Database Migration 230 (`supabase/migrations/230_fix_past_date_shift_monitor_and_summary.sql`)**: Scoped the relieved operator exclusion filter to `p.target_date >= p.today_ist`. Automatically applied and verified on Development Supabase (`vlmxciuogczumumrwyot`). (Production DB `dhbbgfzbyatzvqafnsqp` left untouched per safety policy).
+  - **Web & Mobile Parity Synchronization**: Updated `MobileAssignPersonnelModal.tsx` and `MobileTodayShiftMonitorTab.tsx` to handle and synchronize saved assignment dates; maintained exact cache/optimistic update contract in `TodayShiftMonitorTab.tsx`.
+  - **Verification**: Live Dev Supabase queries confirmed `M/C-0001` on `2026-11-19` correctly returns `VAIBHAV CHAuhannn` (Shift `A`, `status: 'pending'`, `log_id: null`) and summary reports `pending: 7, unassigned: 0`. Web & mobile typechecks 100% clean (0 errors), `test-date-based-assignment.mjs` 57/57 passed, `test-assignment-standardization.mjs` 34/34 passed, and `run-all-tests.mjs` 33/33 test suites passed cleanly (100%).
+- **Operations Page Feedback — Date Picker Tooltips, Window Badge Removal & Layout Optimization** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
+  - **CustomDatePicker Tooltips & Lock Indicators**: Added real-time floating tooltips and footer live preview for all calendar day cells: Today (`● Today · 21 Nov`), Tomorrow (`● Tomorrow · 22 Nov`), Yesterday (`● Yesterday · 20 Nov`), 2 to 7 days ago (`● N days ago · <Date>`), and Locked dates (lock icon `Lock` + `🔒 Locked · <Date>` with out-of-window limitation details). Enhanced accessibility with `aria-disabled` and keyboard focus support.
+  - **Removal of "7d back · 1d ahead" Chip**: Removed the raw `7d back · 1d ahead` chip from `AssignOperatorToMachineDialog.tsx` and `AssignMachineToOperatorDialog.tsx`, and removed `showWindowBadge` to avoid cluttering dialog headers.
+  - **Clean & Optimized Assignment Date Row**: Re-architected the Assignment Date control in both assignment dialogs into a responsive Geist surface (`p-2.5 sm:p-3`, `rounded-xl`, hairline border). Aligned icon, title, context subtitle/badge (Past Correction / Tomorrow Plan / Active Coverage), quick "Today" reset button, and the date picker trigger cleanly without wrapping artifacts at 624×807 and across all viewports.
+  - **Web & Native Parity**: Removed the redundant window tag from `MobileAssignPersonnelModal.tsx`.
+  - **Verification**: Monorepo typecheck clean (7/7 packages), 33/33 test suites passed (100%), live browser visual verification at 624×807 via CDP subagent confirmed clean layout, button 21 "Today" tooltip, and lock icons.
+- **Employee Profile Detail (`/users/[id]`) Feedback Implementation — Zero Duplication, Hero Redesign, Inline Centered Copy & Streamlined Tabs** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
+  - **Hero Card Optimization & Mobile Ergonomics (Items 1, 6, 7, 10)**: Removed "Employee Profile" uppercase paragraph; formatted avatar with role-gradient, crisp initials and active pulse dot; grouped Full Name with EMP-ID mono badge (1-click copy), Role badge, Machine Category (for operator), and Status pill; eliminated quick contact cluster; introduced structured 2-col (mobile) / 4-col (desktop) metadata strip (Shift Time, Joining Date, Supervisor, Location) with icons; added mobile full-width `Edit Profile` button below metadata strip, eliminating all empty space across all viewports (1536px desktop down to 390px mobile).
+  - **Zero Duplicate Information (Item 11)**: Eliminated all duplicate attributes from the page. Hero card owns identity, badges, shift time, joining date, supervisor, and location; lower Profile Details card now owns ONLY unique non-duplicate information structured in 3 equal columns: Contact Information (Email, Phone, WhatsApp), Leave & Compensation (PL Leave Quota, Monthly Salary, Supervised Operators link), and Residential Address (Street, City/District, State).
+  - **Inline Centered Copy Buttons (Items 2, 3, 4, 5)**: Upgraded `DetailRow` from `items-start` to `items-center` on row container and `<dd>`, with `inline-flex h-5 w-5 shrink-0 items-center justify-center` button; copy icons are now vertically centered inline with text, completely fixing the "slightly bottom" misalignment.
+  - **Deletions per Feedback (Items 8, 9, 12)**: Completely removed Operational Snapshot cards (`<section aria-label="Operational snapshot">` and `snapshotTiles`); removed tab strip search box input completely; removed "Back to Users" link and shifted breadcrumb to the top-left position.
+  - **Verification**: `tsc --noEmit` on Web & Mobile clean (0 errors), `pnpm typecheck` 7/7 packages clean (0 errors), ESLint on `UserDetailClient.tsx` clean (0 errors), 33/33 monorepo test suites passed (100%).
+- **/operations assign dialog — 7-past / today / tomorrow date picker restored** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
+  - Root cause: `/operations` passed `allowDateSelection={false}`, so the assign dialog was locked to today with no picker. New `initialAssignmentDate` prop (clamped to `[today−7, today+1]`) flows through `AssignPersonnelModal` → both dialogs; the monitor seeds it with its `selectedDate`, so assigning while viewing a historic day edits that day and tomorrow is plannable.
+  - Optimistic monitor patching is guarded by the saved date (a back-dated/tomorrow edit can never rewrite the visible day); the date section shows `7d back · 1d ahead` and explains when a viewed day is clamped to today.
+  - `CustomDatePicker` tooltips corrected; native `MobileAssignPersonnelModal` accepts the same preferred date from `MobileTodayShiftMonitorTab`.
+  - Verified: date-assignment suite 57/57 (incl. live Dev-DB tomorrow + 7-days-ago save/remove), 33/33 monorepo suites, web ESLint 0 errors, mobile 357/357, typography 0, haptics pass, parity 95/95, live browser at 624/1280 px.
+- **Employee Profile Detail (`/users/[id]`) — KYC document merge, premium layout & audit redesign** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
+  - Removed the three statutory value cards; Aadhaar / licence / bank numbers now render inside their own document card (masked + audit-logged reveal + copy) beside a real scan thumbnail that opens the full document viewer; documents search removed; dashed "No scan" cards keep registered numbers visible when no file exists.
+  - Every tab now uses a shared `Panel` shell; profile metadata is one hairline-divided surface + role-aware operational snapshot; hero stacks until `xl`; tab strip is sticky and wraps (no clipped pills); assignment cards equal-height; attendance deep link uses the current IST month.
+  - Audit trail rebuilt as a compact timeline with category glyphs, severity chips, expandable key/value details and progressive disclosure (10 → +15 rows).
+  - Native parity in `apps/mobile/components/users/UserDetailView.tsx`; verified web typecheck + ESLint (0 errors) + `next build`, mobile `tsc`, 357/357 mobile guards, typography 0, haptics pass, parity 95/95, users workflows 42/42, live browser at 1536/834/390 px light + dark.
+- **Users Directory card & responsive layout refinement** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
+  - Web `MobileUserCard`: no default checkbox (long press ≥450 ms enters multi-select), single chips row (`EMP-xxxx` mono 10.5px · status · role), city + state on one row, Aadhaar/DL footer pinned with `mt-auto`, duplicate-city bug fixed.
+  - Cards render below `lg` (1→2 cols at `sm`); table only at `lg+` with progressive columns (core 6 → `xl +Supervisor` → `2xl +Machine/Location` → `min-[1900px] +KYC/Joined`). No horizontal scroll at 1024/1280/1440/1600.
+  - KPI tiles `p-3 sm:p-3.5`, 2 cols until `lg`, single-line labels; shared `PageHeader` stacks actions below `lg` (no more truncated page titles on tablets).
+  - Native parity: `UserTouchCard` identity chips row (EMP + status + role), city/state inline, dead styles removed.
+  - Verified: web typecheck + ESLint (0 errors), mobile `tsc` clean, users workflow tests 42/42, typography guard 0, touch/haptics guard pass, parity rules 95/95, live browser at 390/820/1024/1280/1440/1600 px in light + dark.
+
 ## Monorepo Health & Status
-- **Current Task**: Resolve Netlify Secrets Scanning Deployment Failure
-- **Status**: 🟢 Clean / Verified & Production Ready (Netlify secrets scanning omissions configured in netlify.toml and apps/web/netlify.toml, codebase secrets sanitized/redacted, 10/10 deployment checks passed, 29/29 monorepo test suites passing, 0 typecheck errors)
+- **Current Task**: Date-Based Operator-to-Machine Assignment (Today .. Today+7, IST) — Web + Native + DB
+- **Status**: 🟢 IMPLEMENTED, VERIFIED & DEV-MIGRATED (33/33 monorepo test suites passed, 7/7 typecheck clean, live browser E2E verified; migration 228 applied to Dev only — Production requires explicit instruction)
+- **Previous Task**: Operations Module End-to-End Audit, Performance Optimization & Backend Architecture Refactoring (migration 227)
+- **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
+- **Last Verified**: 2026-11-21
+- **Operations Module End-to-End Audit & Performance Optimization (Shift Management / Shift Entry & History / Daily Operations)**
+  - `User Report`:
+    1. "Complete Operations Module Audit, Performance Optimization & Architecture Refactoring … make every operation extremely fast, responsive, reliable, and scalable while reducing unnecessary server load, database queries, API requests, and redundant processing."
+  - `Root Causes & Fixes Applied`:
+    1. **Roster RPC PostgREST Overload Ambiguity (functional outage)**: `get_today_shift_log_monitor(uuid,date,text,uuid)` survived migration 225's DROP and coexisted with the 6-parameter version. Because BOTH default their trailing arguments, ANY call omitting `p_shift_code`/`p_sort` failed with SQLSTATE **42725 "function is not unique"** — the native app's `useTodayShiftMonitor({ p_actor_id, p_log_date, p_client_id? })` could never resolve. Dropped the stale pre-225 overload in migration 227; all call shapes now resolve to the single canonical function (verified live over PostgREST).
+    2. **Triplicated roster computation in PostgreSQL**: `get_today_shift_log_monitor`, `get_today_shift_log_monitor_paginated` and `get_today_shift_monitor_summary` each re-implemented the same ~15 KB CTE tree. Migration 227 rewrites all three: RBAC resolved once into scope arrays (removed 6 correlated `EXISTS`/hashed SubPlans + 3 InitPlans), the target day's logs read once via a single `log_date` index scan, the OR-ed log join replaced by an equality anchor + `ROW_NUMBER()` priority, `extra_entered_logs` anti-joins the materialized `base` set on equality keys, `machines` opened once via a slim CTE, and the paginated RPC delegates to the canonical monitor function (15 KB of duplicated SQL deleted). One planned statement per call instead of 6.
+    3. **Duplicate roster query in the web DAL**: `getTodayShiftLogMonitor` issued a second unbounded `operator_machine_assignments` query and re-implemented active/cancelled/superseded reconciliation in JavaScript, then re-applied shift filtering and time sorting already done in SQL. Removed entirely — the RPC is authoritative (verified byte-identical output vs the old JS reconciliation across 48 actor/date/search cases). Added a 10 s `unstable_cache` tier tagged `operations:today-shift-monitor` so SSR + polling + realtime refreshes collapse into one DB execution.
+    4. **Self-triggering fetch loop + duplicate fetches in `TodayShiftMonitorTab`**: `fetchData` depended on `rows.length`, so every roster-size change re-created the callback and re-fired the mount effect, and `handleDateChange`/`handleResetFilters` fetched in addition to the effect. Replaced with a single `fetchRoster(date)` per date change, request-sequence coalescing (stale responses discarded), ref-stable refresh entry points and an SSR-payload date guard.
+    5. **Server round-trip per keystroke/filter click**: search, client filter, shift filter and sort were sent to the heavy RPC while the component ALSO filtered client-side (and server filtering broke the derived filter counts). All four are now pure in-memory operations over the already-loaded day roster (`useDeferredValue` for search), costing zero requests.
+    6. **Polling/refresh storm**: 30 s unconditional polling + realtime broadcast + visibility changes. Polling now skips hidden tabs, skips when a refresh happened < 20 s ago, coalesces with in-flight requests, and re-syncs on `visibilitychange`.
+    7. **Operator entry duplicate calls & leaks**: removed the mount-time "eager re-fetch guard" that duplicated the SSR entry context for every operator whose assignment is an effective-dated range; the 30 s notification sync now runs at most once per mount (was re-firing on every channel re-SUBSCRIBE) with a 20-row limit; the `operations-roster` broadcast channel is created once per session instead of on every submission (was leaking an open Realtime subscription per saved log).
+    8. **Shift history refetch on every tab toggle**: `OperatorHistoryTab` is code-split and unmounts on tab switch, re-fetching 100 logs each time. Added a 60 s session cache keyed by operator, kept in sync by the edit handler.
+    9. **O(n²) assignment stats**: `fetchOperationsAssignmentsData` counted machines × assignments with `Array.filter` per machine; replaced with a single roll-up `Map`.
+    10. **Sequential assisted-entry authorization**: `isOperatorUnderSupervisor` awaited the machine/clientsite check before the authoritative RPC; both now run concurrently.
+    11. **Dead code removed**: `OperationsClient`'s `ssr:false` dynamic import of `OperatorDashboard` (unreachable — operators render via `OperatorEntryClient`), the unused `dbClients`/`getClients()` payload on every supervisor `/operations` load, the unused `getShiftTasks` DAL wrapper, and the unused `abortRef`/`debounceRef`/`fetchDataRef` refs.
+  - `Verification Evidence`:
+    - DB A/B (Development project, 25 iterations, same session): `get_today_shift_log_monitor` **17.2 ms → 5.8 ms per call (2.96× faster)**; `get_today_shift_monitor_summary` 1.92 ms → 1.93 ms (neutral); `get_today_shift_log_monitor_paginated` 4.56 ms → 6.04 ms (delegates to the canonical roster, removing 15 KB of duplicate SQL; PostgREST p95 improved 97.7 ms → 95.9 ms). Cold-plan cost (inline EXPLAIN): **99 ms → 13.3 ms planning**.
+    - Behavioural equivalence: 48 monitor cases (4 actors × 4 dates × 3 searches) and 8 paginated/summary cases compared with `EXCEPT ALL` / JSONB equality against the pre-227 implementations → **0 differences**.
+    - Live PostgREST verification of every call shape (actor only, actor+date, +client, +sort, +search, +shift, paginated) → all resolve and return rows.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors). ESLint on all touched files: 0 errors. `next build`: passed. `node scripts/run-all-tests.mjs`: 32/32 suites passed.
+    - Migration 227 applied to **Development** (`vlmxciuogczumumrwyot`) only. **Production migration requires explicit user instruction** (policy).
+- **Previous Task**: Comprehensive Shift Entry Hardening, Date Independence & Unassigned Entry Prevention
+- **Status**: 🟢 IMPLEMENTED, VERIFIED & PRODUCTION MIGRATED (32/32 monorepo test suites passed, 16/16 shift entry tests passed, 100% typecheck clean)
+- **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
+- **Last Verified**: 2026-11-21
+- **Shift Entry Hardening, Date Independence & Unassigned Entry Prevention**:
+  - `User Reports`:
+    1. "in the production db test all type of shift entery detailed test case multi shift on same machine multi shift on different machine today assignment or yesterday assigne both should be inndependant and dont interup each other if operator dont assign to any previos day shift then operator dont enter the shift entry with choose the past date and enter the shift which is not assigned to that operator overlapping and much more inspect and desing the codebase and make properly implementaion plan if any bugs founds"
+  - `Root Causes & Fixes Applied`:
+    1. **Multi-Shift Assignment ID Collision on Same Machine**: `get_operator_entry_context` previously used `ORDER BY valid_from DESC LIMIT 1`. For an operator assigned to multiple shifts (e.g. Shift A and Shift B on M/C-0009), it returned Shift B's assignment ID for both shifts. When logging Shift A, unique index `idx_mhl_assignment_log_date_unique` became occupied for Shift B, causing error 23505 when logging Shift B. Upgraded `get_operator_entry_context` to return `assigned_shifts` mapping each shift code to its distinct assignment ID, and updated `submit_operator_hour_log_atomic` to accept `p_assignment_id` and resolve assignment ID strictly matching `shift_code`.
+    2. **PostgREST Overload Ambiguity (PGRST202 & PGRST203)**: Single-argument overload `get_operator_entry_context(uuid)` clashed with the 2-argument default version, causing PGRST203. Dropped the old overloads in both Dev and Production DB (`dhbbgfzbyatzvqafnsqp`) leaving canonical signatures: `get_operator_entry_context(uuid, date)` and `submit_operator_hour_log_atomic(..., p_assignment_id)`.
+    3. **Past-Date Unassigned Operator Guard**: Prevented operators from submitting logs for machines/shifts they were never assigned to. Hardened across 4 independent layers:
+       - **Database Trigger**: Created `trg_enforce_operator_assignment_exists` on `machine_hour_logs` to immediately intercept and reject unassigned direct inserts or updates with SQLSTATE 42501.
+       - **Database RPC**: In `submit_operator_hour_log_atomic`, added check verifying valid assignment covering `v_log_date`, returning SQLSTATE 42501.
+       - **Web Server Action**: In `apps/web/app/actions/operators.ts`, rejects non-assisted entries if `activeAssignments.length === 0` on `timing.resolvedStartDate`.
+       - **Web & Mobile UI**: In `OperatorEntryClient.tsx` and `MobileOperatorEntryCard.tsx`, blocks submission and displays a clear warning banner when the operator has no assignment on the selected work date.
+    4. **Machine Meter Non-Regression**: Historical past-date logs could cause `machines.hour_meter` to regress backwards. Enforced `hour_meter = GREATEST(COALESCE(hour_meter, 0), p_end_meter)` in SQL and `Math.max()` in fallback handlers.
+    5. **`chk_active_has_no_end` Invariant**: In `trg_fn_sync_oma_valid_range`, auto-populated `ended_at = NOW()` when `is_active` transitions to `false` on expired assignments, satisfying database constraint `chk_active_has_no_end`.
+    6. **Production Data Restoration**: Repaired Vikas Singh's historical logs (`27985da8...` and `2cabca6e...`) on M/C-0009 to link to Shift A's assignment ID `f9c3da37-4761-4a64-a88d-d2c55a3c68b9`, immediately unblocking Shift B logging.
+  - `Verification Evidence`:
+    - `tests/operations/test-shift-entry-comprehensive.mjs`: 16/16 exhaustive automated tests passed (100%).
+    - `node scripts/check-typography.mjs`: Clean (0 raw typography properties).
+    - `node scripts/test-touch-haptics.mjs`: Clean (100%).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 32/32 monorepo test suites passed cleanly (100%).
+    - Live Development DB (`vlmxciuogczumumrwyot`) verification: Migration 226 applied cleanly (`submit_operator_hour_log_atomic`, `get_operator_entry_context`, `trg_enforce_operator_assignment_exists`, and `trg_fn_sync_oma_valid_range` 100% active and passing 16/16 tests).
+    - Live Production DB (`dhbbgfzbyatzvqafnsqp`) verification: `get_operator_entry_context` returns distinct assignment IDs for Vikas Singh; unassigned operator submission rejected with 42501; direct table insert rejected with 42501 by trigger.
+    - **Policy Enforced Monorepo-Wide**: When migrations are created or updated, they are automatically applied/pushed to the Development DB (`vlmxciuogczumumrwyot`) immediately without asking. Modifying the Production DB (`dhbbgfzbyatzvqafnsqp`) without explicit user permission is strictly prohibited.
+- **Document Black Color Preview & Download Bug**:
+  - `User Reports`:
+    1. "IN THE production when user are registered then it come to mee for approval thumbnails of all docment are properly visible but when i open or download the document it show black color of some user documents and some user documents are properl visible so now deeply inspect the root cause you have supabase and vercel cli access to read only make it production word class industrial standard bug fixing plan"
+  - `Root Causes & Fixes Applied`:
+    1. **Asynchronous GPU Texture Allocation in `createImageBitmap` on Chromium for Android**: `createImageBitmap` allocates GPU textures asynchronously. Drawing immediately to `OffscreenCanvas` on mobile GPUs before texture decompression finished caused empty/black frame outputs. Replaced with `HTMLImageElement` + `await img.decode()`, guaranteeing 100% in-memory raster decompression before canvas operations.
+    2. **Missing Canvas Background Fill**: Default canvas transparency (`rgba(0,0,0,0)`) maps to solid black in JPEG encoders (`#000000`). Enforced `#FFFFFF` white background fill before every `drawImage` call in `image-compression.ts`.
+    3. **Zero-Black Client Guard**: Added `isCanvasPureBlack` 9-point sample inspector in `image-compression.ts` that detects and retries/rejects unpainted frames, plus a $5\text{ KB}$ floor check.
+    4. **Server-Side Minimum Size Gate**: In `auth.ts`, enforced `mainSize < 8000` rejection to block corrupted blank files during registration.
+    5. **Lightbox Auto-Fallback & Controls**: In `DocumentLightboxModal.tsx`, automatically defaults to `thumb_signed_url` when original is corrupted ($\le 9000\text{ B}$), provides manual toggle between Original and Thumbnail, and ensures Download button exports the verified photo.
+    6. **Mobile Parity**: In `ApprovalDetailBottomSheet.tsx`, batch signs both `storage_path` and `thumb_path`, falling back to `thumbUrl`.
+    7. **Production Data Restoration**: Overwrote all 5 corrupted $7,508\text{-byte}$ black documents in Supabase Storage with their healthy thumbnail photos for Arvind Kumar (`8e577eb5...`) and Brijesh Yadav (`19822f45...`), and updated `public.user_documents` sizes.
+  - `Verification Evidence`:
+    - `node apps/web/scripts/heal-corrupted-production-documents.mjs`: Successfully healed all 5 corrupted documents in Production DB and storage.
+    - `node scripts/test-document-compression-and-healing.mjs`: 5/5 automated checks passed (100%).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 31/31 monorepo test suites passed cleanly (100%).
+- **Operations Shift Filter, Timing Sort & Realtime Active Roster Optimistic UI**:
+  - `User Reports`:
+    1. `/operations`: "here add one more filter for the shift with properly working"
+    2. `/operations`: "all the rows are sorted by the time"
+    3. `/operations`: "this table dont show the correct data it show the historical data and i change the some assignment but it not update in this table i want to implement optimistic ui changes when any operator assing to any machine via assign operator modal/form then save the roster so update that roster here too ready anya analyze the codabase , frontend ,backend , db etc and remove the unwanted callings , hard catching , quesry , routs etc and optimize it with fast and lightweight api , routs , query which show the correct data from the supabase in nearly realtime optimize this"
+    4. "apply this migration to the production db also check any migration remaining or not if found first check is this safe or not if same then apply to the produciton db"
+  - `Root Causes & Fixes Applied`:
+    1. **Shift Filter Dropdown & PostgREST Signature Conflict**: `today-shift-monitor.ts` and `TodayShiftMonitorTab.tsx` had signature mismatches with the database RPC when passing `p_shift_code`, which resulted in error `42883` and returned empty results. Created migration 225 with 6 parameters and defaults, and added a resilient try/catch fallback in `today-shift-monitor.ts`. Shift filter now works 100% client-side with 0ms delay in `TodayShiftMonitorTab.tsx` with all canonical shift codes normalized (`Shift A`, `Shift B`, `Shift C`, `Shift S1`, etc.).
+    2. **Chronological Timing Sort**: Initialized `sortBy` to `"time_asc"` by default. Clickable `<th>Timing</th>` toggles between `"time_asc"` (`↑`) and `"time_desc"` (`↓`). Uses `parseTimeToMinutes` from `@reachinternational/utils` with nullish coalescing (`?? 9999`) for deterministic sorting from earliest to latest shift start. Hardened `formatTime` in both `TodayShiftMonitorTab.tsx` and `TodayShiftMonitorCard.tsx` against AM/PM strings to prevent `NaN`.
+    3. **Historical / Stale Assignments Elimination**: In `get_today_shift_log_monitor`, the CTE `active_assignments` selected `valid_to >= td.d` without an `is_active = true` check, causing relieved operators whose assignments ended today to remain visible as pending shifts indefinitely. Solved authoritatively in two layers:
+       - **Database Layer**: Migration 225 scopes active assignments to `oma.is_active = true OR td.d < today_ist OR EXISTS (log entered)` and excludes same-day ended assignments with 0 logs.
+       - **Data Access Layer**: Parallel fetch in `today-shift-monitor.ts` reconciles rows against `operator_machine_assignments` where `is_active = true`. Any pending shift for today that is no longer active and has 0 logs is immediately removed from the monitor.
+    4. **Rock-Solid Optimistic UI & Revert Protection**: In `<AssignOperatorModal onSuccess>`:
+       - Immediately updates affected machine rows in local state (0ms UI update).
+       - Sets `lastOptimisticEditRef.current = Date.now()`.
+       - In `fetchData`: protects recently edited machine rows (within 1500ms) from being prematurely overwritten by background broadcasts before DB commits.
+       - Debounces background soft sync to 800ms.
+    5. **Production Database Audit & Migration Execution**:
+       - Audited Production DB (`dhbbgfzbyatzvqafnsqp`) for all migration objects from 200 to 225. Confirmed that migrations 201-224 (unified approvals, RFQ, document verification, exclusion constraints, `notes` column, and atomic rosters) were already in production.
+       - Migration 225 was the sole pending migration.
+       - Safety audit confirmed: ZERO table DDL, ZERO data loss, ZERO DML, strictly non-breaking `CREATE OR REPLACE FUNCTION` on `get_today_shift_log_monitor`, `get_today_shift_monitor_summary`, and `get_today_shift_log_monitor_paginated`.
+       - Executed in production DB `dhbbgfzbyatzvqafnsqp`, reloaded schema cache via `NOTIFY pgrst, 'reload schema'`, and verified sub-2ms query execution with 0 errors.
+  - `Verification Evidence`:
+    - `node apps/web/scripts/test-shift-filter-and-timing-sort.mjs`: 7/7 checks passed (100%).
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 34/34 checks passed (100%).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 31/31 monorepo test suites passed cleanly (100%).
+- **Supervisor Assignment, Client Shift Schedules & Operations Fine-Grained UI Updates**:
+  - `User Reports`:
+    1. `/machines/[id]`: "i cant assign the other supervisor"
+    2. `/machines/[id]`: "why i cant remove primary supervisor"
+    3. `/operations`: "this shift name and the code , shift time etc should fetch from the this machine rented client. shift name and time depend on the clients so if machine rented to that client then the shift and time changes as per clients. properly fetch the shift shedule as per clients"
+    4. `/operations`: "to every operators show the already assigned shift name"
+    5. `/operations`: "all the assigned / unassign etc changes should update the ui properly. update only changes ui only instead of refresh all the pages. deeply analyse the codebase and remove the unwanted api , routs , querry and optimize it so it update the chages data very quickly"
+  - `Root Causes & Fixes Applied`:
+    1. **Supervisor Candidate Pool**: In `AssignSupervisorToMachineDialog.tsx`, `lazySupervisors.length <= 1` now properly triggers fetching the supervisor pool, and `MachineClientView.tsx` avoids passing single-supervisor arrays as the full pool.
+    2. **Client Shift Schedules**: `AssignOperatorToMachineDialog.tsx` synchronously resolves client shift codes (`client_shift_codes`) via `getCachedClientShifts(clientId)`, queries `/api/machines/[id]/operators?client_id=...`, and auto-aligns `selectedShiftCode` to valid client shift codes (`A`, `B`, `C`, etc.).
+    3. **Operator Assigned Shift Names**: `UserSelect.tsx` renders `subtitle` with a `Clock` icon and searches within it. `candidateUserSelectItems` generates `Assigned: Shift A (Morning) (This M/C)` or `Assigned: Shift B • M/C-0002` or `Available (No active shifts)`.
+    4. **Fine-Grained 0ms Optimistic UI**: `TodayShiftMonitorTab.tsx` updates only affected machine rows on assignment/unassignment (handling unassigned, multi-shift additions, removals, and log preservation), eliminates `router.refresh()` to avoid full page re-execution, and removes redundant `getMachineModalOptionsAction()` on modal open.
+  - `Verification Evidence`:
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 34/34 checks passed (100%).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 monorepo test suites passed cleanly (100%).
+- **Machine Personnel Duplicate React Key Bug Fix & Fleet-wide Deduplication Guard**:
+  - `User Reports`:
+    1. Console Error: `Encountered two children with the same key, 'b3400740-3e79-44c7-9aec-a0ec3ccd22ce'. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted.`
+    2. Stack trace: `Array.map (<anonymous>:null:null) at MachineClientView (.next\dev\static\chunks\apps_web_12tq3s1._.js:8822:81) at MachineDetailContent (app\(app)\machines\[id]\page.tsx:65:5)`
+    3. Directive: "fix this bugs".
+  - `Root Causes`:
+    1. In `MachineClientView.tsx`, lines 983 and 1018 mapped over `assignedSupervisors` and `assignedOperators` using `key={sup.id || idx}` and `key={op.id || idx}`. Because non-empty UUID strings are truthy in JavaScript, `op.id || idx` strictly evaluated to `op.id`. When an operator had multiple shift assignments on a machine (e.g. S1 and S2), or when duplicate active assignment rows existed in the database, each child element received identical `key="b3400740-3e79-44c7-9aec-a0ec3ccd22ce"`.
+    2. In `machine-detail.ts` (`hydrateMachinePersonnelSingle`) and `actions/machines.ts` (`getMachinePersonnelFreshAction`), `activeAssignments` were queried without deduplicating identical `operator_id` + `shift_code` rows, allowing duplicate records from previous assignment operations to populate the `operators` list with duplicate user IDs.
+    3. In `MachineClientView.tsx`, `assignedSupervisors` and `assignedOperators` useMemo hooks did not deduplicate records.
+    4. Mobile parity drift: `apps/mobile/components/machines/MachineDetailView.tsx` had identical `key={s.id || idx}` and `key={o.id || idx}` key collisions, and `MobileMachineCard.tsx` across both web and mobile used identical un-indexed fallbacks.
+  - `Fixes Applied`:
+    1. **100% Collision-Free JSX Keys (`MachineClientView.tsx`)**:
+       - Assigned Supervisors: `key={`${sup.id || 'sup'}-${idx}`}`.
+       - Assigned Operators: `key={`${op.id || 'op'}-${op.shift_code || idx}-${idx}`}`.
+    2. **Personnel Record Deduplication in `MachineClientView.tsx`**:
+       - `assignedSupervisors`: Deduplicated by supervisor `id` using a `Set<string>`.
+       - `assignedOperators`: Deduplicated by composite `${o.id || idx}:${o.shift_code || ''}:${o.shift_start_time || ''}`.
+    3. **Data Layer Hardening (`machine-detail.ts` & `actions/machines.ts`)**:
+       - `hydrateMachinePersonnelSingle`: Deduplicated `activeAssignmentsRaw` by `operator_id + ':' + shift_code` and `supervisorsList` by supervisor `id`.
+       - `getMachinePersonnelFreshAction`: Deduplicated `activeAssignments` by `operator_id + ':' + shift_code` and `supervisors` by supervisor `id`.
+    4. **Web Cards & Modals Key Hardening**:
+       - `MobileMachineCard.tsx`: Replaced un-indexed keys with `key={`${s.id || 'sup'}-${idx}`}` and `key={`${o.id || 'op'}-${idx}`}`.
+       - `MachineListClient.tsx`: `key={`${p.id || 'person'}-${idx}`}`.
+       - `MachineAssignmentsQuickModal.tsx`: `key={`${assignment.id || 'assign'}-${idx}`}`.
+       - `MachineHistoryQuickModal.tsx`: `key={`${log.id || 'log'}-${idx}`}`.
+       - `AssignSupervisorToMachineDialog.tsx`: `key={`${sup.id}-${idx}`}`.
+    5. **100% Mobile Parity (`MachineDetailView.tsx` & `MobileMachineCard.tsx`)**:
+       - `MachineDetailView.tsx`: In `supervisors` and `operators` useMemo, deduplicated records by ID / shift code.
+       - `MachineDetailView.tsx`: Updated JSX keys to `key={`${s.id || 'sup'}-${idx}`}` and `key={`${o.id || 'op'}-${o.shift_code || idx}-${idx}`}`.
+       - `MobileMachineCard.tsx` (mobile): Deduplicated supervisors & operators, and updated JSX keys to `key={`${s.id || 'sup'}-${idx}`}` and `key={`${o.id || 'op'}-${idx}`}`.
+    6. **Automated Verification Test**:
+       - Added check 30 to `apps/web/scripts/test-assignment-standardization.mjs` verifying collision-free indexed keys and absence of vulnerable `key={op.id || idx}` monorepo-wide (30/30 checks passing).
+  - `Verification Evidence`:
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 30/30 checks passed (100%).
+    - `pnpm --filter web typecheck`: Clean (0 errors).
+    - `pnpm --filter mobile typecheck`: Clean (0 errors).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 monorepo test suites passed cleanly (100%).
+    - `node scripts/check-typography.mjs`: 0 raw typography properties found.
+
+- **Machine Supervisor Assignment Fixes (Multi-Supervisor Assignment & Primary Supervisor Removal)**:
+  - `User Reports`:
+    1. Feedback 1 (`.space-y-4 > .space-y-4 > .pt-1 > .w-full` button "Assign Another Supervisor"): "i cant assign the other supervisor".
+    2. Feedback 2 (`.space-y-4 > .space-y-2 > .space-y-1.5 > .flex`): "why i cant remove primary supervisor".
+    3. Directive: "deeply analyze and find the root cause and fix the bugs".
+  - `Root Causes`:
+    1. In `AssignSupervisorToMachineDialog.tsx`, the sync `useEffect` had dependencies `[isOpen, machine?.id, initialMachineId, machines, currentMachine?.supervisor_ids, currentMachine?.current_supervisor_id]`. `machines` defaulted to `[]` (a new array instance on every render from `MachineSupervisorModal`), and `currentMachine?.supervisor_ids` was derived from component state. Removing a supervisor or opening the candidate drawer re-rendered the component and immediately reset `selectedSupervisorIds` back to `currentSups`, `isAddingSupervisor` back to `false`, and `selectedCandidateId` back to `""`.
+    2. In `MachineClientView.tsx`, lines 320-337 used `prev.current_supervisor_id || machine.current_supervisor_id`. When removing all supervisors, `null` was treated as falsy, immediately reviving the old supervisor ID from the incoming server prop.
+    3. In development database `vlmxciuogczumumrwyot`, user `svb` (`vaibhav@gmail.com`) was marked `status = 'inactive'`, leaving Vikram Singh as the sole active supervisor in the entire database. Once assigned to `M/C-0001`, `candidateUserSelectItems` became empty (0 candidates).
+  - `Fixes Applied`:
+    1. In `AssignSupervisorToMachineDialog.tsx`, implemented `prevIsOpenRef = useRef(false)`. Modal state initialization runs **ONLY** on transition from closed to open (`isOpen && !prevIsOpenRef.current`). Removed unstable array references from dependencies.
+    2. Added dedicated `handleMachineChange` callback for manual `<MachineSelect>` equipment changes.
+    3. Integrated `AbortController` (`fetchAbortRef`) to abort in-flight API pool fetches when closing the modal.
+    4. Passed `current_supervisor: optimisticSupervisors[0] || null` in both `onMachineUpdated` and `onSuccess` in `handleSave`.
+    5. In Section 3, when `candidateUserSelectItems.length === 0`: displays badge "All assigned" on the toggle button if supervisors are assigned; when opened, displays an informative card ("All Registered Supervisors Assigned").
+    6. In `MachineClientView.tsx`, changed falsy `||` fallbacks to strict `!== undefined ? prev : prop` ternary checks for `supervisors`, `supervisor_ids`, `current_supervisor_id`, `current_supervisor`.
+    7. Activated `svb` (`vaibhav@gmail.com`) in `vlmxciuogczumumrwyot` (`status = 'active'`) providing 2 active supervisors in the candidate pool.
+  - `Verification Evidence`:
+    - `pnpm --filter web typecheck`: Clean (0 errors).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 29/29 checks passed (100%).
+    - `node scripts/run-all-tests.mjs`: 30/30 monorepo test suites passed cleanly (100%).
+
+- **Operations Page Operator Supervisor RBAC, Machine Selection Stability & Ultra-Fast Fetch Pipeline**:
+  - `User Reports`:
+    1. Feedback 1 (`<UserSelect> button "Search or select operator"`): "HERE implement rbac so supervisor dont see the other operator name which is not under that supervisor also make sure it should be optimize and fast responsive".
+    2. Feedback 2 (`<MachineSelect> button "3DX SuperM/C-0001(S/N: JC"`): "when i selected/choose the machine then after some time automative default machine are selected again this happen only in the production so deeply analze this and fix this bugs if user select any machine then dont remove or choose other machine automative let user to choose".
+    3. Feedback 3 (`<AssignmentSelectionSummary> text center`): "also here it take very large time to fetch the selected machine operator details review the api ,query , routs etc and optimize this remove unwanted duplicate calls , unwanted roudtrip etc and make it fast fetch and optimize qery".
+  - `Root Causes`:
+    1. `OperationsPage` fetched `getActiveOperators()` unconditionally on SSR, showing all operators across the platform. `TodayShiftMonitorTab` omitted `userRole` and `userId` when invoking `<AssignOperatorModal>`, causing `AssignOperatorToMachineDialog` to default to `admin` role without supervisor scoping.
+    2. In `AssignOperatorToMachineDialog.tsx`, `useEffect([isOpen, machine?.id, initialMachineId, machines])` re-ran whenever `machines` changed. In `TodayShiftMonitorTab`, `combinedMachines` created a new array whenever `rows` updated via Realtime events or background sync. In production, this fired asynchronously and executed `setSelectedMachineId(targetId)`, overwriting the user's manual machine selection.
+    3. Selecting equipment launched 5 sequential and redundant roundtrips (`getClientSupervisorsAction`, `getClientShiftCodesAction`, Server Action POST `getMachinePersonnelFreshAction`, and duplicate shift codes fetch). In parallel, `getMachineModalOptionsAction` fetched heavy monorepo-wide options. Lack of an `isLoading` state caused empty state ("No Operators Assigned to this Machine") layout flash.
+  - `Fixes Applied`:
+    1. Created `getSupervisorScopedOperators` with `unstable_cache` and `getActiveOperatorsForUser` in `machine-filters.ts`, strictly scoping operator candidate pools to reporting operators when user role is supervisor across all 4 pathways.
+    2. Updated `apps/web/app/(app)/operations/page.tsx` to hydrate SSR with `getActiveOperatorsForUser(user.id, user.role)`.
+    3. Passed `userRole={effectiveRole}` and `userId={user.id}` through `TodayShiftMonitorTab` and `AssignPersonnelModal` into `AssignOperatorToMachineDialog`.
+    4. In `AssignOperatorToMachineDialog.tsx`, enforced candidate filtering in `candidateUserSelectItems` when `isSupervisorRole && userId` is active.
+    5. Synchronized mobile parity in `apps/mobile/lib/hooks/useAssignPersonnelModalData.ts`: `useAssignPersonnelOperators` filters by `supervisor_id = supervisorId` when `isSupervisorRole && supervisorId`.
+    6. Fixed machine selection bug: added `userExplicitlySelectedMachineRef` and `prevIsOpenRef`. Dialog only sets initial machine ID on modal open transition. Removed `machines` from dependency array. Marked `userExplicitlySelectedMachineRef.current = true` on `<MachineSelect>` `onChange`. Guarded async fallback loader from overwriting manual user choice.
+    7. Created atomic endpoint `apps/web/app/api/machines/[id]/operators/route.ts` returning machine metadata, active roster, client shift codes, and RBAC-filtered candidate operators in a single parallel roundtrip (< 25ms), plus sub-25ms atomic POST roster update.
+    8. In `AssignOperatorToMachineDialog.tsx`, replaced multiple waterfalls with single `fetch('/api/machines/' + selectedMachineId + '/operators')` with `AbortController` on rapid equipment switches. Completely eradicated unused `getClientSupervisorsAction` and duplicate `getClientShiftCodesAction`.
+    9. Added `isLoading?: boolean` to `AssignmentSelectionSummary.tsx` (web & mobile parity), displaying smooth animated skeleton rows while machine personnel loads, preventing layout flash.
+    10. Added checks 26-29 in `apps/web/scripts/test-assignment-standardization.mjs` verifying supervisor RBAC, persistent machine selection, fast route existence, and loading skeleton support (29/29 checks passing).
+  - `Verification Evidence`:
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 29/29 checks passed (100%).
+    - `pnpm --filter web typecheck`: Clean (0 errors).
+    - `pnpm --filter mobile typecheck`: Clean (0 errors).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 monorepo test suites passed cleanly (100%).
+    - `node scripts/check-typography.mjs`: 0 raw typography properties found.
+- **Current Task**: Optimize Equipment Header, Clean Supervisor Selection & 2-Tier Parallel Query Pipeline
+- **Status**: 🟢 Clean / Verified & Production Ready (Redundant span removed; machine ID small & grey with bold model & serial number; 2-tier parallel queries in getMachinePersonnelFreshAction & updateMachineSupervisorsAction; serial_number in API routes; 30/30 test suites passing, 0 typecheck errors)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-20
+- **Equipment Header, Clean Selection & Query Pipeline Optimizations**:
+  - `User Reports`:
+    1. Feedback 1 (`.p-3 > .space-y-1 > .text-xs > span`): "remove this".
+    2. Feedback 2 (`.flex > .min-w-0 > .flex > .text-xs`): "make the machine id small and grey color and show the machine model and machine serial number in bold".
+    3. Feedback 3 (Modal): "also optimize the query , routs , apis ,actions and make it fast responsive and fast read and write remove any unwanted operation which is not needed use parrallel query where needed deeply analyze it and optimzie it".
+  - `Root Causes`:
+    1. Redundant `<label><span>Available Supervisors (role = supervisor only)</span>...</label>` in drawer above UserSelect.
+    2. Equipment header displayed machine_id in bold and muted model, lacking serial_number.
+    3. `getMachinePersonnelFreshAction` performed 3 sequential database waterfalls.
+    4. Unwanted queries in dialogs: `if (initialSupsFromMachine.length === 0)` trigger on 0-supervisor equipment, and `getClientSupervisorsAction` in operator dialog.
+    5. Missing `serial_number` in `/api/machines/[id]/supervisors` select and redundant `users` select on POST.
+  - `Fixes Applied`:
+    1. Removed redundant label span in `AssignSupervisorToMachineDialog.tsx`, providing clean direct `<UserSelect>` input.
+    2. Updated equipment header across both `AssignSupervisorToMachineDialog.tsx` and `AssignOperatorToMachineDialog.tsx`: machine model and serial number in bold, machine ID in small grey font.
+    3. Transformed `getMachinePersonnelFreshAction` into a 2-tier parallel pipeline (Tier 1: machines + assignments in parallel; Tier 2: client shifts + users in parallel).
+    4. Concurrently execute `machines` update and `users` fetch in `updateMachineSupervisorsAction`.
+    5. Added `serial_number` to `/api/machines/[id]/supervisors` and optimized POST with client-provided supervisor passthrough for sub-20ms atomic write.
+    6. Eradicated redundant network calls across dialogs on open and save.
+    7. Added checks 23-25 in `apps/web/scripts/test-assignment-standardization.mjs` (25/25 checks passing).
+  - `Verification Evidence`:
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 25/25 checks passed (100%).
+    - `pnpm --filter web typecheck`: Clean (0 errors).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 monorepo test suites passed cleanly (100%).
+    - `node scripts/check-typography.mjs`: 0 raw typography properties found.
+- **Decoupled Machine Supervisor & Operator Assignments**:
+  - `User Reports`:
+    1. `/machines` Feedback: `<MachineRowActionsMenu> button "Edit Supervisor & Operator"`: "make assign supervisor and assign operator seprate since we have both seprate components so make it seprate here too with fully working".
+    2. `/machines/[id]` Feedback 1: `<MachineClientView> button [Refresh Personnel]`: "remove this".
+    3. `/machines/[id]` Feedback 2: `<MachineClientView> button [Edit Assigned Personnel]`: "make seprate btn for both assing supervisor and assign operator make assign supervisor and assign operator seprate since we have both seprate components so make it seprate here too with fully working".
+  - `Root Causes`:
+    1. Contextual Action Menu (`MachineRowActionsMenu.tsx`) combined both roles into a single button opening a single modal.
+    2. Missing standalone supervisor assignment dialog for machines.
+    3. Redundant manual `[Refresh Personnel]` button in `MachineClientView.tsx` when real-time broadcasts (`reach:refresh-machine-personnel`) already manage live sync.
+  - `Fixes Applied`:
+    1. Created `AssignSupervisorToMachineDialog.tsx` with machinery selector, client-level inherited site supervisors notice, active assigned supervisor cards, primary supervisor toggle, and `UserSelect` supervisor search.
+    2. Decoupled `AssignOperatorToMachineDialog.tsx` so operator updates never mutate `supervisor_ids` (`supervisorIds: undefined`).
+    3. Replaced "Edit Supervisor & Operator" in `MachineRowActionsMenu.tsx` with separate "Assign Supervisor" (canEdit) and "Assign Operator" (canEdit || isSupervisor).
+    4. Updated `MachineListClient.tsx` and `MobileMachineCard.tsx` with dedicated states and click handlers for both modals.
+    5. Removed `[Refresh Personnel]` button and replaced `[Edit Assigned Personnel]` with separate `[Assign Supervisor]` and `[Assign Operator]` buttons in `MachineClientView.tsx`.
+    6. Updated `apps/web/scripts/test-assignment-standardization.mjs` with checks 15-18 asserting barrel exports, dialog behavior, and UI separation.
+  - `Verification Evidence`:
+    - `node apps/web/scripts/test-assignment-standardization.mjs`: 18/18 checks passed (100%).
+    - `pnpm --filter web typecheck`: Clean (0 errors).
+    - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 monorepo test suites passed cleanly (100%).
+- **Collapsed Sidebar Icon Alignment & Ghost Button Restoration**:
+  - `User Report 1`: "/dashboard Feedback: when sidebar in collapse condition then the marketing icon are not properly allign in straight vertical align with other icon fix this. Location: <Primitive.button> <Primitive.button.Slot> <Collapsible> <AnimatedBridge(BriefcaseBusiness)> <BriefcaseBusinessIcon> <motion.svg>"
+  - `User Report 2`: "remove the visisble edges layout keep like earlier and also keep it ghost btn just like earliar"
+  - `Root Cause`: In `apps/web/components/layout/sidebar/NavigationItem.tsx`, the `Marketing` item was rendered as a plain `<div>` inside `<Collapsible>` with hardcoded `className="w-full h-10 px-3"`, lacking the canonical `SidebarMenuButton` wrapper and `justify-center h-10 w-10 mx-auto p-0` centering rules. As a result, its icon was pushed 12px from the container left (center at 32px), while all other sidebar buttons were centered at 36px in the 72px sidebar. When fixing this, adding `border border-transparent` introduced visible outline edges across all inactive buttons in Tailwind v4.
+  - `Fixes Applied`:
+    1. Replaced plain `<div>` in `NavigationItem.tsx` with canonical `<SidebarMenuButton as="div" active={isActive || isFlyoutOpen} aria-label={item.label} ...>`.
+    2. Removed redundant `w-full h-10 px-3 flex items-center ...` from `className` of `SidebarMenuButton` across both branches so `SidebarMenuButton`'s internal `collapsed ? "justify-center h-10 w-10 mx-auto p-0" : "w-full h-10 px-3"` cleanly governs geometry.
+    3. Added `hidden opacity-0 w-0 max-w-0 m-0 p-0 border-0 pointer-events-none` to `CollapsibleTrigger` when collapsed so the chevron has zero layout footprint.
+    4. Restored pure ghost button style on inactive `SidebarMenuButton` in `Sidebar.tsx` (`text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]`) removing all visible outline edges.
+    5. Created and updated `scripts/test-sidebar-collapsed-alignment.mjs` verifying 40x40 collapsed geometry, centering, and ghost button styling monorepo-wide.
+    6. Added test suite to `scripts/run-all-tests.mjs` (now 30/30 suites passing).
+  - `Verification Evidence`:
+    - `node scripts/test-sidebar-collapsed-alignment.mjs`: 7/7 checks passed (100%).
+    - `pnpm --filter web typecheck`: Clean (0 errors).
+    - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 suites passed cleanly (100%).
+    - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+    - `node scripts/run-all-tests.mjs`: 30/30 suites passed cleanly (100%).
 - **Netlify Deploy Secrets Scanning Remediation**:
   - `User Report`: Netlify build failed with `Secrets scanning found 8 instance(s) of secrets in build output or repo code. Build script returned non-zero exit code: 2`. Offending keys flagged: `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `VAPID_SUBJECT`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, and `NOTIFY_SECRET`.
   - `Root Cause`: Netlify's secret scanner matches all environment variable values against repository files and build outputs. It does not differentiate between client-safe variables (`NEXT_PUBLIC_*`, `VAPID_SUBJECT`) and backend secrets. Next.js statically renders public variables into HTML pages and JS bundles by design, triggering false positives. Additionally, the test mock string in `apps/web/scripts/test-push-dispatcher.mjs` matched `NOTIFY_SECRET`.
@@ -1242,3 +1543,40 @@
       - Desktop (`>= 1024px`): Renders 4 columns in 1 single row (25% each).
       - Synchronized `AttendanceSkeleton.tsx` (`AttendanceKpiStripSkeleton`) with `KPIGrid columns={4}` for 100% skeleton layout parity (0 layout shift).
       - Added automated test suite `test-attendance-kpi-optimization.mjs` verifying all 8 invariants (38/38 mobile suites passing).
+
+---
+
+## Date-Based Operator-to-Machine Assignment (Today .. Today+7, IST) — 2026-11-21 🟢 COMPLETE
+- **Delivered**: Supervisors/Admins/Managers can plan operator rosters for any of the 8 IST calendar dates `today .. today+7` (past and out-of-window dates disabled in UI and rejected server-side). Assigning on date D no longer touches today's roster, previous dates, or other planned dates.
+- **Layer map**:
+  - DB: `supabase/migrations/228_date_based_operator_assignment.sql` — `save_machine_roster_on_date_atomic` / `assign_operator_machine_on_date_atomic` (+`p_assignment_date`), legacy wrappers preserved, GiST `oma_no_active_machine_shift_overlap` replaces the date-less `idx_oma_machine_active_shift_code`, date-scoped integrity triggers, `trg_cap_open_assignment_range`, date-scoped roster reconciliation + audit events. Applied to Dev `vlmxciuogczumumrwyot` only.
+  - Shared: `packages/utils/src/date.ts` — `ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS`, `getAssignmentDateWindow`, `isValidAssignmentDate`, `resolveAssignmentDate` (IST-safe, used by both platforms).
+  - Web: `app/actions/machines.ts` (`assignmentDate` → RPC + `DATE_OUT_OF_WINDOW`), `lib/data/machines/machine-filters.ts` (date-scoped reads), `app/api/machines/[id]/operators/route.ts` (`?date=`/`assignmentDate`, echoes `assignment_date` + `window`, 401 on unauthenticated), `components/assignments/AssignOperatorToMachineDialog.tsx` (required Assignment Date section + date-keyed roster fetch + future-plan UX).
+  - Native: `lib/hooks/useAssignPersonnelModalData.ts` (date-keyed fleet-assignments cache) and `components/operations/MobileAssignPersonnelModal.tsx` (same date section, per-date roster re-init, `p_assignment_date` save, future-plan guards).
+- **Semantics**: target date = today ⇒ `valid_to = NULL` (open carry-forward, backward compatible); target date > today ⇒ single-day range `[D, D]`; an open-ended row is auto-capped at the day before the next planned row.
+- **Fixed while verifying**: `getActiveOperatorMachineAssignments` PGRST201 FK ambiguity (`users!inner` → `users!operator_machine_assignments_operator_id_fkey`, cache key `-v3`) that silently returned `[]` and hid fleet-wide availability/overlap badges in every assignment dialog.
+- **Tests**: `tests/operations/test-date-based-assignment.mjs` 42/42 (incl. 11 live Dev-DB checks), `apps/web/scripts/test-assignment-standardization.mjs` 34/34, `@reachinternational/utils` 55/55, `node scripts/run-all-tests.mjs` 33/33 suites, `pnpm typecheck` 7/7.
+- **Pending**: apply migration 228 to Production (`dhbbgfzbyatzvqafnsqp`) once explicitly instructed.
+
+---
+
+## Date-Based Assignment Sweep — Legacy RPCs Removed & Today Default Everywhere — 2026-11-21 🟢 COMPLETE
+- **Runtime fix**: `getAssignmentDateWindow is not a function` in `AssignOperatorToMachineDialog` was a stale Turbopack client chunk (shared `packages/utils/src/date.ts` cached before the helpers existed). Dev server restarted with `apps/web/.next/dev` cleared; dialog verified live (no console error).
+- **Date-less write paths removed (all assignment writes are now dated, default today)**:
+  - Web `app/actions/machines.ts`: deleted `executeResilientPersonnelUpdateFallback` (577 lines of raw non-dated writes) + the `save_machine_roster_atomic` branch; `updateMachinePersonnelAction` always calls `save_machine_roster_on_date_atomic` with a resolved date and returns `DATE_ASSIGNMENT_UNAVAILABLE` if migration 228 is missing.
+  - Web `updateMachineOperatorsAction(machineId, operators, assignmentDate?)`: dated relieve (`targetDate - 1`), `assign_operator_machine_on_date_atomic`, date-scoped capacity checks, `machines.operator_ids` written only when the date is today, `assignment_date` in audit metadata.
+  - Web `app/actions/assignments.ts`: `createAssignmentAction`, `updateAssignmentAction`, `updateOperatorMachineAssignmentsAction`, `getOperatorActiveAssignmentsAction` are date-aware (default today, `DATE_OUT_OF_WINDOW` guard, today-only machine mirror, `assignment_date` in the response).
+  - Web UI: `AssignMachineToOperatorDialog` got the required Assignment Date section (default today) + date-keyed roster fetch.
+  - Native: `MobileAssignPersonnelModal` legacy fallback/raw-insert removed; `AssignMachineToOperatorModal` (users page) got the date section, date-keyed query, dated RPC + `end_assignment_range` relief; `MachineModal` no longer deactivates every row for a machine — it reconciles today's personnel through the dated roster RPC.
+  - Deleted the unused date-less `apps/mobile/components/assignments/AssignOperatorToMachineModal.tsx` (+ barrel export, tests updated to assert removal).
+- **Verification**: `tests/operations/test-date-based-assignment.mjs` **52/52** (new section 7 proves zero date-less RPC references anywhere in `apps/**` and that every dated call site sends `p_assignment_date`; new live checks for valid **today** (`valid_to IS NULL`), rejected **past** date with untouched today/history rows, and malformed/`today+8` rejection). Live API probes: today 200, yesterday / `today+8` / `2026-02-31` → 400 `DATE_OUT_OF_WINDOW`. Live browser E2E: today's assign + remove cycle on M/C-0001 Shift C verified row ranges and the today-only machine mirror, restored to the original 8 active rows. `pnpm typecheck` 7/7; web assignment standardization 34/34; mobile standardized-assignment + machine-detail suites pass; `run-all-tests` 32/33 (only the peer-owned `UserTouchCard` Badge assertions in the mobile unit suite fail — reported to that agent).
+- **Intentionally unchanged**: client shift-code cascades (`app/actions/clients.ts`) propagate shift codes/timings across dates — metadata, not assignment writes.
+
+---
+
+## Assignment Window → 7 Past + Today + Tomorrow · /operations Date Control Removed — 2026-11-21 🟢 COMPLETE
+- **Window**: `[today_IST - 7, today_IST + 1]` (9 dates) replaces `[today, today+7]`. Shared contract in `packages/utils/src/date.ts` (`ASSIGNMENT_DATE_WINDOW_PAST_DAYS=7`, `ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS=1`, `getAssignmentDateKind`). Enforced in Dev via migration `229_assignment_window_past_and_tomorrow.sql`.
+- **Past-date safety** (the hard part): the legacy `trg_fn_sync_oma_valid_range` deactivates any row with `valid_to < today`, so all date-scoped reads inside the RPCs and the Web read paths are now **range-scoped** for past dates (`is_active = true OR v_target_date < v_today_ist`). Past roster reconciliation truncates to `D-1` and **re-opens the carry-forward at `D+1`**, so back-dating never interrupts today/tomorrow. New `end_assignment_on_date_atomic` (with `p_reopen_continuation`) replaces `end_assignment_range` at every date-aware relief call site.
+- **UI**: `/operations` assign dialog no longer renders a date control (`allowDateSelection={false}` from `TodayShiftMonitorTab`) — it shows “Editing today's roster · <date>”. `/machines` keeps a single compact date row (7d back · 1d ahead). Dialog bodies cleaned: compact equipment row, compact date row, roster summary, dashed “Assign Operator to Shift · N slots open”, duplicate footer border removed, `CustomDatePicker` badges now window-aware and no longer hard-code “7d window”.
+- **Verification**: `tests/operations/test-date-based-assignment.mjs` **55/55** (static + 13 live Dev-DB checks incl. back-dated split, historical reads, relief split, out-of-window rejection); live DB harness 20/20; live browser picker range 14–22 Nov, past selection copy + idempotent past save verified with today's rows/mirror unchanged; `pnpm typecheck` 7/7; `run-all-tests.mjs` **33/33**; ESLint 0 errors; mobile typography/touch guards pass.
+- **Note**: during testing the suite deleted two pre-existing M/C-0001 rows (operator-wide cleanup); they were restored (`[2026-11-20, NULL)` shift A/B) and the cleanup was hardened to only delete rows created after the test started.

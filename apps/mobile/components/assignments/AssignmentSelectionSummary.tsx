@@ -46,6 +46,7 @@ export interface AssignmentSelectionSummaryProps {
   title?: string;
   capacityLabel?: string;
   disabled?: boolean;
+  isLoading?: boolean;
 }
 
 export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProps> = ({
@@ -55,6 +56,7 @@ export const AssignmentSelectionSummary: React.FC<AssignmentSelectionSummaryProp
   title = 'ASSIGNED OPERATORS (24H)',
   capacityLabel,
   disabled = false,
+  isLoading = false,
 }) => {
   const { theme, isDark } = useTheme();
   const [confirmTarget, setConfirmTarget] = useState<SelectedAssignmentSummaryItem | null>(null);

@@ -2,8 +2,7 @@ import { requirePermission, getCurrentUser } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { getOperatorEntryContext } from "@/lib/queries/operator-entry";
 import { getTodayShiftLogMonitor } from "@/lib/data/operations/today-shift-monitor";
-import { getClients } from "@/lib/queries/clients";
-import { getActiveOperators } from "@/lib/data/machines/machine-filters";
+import { getActiveOperatorsForUser } from "@/lib/data/machines/machine-filters";
 import { OperationsClient } from "@/components/operations/OperationsClient";
 import { OperatorEntryClient } from "@/components/operations/entry/OperatorEntryClient";
 import type { Metadata } from "next";
@@ -47,11 +46,12 @@ export default async function OperationsPage(props: {
     );
   }
 
-  // Dedicated Shift Logs view for supervisors, managers, admins, and HR
-  const [initialTodayRows, dbClients, activeOperators] = await Promise.all([
+  // Dedicated Shift Logs view for supervisors, managers, admins, and HR.
+  // The client filter options and counts are derived from the roster rows themselves,
+  // so the previous `getClients()` call (a full CRM client payload on every visit) is gone.
+  const [initialTodayRows, activeOperators] = await Promise.all([
     getTodayShiftLogMonitor(user.id, currentDate),
-    getClients(),
-    getActiveOperators(),
+    getActiveOperatorsForUser(user.id, user.role),
   ]);
 
   return (
@@ -59,7 +59,6 @@ export default async function OperationsPage(props: {
       userRole={user?.role}
       user={user!}
       machines={[]}
-      dbClients={dbClients}
       operators={activeOperators}
       initialTodayRows={initialTodayRows}
       initialDate={currentDate}

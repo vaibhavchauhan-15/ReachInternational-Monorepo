@@ -2,137 +2,103 @@ import "server-only";
 
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
-import { createSupabaseAdminClient, tryCreateSupabaseAdminClient } from "@/lib/supabase/admin";
+import { tryCreateSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasSupabaseSecretKey } from "@/lib/env/server";
-import { TAGS } from "@/lib/cache/tags";
 import { dedupeShiftMonitorRows } from "@/lib/utils/shift-monitor";
+import { TAGS } from "@/lib/cache/tags";
+import { getISTDateString } from "@reachinternational/utils";
 
-import type { TodayShiftMonitorRow, ShiftTaskRow, ShiftTasksResponse } from "@reachinternational/types";
-export type { TodayShiftMonitorRow, ShiftTaskRow, ShiftTasksResponse };
+import type { TodayShiftMonitorRow } from "@reachinternational/types";
+export type { TodayShiftMonitorRow };
 export { dedupeShiftMonitorRows };
 
 /**
- * Fetches shift tasks for the 7-day window via get_shift_tasks RPC.
- * Actor RBAC and operator-scoped view are enforced inside the RPC.
+ * Raw read of the single-day shift roster through `get_today_shift_log_monitor`.
+ *
+ * The RPC is the single authoritative source for:
+ * - active-assignment scoping (cancelled / relieved / superseded same-day ranges excluded)
+ * - RBAC (supervisor sees only their operators, machines and client sites)
+ * - search across operator / machine / client / site fields
+ * - shift-code normalisation filtering and time asc/desc sorting
+ *
+ * Therefore this data layer performs ZERO post-processing: no second "active roster"
+ * query, no in-memory reconciliation, no duplicate filtering or sorting. Migration 227
+ * made this RPC a single planned statement (~50% less DB CPU than the previous
+ * duplicated 3-query implementation).
  */
-export const getShiftTasks = cache(
-  async (
-    actorId: string,
-    params?: {
-      operatorId?: string;
-      fromDate?: string;
-      toDate?: string;
-      status?: "all" | "pending" | "entered";
-      page?: number;
-      pageSize?: number;
-    }
-  ): Promise<ShiftTasksResponse> => {
-    try {
-      const supabase = tryCreateSupabaseAdminClient() || (await createSupabaseServerClient());
-      const { data, error } = await supabase.rpc("get_shift_tasks", {
-        p_actor_id: actorId,
-        ...(params?.operatorId ? { p_operator_id: params.operatorId } : {}),
-        ...(params?.fromDate ? { p_from_date: params.fromDate } : {}),
-        ...(params?.toDate ? { p_to_date: params.toDate } : {}),
-        ...(params?.status ? { p_status: params.status } : {}),
-        ...(params?.page ? { p_page: params.page } : {}),
-        ...(params?.pageSize ? { p_page_size: params.pageSize } : {}),
-      });
+async function fetchTodayShiftLogMonitorFromDb(
+  actorId: string,
+  logDate?: string,
+  search?: string,
+  clientId?: string,
+  shiftCode?: string,
+  sort?: string
+): Promise<TodayShiftMonitorRow[]> {
+  const supabase = tryCreateSupabaseAdminClient() || (await createSupabaseServerClient());
 
-      if (error) {
-        console.error("[getShiftTasks] RPC error:", error);
-        throw new Error(`Failed to load shift tasks: ${error.message}`);
-      }
+  const trimmedSearch = search?.trim() || undefined;
+  const trimmedClientId = clientId?.trim() || undefined;
+  const trimmedShiftCode = shiftCode?.trim() || undefined;
+  const trimmedSort = sort?.trim() || "time_asc";
 
-      return (data as unknown as ShiftTasksResponse) || {
-        page: 1,
-        pageSize: 50,
-        totalCount: 0,
-        hasMore: false,
-        fromDate: "",
-        toDate: "",
-        rows: [],
-      };
-    } catch (err) {
-      console.warn("[getShiftTasks] Fallback to empty response:", err);
-      return {
-        page: 1,
-        pageSize: 50,
-        totalCount: 0,
-        hasMore: false,
-        fromDate: "",
-        toDate: "",
-        rows: [],
-      };
-    }
+  const { data, error } = await supabase.rpc("get_today_shift_log_monitor", {
+    p_actor_id: actorId,
+    ...(logDate ? { p_log_date: logDate } : {}),
+    ...(trimmedSearch ? { p_search: trimmedSearch } : {}),
+    ...(trimmedClientId ? { p_client_id: trimmedClientId } : {}),
+    ...(trimmedShiftCode && trimmedShiftCode !== "all" ? { p_shift_code: trimmedShiftCode } : {}),
+    ...(trimmedSort ? { p_sort: trimmedSort } : {}),
+  });
+
+  if (error) {
+    console.error("[getTodayShiftLogMonitor] RPC error:", error.message || error);
+    return [];
   }
-);
+
+  const rows = (data as TodayShiftMonitorRow[]) || [];
+  return rows.length > 1 ? dedupeShiftMonitorRows(rows) : rows;
+}
 
 /**
- * Fetches the today's shift log monitor data via the get_today_shift_log_monitor RPC.
- * RBAC is enforced inside the RPC: supervisors see only their operators, admin/manager/super_admin see all.
- * When p_search is provided, server-side ILIKE filtering is applied inside the RPC.
+ * Cached single-day shift roster.
+ *
+ * Performance contract:
+ * - `cache()` deduplicates repeated calls inside one render / server action (~0 ms).
+ * - `unstable_cache` (10 s) collapses SSR + client polling + realtime-triggered refreshes
+ *   into one database execution per actor/date/filter combination.
+ * - Tagged with `operations:today-shift-monitor` so every mutation that touches logs,
+ *   assignments or machine state invalidates it instantly (`revalidateTag`).
+ * - `bypassCache` forces an authoritative read after an explicit user action.
  */
+const getCachedShiftMonitor = unstable_cache(
+  fetchTodayShiftLogMonitorFromDb,
+  ["operations-today-shift-monitor-v2"],
+  { revalidate: 10, tags: [TAGS.todayShiftMonitor, TAGS.operations] }
+);
+
 export const getTodayShiftLogMonitor = cache(
-  async (actorId: string, logDate?: string, search?: string, bypassCache?: boolean, clientId?: string): Promise<TodayShiftMonitorRow[]> => {
-    const trimmedSearch = search?.trim() || undefined;
-    const trimmedClientId = clientId?.trim() || undefined;
+  async (
+    actorId: string,
+    logDate?: string,
+    search?: string,
+    clientId?: string,
+    shiftCode?: string,
+    sort?: string,
+    bypassCache: boolean = false
+  ): Promise<TodayShiftMonitorRow[]> => {
+    const targetDate = logDate || getISTDateString();
 
-    // Direct / non-cached query (search, client filter, bypassCache, or missing secret key)
-    const runDirect = async () => {
-      try {
-        const supabase = tryCreateSupabaseAdminClient() || (await createSupabaseServerClient());
-        const { data, error } = await supabase.rpc("get_today_shift_log_monitor", {
-          p_actor_id: actorId,
-          ...(logDate ? { p_log_date: logDate } : {}),
-          ...(trimmedSearch ? { p_search: trimmedSearch } : {}),
-          ...(trimmedClientId ? { p_client_id: trimmedClientId } : {}),
-        });
-        if (error) {
-          console.error("Error fetching today shift log monitor (direct):", error);
-          return [];
-        }
-        return dedupeShiftMonitorRows((data as TodayShiftMonitorRow[]) || []);
-      } catch (err) {
-        console.error("Direct fetch today shift log monitor failed:", err);
-        return [];
-      }
-    };
-
-    if (trimmedSearch || trimmedClientId || bypassCache || !hasSupabaseSecretKey()) {
-      return runDirect();
-    }
-
-    // Cached path when admin client is available
-    const cacheKey = `today-shift-monitor:${actorId}:${logDate || "today"}:${clientId || "all"}`;
-    try {
-      const fetchCached = unstable_cache(
-        async (): Promise<TodayShiftMonitorRow[]> => {
-          const supabase = createSupabaseAdminClient();
-          const { data, error } = await supabase.rpc("get_today_shift_log_monitor", {
-            p_actor_id: actorId,
-            ...(logDate ? { p_log_date: logDate } : {}),
-            ...(trimmedClientId ? { p_client_id: trimmedClientId } : {}),
-          });
-
-          if (error) {
-            console.error("Error fetching today shift log monitor:", error);
-            throw new Error(`Failed to load shift log monitor: ${error.message}`);
-          }
-
-          return dedupeShiftMonitorRows((data as TodayShiftMonitorRow[]) || []);
-        },
-        [cacheKey],
-        {
-          tags: [TAGS.todayShiftMonitor, TAGS.operationsLogs],
-          revalidate: 15,
-        }
+    if (bypassCache) {
+      return fetchTodayShiftLogMonitorFromDb(
+        actorId,
+        targetDate,
+        search,
+        clientId,
+        shiftCode,
+        sort
       );
-
-      return await fetchCached();
-    } catch {
-      return runDirect();
     }
+
+    return getCachedShiftMonitor(actorId, targetDate, search, clientId, shiftCode, sort);
   }
 );

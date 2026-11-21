@@ -16,6 +16,10 @@ import {
   parseTimeToMinutes,
   minutesTo24HourTime,
   formatTo12Hour,
+  addDaysToDateStr,
+  getISTDateString,
+  isValidAssignmentDate,
+  resolveAssignmentDate,
 } from "@reachinternational/utils";
 import type { OperatorMachineAssignment } from "@/lib/types/database";
 
@@ -39,6 +43,24 @@ export interface AssignmentActionResult<T = unknown> {
   fieldErrors?: Record<string, string>;
 }
 
+const DATE_WINDOW_ERROR = "Assignment date must be between 7 days ago and tomorrow (IST).";
+
+/**
+ * Canonical, date-based assignment target resolution for every assignment write path.
+ * Today is the default; any date outside [today_IST, today_IST + 7] is rejected.
+ * Mirrors the database-side enforcement in migration 228 (`DATE_OUT_OF_WINDOW`).
+ */
+function resolveAssignmentTarget(raw?: string | null):
+  | { ok: true; date: string; isToday: boolean }
+  | { ok: false; error: string; code: string } {
+  const requested = raw ? String(raw).trim() : null;
+  if (requested && !isValidAssignmentDate(requested)) {
+    return { ok: false, error: DATE_WINDOW_ERROR, code: "DATE_OUT_OF_WINDOW" };
+  }
+  const date = resolveAssignmentDate(requested);
+  return { ok: true, date, isToday: date === getISTDateString() };
+}
+
 /**
  * Assigns an operator to a machine with a recurring daily shift window.
  * Enforces maximum 3 active operators and GiST exclusion overlap prevention atomically.
@@ -50,6 +72,8 @@ export async function createAssignmentAction(payload: {
   shiftStartTime: string;
   shiftEndTime: string;
   notes?: string | null;
+  /** Date-based assignment target (YYYY-MM-DD), today .. today+7 IST. Defaults to today. */
+  assignmentDate?: string | null;
 }): Promise<AssignmentActionResult<OperatorMachineAssignment>> {
   try {
     const caller = await requireRole(
@@ -86,9 +110,17 @@ export async function createAssignmentAction(payload: {
 
     const supabase = createSupabaseAdminClient();
 
-    // 1. Invoke atomic assignment RPC
+    // Date-based assignment target: today by default, [today, today+7] only
+    const target = resolveAssignmentTarget(
+      (payload as { assignmentDate?: string | null }).assignmentDate
+    );
+    if (!target.ok) {
+      return { success: false, code: target.code, error: target.error };
+    }
+
+    // 1. Invoke atomic, date-aware assignment RPC
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
-      "assign_operator_machine_atomic",
+      "assign_operator_machine_on_date_atomic",
       {
         p_machine_id: parsed.data.machineId,
         p_operator_id: parsed.data.operatorId,
@@ -99,6 +131,7 @@ export async function createAssignmentAction(payload: {
         p_assigned_by: caller.id,
         p_notes: parsed.data.notes || null,
         p_shift_code: parsed.data.shiftCode || null,
+        p_assignment_date: target.date,
       }
     );
 
@@ -392,6 +425,8 @@ export async function updateAssignmentAction(payload: {
   shiftStartTime: string;
   shiftEndTime: string;
   notes?: string | null;
+  /** Date-based assignment target (YYYY-MM-DD), today .. today+7 IST. Defaults to today. */
+  assignmentDate?: string | null;
 }): Promise<AssignmentActionResult<{ success: boolean; assignmentId: string }>> {
   try {
     const caller = await requireRole(
@@ -421,7 +456,16 @@ export async function updateAssignmentAction(payload: {
 
     const supabase = createSupabaseAdminClient();
 
-    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    const todayDate = getISTDateString();
+
+    // Date-based assignment target: today by default, [today, today+7] only
+    const target = resolveAssignmentTarget(
+      (payload as { assignmentDate?: string | null }).assignmentDate
+    );
+    if (!target.ok) {
+      return { success: false, code: target.code, error: target.error };
+    }
+    const targetDate = target.date;
 
     // Verify assignment exists and is active
     const { data: existing, error: fetchErr } = await supabase
@@ -434,12 +478,12 @@ export async function updateAssignmentAction(payload: {
       return { success: false, error: "Active assignment not found." };
     }
 
-    // Check if logs already exist for today on this assignment
+    // Check if logs already exist for the target date on this assignment
     const { data: todayLogs } = await supabase
       .from("machine_hour_logs")
       .select("id")
       .eq("assignment_id", existing.id)
-      .eq("log_date", todayDate)
+      .eq("log_date", targetDate)
       .limit(1);
 
     const hasEntryToday = Boolean(todayLogs && todayLogs.length > 0);
@@ -447,22 +491,21 @@ export async function updateAssignmentAction(payload: {
     if (hasEntryToday) {
       return {
         success: false,
-        error: "A shift log has already been submitted for this assignment today. Shift changes cannot alter a completed day's assignment.",
+        error: `A shift log has already been submitted for this assignment on ${targetDate}. Shift changes cannot alter a completed day's assignment.`,
       };
     }
 
     let resultAssignmentId = existing.id;
 
-    if (existing.valid_from < todayDate) {
-      // Historical range: Close old range as of yesterday so history is 100% immutable
-      const yesterdayDate = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-      const closeDate = existing.valid_from <= yesterdayDate ? yesterdayDate : existing.valid_from;
-
-      const { data: endRes, error: endErr } = await supabase.rpc("end_assignment_range", {
+    if (existing.valid_from < targetDate) {
+      // Shift timings change on a later date: close the previous range the day before the
+      // target date (no continuation — the new range is written immediately afterwards).
+      const { data: endRes, error: endErr } = await supabase.rpc("end_assignment_on_date_atomic", {
         p_assignment_id: existing.id,
+        p_effective_date: targetDate,
         p_caller_id: caller.id,
         p_end_reason: "shift_changed",
-        p_effective_date: closeDate,
+        p_reopen_continuation: false,
         p_notes: payload.notes || "Shift timings updated",
       });
 
@@ -473,9 +516,9 @@ export async function updateAssignmentAction(payload: {
         };
       }
 
-      // Open new assignment starting today with updated timings
+      // Open the new date-aware assignment with the updated timings
       const { data: newAssignRes, error: newAssignErr } = await supabase.rpc(
-        "assign_operator_machine_atomic",
+        "assign_operator_machine_on_date_atomic",
         {
           p_machine_id: existing.machine_id,
           p_operator_id: existing.operator_id,
@@ -486,6 +529,7 @@ export async function updateAssignmentAction(payload: {
           p_assigned_by: caller.id,
           p_notes: parsed.data.notes || null,
           p_shift_code: parsed.data.shiftCode || existing.shift_code || null,
+          p_assignment_date: targetDate,
         }
       );
 
@@ -498,7 +542,7 @@ export async function updateAssignmentAction(payload: {
 
       resultAssignmentId = newAssignRes.assignment_id;
     } else {
-      // Created today with zero logs: safe to update timings in place
+      // Created on the target date with zero logs: safe to update timings in place
       const { error: updateErr } = await supabase
         .from("operator_machine_assignments")
         .update({
@@ -607,7 +651,10 @@ function doRangesOverlapLocal(rangesA: Array<[number, number]>, rangesB: Array<[
  * Loads an operator's active machinery assignments, designated supervisors, and profile data.
  * Used when the operator is fixed in the unified assignment modal.
  */
-export async function getOperatorActiveAssignmentsAction(operatorId: string): Promise<{
+export async function getOperatorActiveAssignmentsAction(
+  operatorId: string,
+  targetDate?: string | null
+): Promise<{
   success: boolean;
   error?: string;
   operator?: {
@@ -705,8 +752,8 @@ export async function getOperatorActiveAssignmentsAction(operatorId: string): Pr
       }
     }
 
-    // 3. Fetch active machine assignments for this operator valid for today IST
-    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    // 3. Fetch the operator's machine assignments that are effective on the selected date
+    const todayDate = resolveAssignmentDate(targetDate);
     const { data: rawAssignments, error: assErr } = await supabase
       .from("operator_machine_assignments")
       .select(`
@@ -881,10 +928,14 @@ export async function updateOperatorMachineAssignmentsAction(
       shiftEndTime?: string | null;
       notes?: string | null;
     }>;
+    /** Date-based assignment target (YYYY-MM-DD), today .. today+7 IST. Defaults to today. */
+    assignmentDate?: string | null;
   }
 ): Promise<{
   success: boolean;
   error?: string;
+  code?: string;
+  assignment_date?: string;
 }> {
   if (!isValidUuid(operatorId)) {
     return { success: false, error: "Invalid operator ID format." };
@@ -893,6 +944,14 @@ export async function updateOperatorMachineAssignmentsAction(
   try {
     const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = createSupabaseAdminClient();
+
+    // Date-based assignment target: today by default, [today, today+7] only
+    const target = resolveAssignmentTarget(payload.assignmentDate);
+    if (!target.ok) {
+      return { success: false, code: target.code, error: target.error };
+    }
+    const targetDate = target.date;
+    const isTodayAssignment = target.isToday;
 
     const assignments = Array.isArray(payload.machineAssignments) ? payload.machineAssignments : [];
 
@@ -976,14 +1035,14 @@ export async function updateOperatorMachineAssignmentsAction(
       }
     }
 
-    // 4. Query current active assignments for this operator valid for today IST
-    const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    // 4. Query the operator's assignments that are effective on the selected date
+    const todayDate = getISTDateString();
     const { data: currentActive, error: fetchErr } = await supabase
       .from("operator_machine_assignments")
       .select("id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, valid_from, valid_to")
       .eq("operator_id", operatorId)
-      .lte("valid_from", todayDate)
-      .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
+      .lte("valid_from", targetDate)
+      .or(`valid_to.is.null,valid_to.gte.${targetDate}`);
 
     if (fetchErr) {
       return { success: false, error: fetchErr.message };
@@ -993,32 +1052,33 @@ export async function updateOperatorMachineAssignmentsAction(
     const targetKeys = new Set(resolvedAssignments.map((a) => `${a.machineId}:${a.shiftCode || "S1"}`));
     const targetMachineIds = new Set(resolvedAssignments.map((a) => a.machineId));
 
-    // 5. Relieve any assignments that were removed
+    // 5. Relieve any assignments that were removed on the target date.
+    // Date-aware relief truncates the covered range and re-opens the continuation the day
+    // after the target date, so back-dating never wipes today's or tomorrow's coverage.
     const assignmentsToRelieve = currentActiveList.filter(
       (a) => !targetKeys.has(`${a.machine_id}:${a.shift_code || "S1"}`)
     );
-    const yesterdayDate = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     for (const relieved of assignmentsToRelieve) {
       targetMachineIds.add(relieved.machine_id);
-      const closeDate = (relieved.valid_from && relieved.valid_from <= yesterdayDate) ? yesterdayDate : (relieved.valid_from || todayDate);
-      await supabase.rpc("end_assignment_range", {
+      await supabase.rpc("end_assignment_on_date_atomic", {
         p_assignment_id: relieved.id,
+        p_effective_date: targetDate,
         p_caller_id: caller.id,
         p_end_reason: "reassigned",
-        p_effective_date: closeDate,
+        p_reopen_continuation: true,
       });
 
-      // Check if operator still has any other active assignment on that machine
+      // Check if operator still has any other assignment effective on the target date
       const { data: remainingOnMachine } = await supabase
         .from("operator_machine_assignments")
         .select("id")
         .eq("operator_id", operatorId)
         .eq("machine_id", relieved.machine_id)
-        .lte("valid_from", todayDate)
-        .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
+        .lte("valid_from", targetDate)
+        .or(`valid_to.is.null,valid_to.gte.${targetDate}`);
 
-      if (!remainingOnMachine || remainingOnMachine.length === 0) {
-        // Remove operator from that machine's operator_ids array
+      if ((!remainingOnMachine || remainingOnMachine.length === 0) && isTodayAssignment) {
+        // Remove operator from that machine's current operator mirror (today-effective only)
         const { data: targetM } = await supabase
           .from("machines")
           .select("id, operator_ids")
@@ -1039,12 +1099,12 @@ export async function updateOperatorMachineAssignmentsAction(
       }
     }
 
-    // 6. Apply / update active assignments
+    // 6. Apply / update the assignments for the selected date
     for (const item of resolvedAssignments) {
       const start24 = item.shiftStartTime ? normalizeTimeTo24Hour(item.shiftStartTime) : "06:00:00";
       const end24 = item.shiftEndTime ? normalizeTimeTo24Hour(item.shiftEndTime) : "14:00:00";
 
-      const { data: rpcRes, error: rpcErr } = await supabase.rpc("assign_operator_machine_atomic", {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc("assign_operator_machine_on_date_atomic", {
         p_machine_id: item.machineId,
         p_operator_id: operatorId,
         p_shift_start: start24,
@@ -1054,6 +1114,7 @@ export async function updateOperatorMachineAssignmentsAction(
         p_assigned_by: caller.id,
         p_notes: item.notes || null,
         p_shift_code: item.shiftCode || null,
+        p_assignment_date: targetDate,
       });
 
       if (rpcErr) {
@@ -1070,25 +1131,27 @@ export async function updateOperatorMachineAssignmentsAction(
         };
       }
 
-      // Add operator to that machine's operator_ids array if missing
-      const { data: targetM } = await supabase
-        .from("machines")
-        .select("id, operator_ids")
-        .eq("id", item.machineId)
-        .maybeSingle();
+      // Add operator to that machine's current operator mirror (today-effective only)
+      if (isTodayAssignment) {
+        const { data: targetM } = await supabase
+          .from("machines")
+          .select("id, operator_ids")
+          .eq("id", item.machineId)
+          .maybeSingle();
 
-      if (targetM) {
-        const currOps = Array.isArray(targetM.operator_ids) ? targetM.operator_ids : [];
-        if (!currOps.includes(operatorId)) {
-          const nextOps = [...currOps, operatorId].slice(0, 3);
-          await supabase
-            .from("machines")
-            .update({
-              operator_ids: nextOps,
-              current_operator_id: nextOps[0] || operatorId,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", item.machineId);
+        if (targetM) {
+          const currOps = Array.isArray(targetM.operator_ids) ? targetM.operator_ids : [];
+          if (!currOps.includes(operatorId)) {
+            const nextOps = [...currOps, operatorId].slice(0, 3);
+            await supabase
+              .from("machines")
+              .update({
+                operator_ids: nextOps,
+                current_operator_id: nextOps[0] || operatorId,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", item.machineId);
+          }
         }
       }
     }
@@ -1108,7 +1171,7 @@ export async function updateOperatorMachineAssignmentsAction(
       revalidateTag(TAGS.machineAssignment(mId), { expire: 0 });
     }
 
-    return { success: true };
+    return { success: true, assignment_date: targetDate };
   } catch (err: unknown) {
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;

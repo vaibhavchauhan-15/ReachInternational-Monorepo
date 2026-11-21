@@ -218,7 +218,7 @@ function BaseUserTouchCard({
         } as any),
       ]}
     >
-      {/* Card Header: Avatar & Name on left; Role & Status Badges side-by-side on right */}
+      {/* Card Header: Avatar & Name */}
       <View style={styles.userCardHeader}>
           <View style={styles.userAvatarRow}>
             {isSelectMode ? (
@@ -245,32 +245,40 @@ function BaseUserTouchCard({
                 style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]}
                 numberOfLines={1}
               />
-              {u.employee_id ? (
-                <Text variant="caption" weight="medium" style={{ color: theme.colors.mute, marginTop: 1 }}>
-                  {u.employee_id}
-                </Text>
-              ) : null}
             </View>
           </View>
+        </View>
 
-          {/* Header Right: Standardized Compact Role & Status Badges */}
-          <View style={styles.headerRightActions}>
-            <View style={styles.headerBadgesCluster}>
-              {/* Role Badge (centralized Badge with theme tokens) */}
-              <Badge
-                role={u.role}
-                label={formatRoleName(u.role)}
-                size="sm"
-              />
+        {/* Identity chips: employee ID left, status + role pushed to the right */}
+        <View style={styles.identityChipsRow}>
+          {u.employee_id ? (
+            <Text
+              variant="micro"
+              weight="medium"
+              style={{ color: theme.colors.mute, flexShrink: 0 }}
+              numberOfLines={1}
+            >
+              {u.employee_id}
+            </Text>
+          ) : (
+            <View />
+          )}
 
-              {/* Status Badge (centralized Badge with status dot) */}
-              <Badge
-                status={u.status}
-                dot
-                label={u.status === 'active' ? 'Active' : (u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1).toLowerCase() : 'Inactive')}
-                size="sm"
-              />
-            </View>
+          <View style={styles.identityChipsRight}>
+            {/* Status Badge (centralized Badge with status dot) */}
+            <Badge
+              status={u.status}
+              dot
+              label={u.status === 'active' ? 'Active' : (u.status ? u.status.charAt(0).toUpperCase() + u.status.slice(1).toLowerCase() : 'Inactive')}
+              size="sm"
+            />
+
+            {/* Role Badge (centralized Badge with theme tokens) */}
+            <Badge
+              role={u.role}
+              label={formatRoleName(u.role)}
+              size="sm"
+            />
           </View>
         </View>
 
@@ -307,29 +315,26 @@ function BaseUserTouchCard({
             {Boolean(u.city || u.district || u.state) && (
               <View style={styles.metaChipRow}>
                 <MapPin size={12} color={theme.colors.mute} />
-                <View style={{ flex: 1 }}>
-                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
                     {u.city || u.district || '—'}
                   </Text>
-                  {u.state ? (
-                    <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
-                      {u.state}
+                  {u.state && u.state !== (u.city || u.district) ? (
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      {`, ${u.state}`}
                     </Text>
                   ) : null}
-                </View>
+                </Text>
               </View>
             )}
 
             {Boolean((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
               <View style={styles.metaChipRow}>
                 <User size={12} color="#0d9488" />
-                <Text variant="caption" style={styles.metaChipText} numberOfLines={1}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>Supervisor: </Text>
-                  <Text variant="caption" weight="medium" style={{ color: theme.colors.ink }}>
-                    {u.supervisors && u.supervisors.length > 0
-                      ? u.supervisors.map((s: any) => s.full_name).join(', ')
-                      : u.supervisor?.full_name}
-                  </Text>
+                <Text variant="caption" weight="medium" style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {u.supervisors && u.supervisors.length > 0
+                    ? u.supervisors.map((s: any) => s.full_name).join(', ')
+                    : u.supervisor?.full_name}
                 </Text>
               </View>
             )}
@@ -486,6 +491,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacingNumeric.xs,
   },
+  identityChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  identityChipsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+  },
   userAvatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -506,30 +524,6 @@ const styles = StyleSheet.create({
   userName: {
     flexShrink: 1,
   },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacingNumeric.xs,
-  },
-  headerBadgesCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  chipBadge: {
-    height: 24,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
   cardMetaBox: {
     padding: spacingNumeric.sm,
     borderRadius: radiusNumeric.md,
@@ -541,9 +535,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  empIdBadge: {
-    alignSelf: 'flex-start',
   },
   metaChipText: {
     flexShrink: 1,

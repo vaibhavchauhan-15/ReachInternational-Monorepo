@@ -140,7 +140,7 @@ export function MachineHistoryQuickModal({
                         const runHours = Number(log.running_hours) || 0;
                         const otHours = Number(log.overtime_hours) || 0;
                         return (
-                          <tr key={log.id || idx} className="hover:bg-[var(--color-hairline-soft-surface)]/40 transition-colors">
+                          <tr key={`${log.id || 'log'}-${idx}`} className="hover:bg-[var(--color-hairline-soft-surface)]/40 transition-colors">
                             <td className="p-2.5 pl-3 text-[var(--color-ink)] font-semibold font-sans">
                               {log.log_date ? formatDate(log.log_date) : "—"}
                             </td>

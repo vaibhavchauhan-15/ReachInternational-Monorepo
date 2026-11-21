@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Truck, Plus, Trash2, Clock, AlertCircle } from "lucide-react";
+import { Truck, Plus, Trash2, Clock, AlertCircle, CalendarDays } from "lucide-react";
 import { AssignmentDialog } from "./AssignmentDialog";
 import { AssignmentSearch } from "./AssignmentSearch";
 import { AssignmentSelectableList, type AssignmentCandidateItem } from "./AssignmentSelectableList";
@@ -10,6 +10,7 @@ import { AssignmentSelectionSummary, type SelectedAssignmentSummaryItem } from "
 import { AssignmentShiftPicker } from "./AssignmentShiftPicker";
 import { AssignmentActions } from "./AssignmentActions";
 import { useToast } from "@/components/ui/Toast";
+import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
 import type { User, ClientShiftCode } from "@reachinternational/types";
 import {
   getUserInitials,
@@ -17,6 +18,11 @@ import {
   formatTo12Hour,
   shiftToMinuteRanges,
   doRangesOverlap,
+  getAssignmentDateKind,
+  resolveAssignmentDate,
+  getISTDateString,
+  ASSIGNMENT_DATE_WINDOW_PAST_DAYS,
+  ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS,
 } from "@reachinternational/utils";
 import { DEFAULT_CLIENT_SHIFTS } from "../operations/entry/ShiftInputs";
 import {
@@ -47,6 +53,13 @@ export interface AssignMachineToOperatorDialogProps {
   onClose: () => void;
   operator: User | any;
   userRole?: string;
+  /** When false the dialog is locked to TODAY and renders no date control. */
+  allowDateSelection?: boolean;
+  /**
+   * Preferred assignment date when the dialog opens (YYYY-MM-DD, IST).
+   * Clamped into [today - 7 .. today + 1]; falls back to today when missing or out of window.
+   */
+  initialAssignmentDate?: string | null;
   onSuccess?: (result?: any) => void;
 }
 
@@ -54,6 +67,8 @@ export function AssignMachineToOperatorDialog({
   isOpen,
   onClose,
   operator,
+  allowDateSelection = true,
+  initialAssignmentDate,
   onSuccess,
 }: AssignMachineToOperatorDialogProps) {
   const router = useRouter();
@@ -63,6 +78,24 @@ export function AssignMachineToOperatorDialog({
   const [isLoadingMachines, setIsLoadingMachines] = useState(false);
   const [operatorRoster, setOperatorRoster] = useState<OperatorMachineRosterItem[]>([]);
   const [initialSnapshot, setInitialSnapshot] = useState<OperatorMachineRosterItem[]>([]);
+
+  // Date-based assignment (today - 7 days .. today + 1 day, IST).
+  // The preferred date (caller supplied) is clamped into the canonical window; today by default.
+  const [assignmentDate, setAssignmentDate] = useState<string>(() =>
+    resolveAssignmentDate(initialAssignmentDate)
+  );
+  const todayIst = useMemo(() => getISTDateString(), []);
+  const isTodayAssignment = assignmentDate === todayIst;
+  const dateKind = useMemo(() => getAssignmentDateKind(assignmentDate, todayIst), [assignmentDate, todayIst]);
+  const isPastAssignment = dateKind === "past";
+  const isTomorrowPlan = dateKind === "tomorrow";
+
+  // Every time the dialog opens, reset to the caller's preferred (in-window) date
+  useEffect(() => {
+    if (!isOpen) return;
+    setAssignmentDate(resolveAssignmentDate(initialAssignmentDate));
+    setSubmitError(null);
+  }, [isOpen, initialAssignmentDate]);
 
   // Selection state
   const [selectedMachineId, setSelectedMachineId] = useState<string>("");
@@ -74,7 +107,7 @@ export function AssignMachineToOperatorDialog({
   // Active machine's client shifts
   const [machineClientShifts, setMachineClientShifts] = useState<ClientShiftCode[]>(DEFAULT_CLIENT_SHIFTS);
 
-  // Load assignable machines and operator active assignments on open
+  // Load assignable machines and the operator's assignments for the selected date on open
   useEffect(() => {
     if (!isOpen || !operator?.id) return;
 
@@ -86,7 +119,7 @@ export function AssignMachineToOperatorDialog({
 
     Promise.all([
       getAssignableMachinesAction(),
-      getOperatorActiveAssignmentsAction(operator.id),
+      getOperatorActiveAssignmentsAction(operator.id, assignmentDate),
     ])
       .then(([machinesRes, assignmentsRes]) => {
         if (!mounted) return;
@@ -120,7 +153,7 @@ export function AssignMachineToOperatorDialog({
     return () => {
       mounted = false;
     };
-  }, [isOpen, operator?.id]);
+  }, [isOpen, operator?.id, assignmentDate]);
 
   // When selectedMachineId changes, load client shifts for that machine
   useEffect(() => {
@@ -306,6 +339,7 @@ export function AssignMachineToOperatorDialog({
           shiftEndTime: a.shiftEndTime,
           notes: a.notes,
         })),
+        assignmentDate,
       });
 
       if (!res.success || res.error) {
@@ -315,7 +349,15 @@ export function AssignMachineToOperatorDialog({
         return;
       }
 
-      toast("success", "Assignments saved", `Equipment shift assignments updated for ${operator.full_name}.`);
+      toast(
+        "success",
+        isTodayAssignment ? "Assignments saved" : isPastAssignment ? "Past roster updated" : "Tomorrow's roster planned",
+        isTodayAssignment
+          ? `Equipment shift assignments updated for ${operator.full_name}.`
+          : isPastAssignment
+          ? `Corrected ${operator.full_name}'s equipment shifts for ${assignmentDate}. Today's and tomorrow's assignments stay untouched.`
+          : `Equipment shift plan stored for ${assignmentDate}. Today's assignments stay untouched.`
+      );
       onSuccess?.(res);
       onClose();
       router.refresh();
@@ -355,13 +397,99 @@ export function AssignMachineToOperatorDialog({
           isSaving={isSaving}
           isDirty={isDirty}
           disabled={!isDirty || isSaving}
-          submitLabel={isSaving ? "Saving..." : "Save Equipment Assignments"}
+          submitLabel={
+            isSaving
+              ? "Saving..."
+              : isTodayAssignment
+                ? "Save Equipment Assignments"
+                : `Save Plan for ${assignmentDate}`
+          }
           cancelLabel="Cancel"
           errorMessage={submitError}
         />
       }
     >
-      <div className="space-y-5">
+      <div className="space-y-3.5">
+        {/* SECTION 1: Assignment Date — 7 past days + today + tomorrow (IST).
+            Hidden entirely when the caller locks the dialog to today. */}
+        {allowDateSelection ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 p-2.5 sm:p-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-7 w-7 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">
+                <CalendarDays className="h-3.5 w-3.5" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-[var(--color-ink)] select-none">
+                    Assignment date
+                  </span>
+                  {isPastAssignment && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 leading-none">
+                      Past Correction
+                    </span>
+                  )}
+                  {isTomorrowPlan && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 leading-none">
+                      Tomorrow Plan
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] text-[var(--color-mute)] truncate">
+                  {isPastAssignment
+                    ? "Past correction — today stays untouched"
+                    : isTomorrowPlan
+                    ? "Tomorrow only — today stays untouched"
+                    : "Carries forward until changed"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 sm:ml-auto w-full sm:w-auto">
+              {!isTodayAssignment && (
+                <button
+                  type="button"
+                  onClick={() => setAssignmentDate(todayIst)}
+                  disabled={isSaving}
+                  className="shrink-0 h-9 px-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:border-sky-500/40 active:scale-95 transition-all cursor-pointer touch-manipulation disabled:opacity-50"
+                  title="Jump to Today"
+                >
+                  Today
+                </button>
+              )}
+              <CustomDatePicker
+                value={assignmentDate}
+                onChange={(nextDate) => {
+                  if (!nextDate) return;
+                  setSubmitError(null);
+                  setAssignmentDate(resolveAssignmentDate(nextDate));
+                }}
+                maxDaysOld={ASSIGNMENT_DATE_WINDOW_PAST_DAYS}
+                allowFutureDays={ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS}
+                showRelativeBadge
+                required
+                disabled={isSaving}
+                placeholder="Select assignment date..."
+                className="flex-1 sm:w-[210px]"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 px-3 py-2 text-[11px] text-[var(--color-mute)] select-none">
+            <div className="h-6 w-6 rounded-md bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">
+              <CalendarDays className="h-3.5 w-3.5" />
+            </div>
+            <span>
+              Editing <span className="font-semibold text-[var(--color-ink)]">today&apos;s</span> roster ·{" "}
+              {new Date(`${todayIst}T00:00:00`).toLocaleDateString("en-IN", {
+                weekday: "short",
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+        )}
+
         {/* Active Allocated Equipment Roster */}
         <AssignmentSelectionSummary
           items={summaryItems}

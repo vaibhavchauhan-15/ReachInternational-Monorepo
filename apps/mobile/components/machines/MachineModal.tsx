@@ -13,7 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
-import { formatTo12Hour, parseTimeToMinutes, sanitizeDatabaseError } from '@reachinternational/utils';
+import { formatTo12Hour, parseTimeToMinutes, sanitizeDatabaseError, getISTDateString } from '@reachinternational/utils';
 import { X, ChevronDown, AlertCircle, Check, Clock, Search, Phone, Plus, ShieldCheck } from '../ui/icon';
 import { type SelectableUser } from './MultiUserSelectModal';
 import { type SelectableClient } from './ClientSelectModal';
@@ -766,48 +766,42 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       const effectiveStatus = selectedClient?.id ? 'rented' : 'available';
       const effectiveClientId = selectedClient?.id || null;
 
-      // Atomically sync operator assignments table if editing existing machine
+      // Date-based roster sync for TODAY (canonical dated RPC — never writes date-less rows)
       if (machineToEdit?.id && (isSupervisor || initialSection === 'personnel' || initialSection === 'all')) {
-        if (operatorIds.length === 0) {
-          await supabase
-            .from('operator_machine_assignments')
-            .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
-            .eq('machine_id', machineToEdit.id)
-            .eq('is_active', true);
-        } else {
-          await supabase
-            .from('operator_machine_assignments')
-            .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
-            .eq('machine_id', machineToEdit.id)
-            .eq('is_active', true)
-            .not('operator_id', 'in', `(${operatorIds.join(',')})`);
+        const todayIst = getISTDateString();
+        const rosterPayload = operatorIds.map((opId) => {
+          const shiftCode = (operatorShifts[opId] || 'S1').toUpperCase();
+          const shiftObj = clientShifts.find((s) => s.code.toUpperCase() === shiftCode) || DEFAULT_MOBILE_SHIFTS[0];
+          return {
+            operatorId: opId,
+            shiftCode,
+            shiftStartTime: shiftObj.start_time,
+            shiftEndTime: shiftObj.end_time,
+            notes: 'Assigned via mobile app',
+          };
+        });
 
-          for (const opId of operatorIds) {
-            const shiftCode = (operatorShifts[opId] || 'S1').toUpperCase();
-            const shiftObj = clientShifts.find((s) => s.code.toUpperCase() === shiftCode) || DEFAULT_MOBILE_SHIFTS[0];
-            const { data: rpcData, error: rpcError } = await supabase.rpc('assign_operator_machine_atomic', {
-              p_machine_id: machineToEdit.id,
-              p_operator_id: opId,
-              p_shift_start_time: shiftObj.start_time,
-              p_shift_end_time: shiftObj.end_time,
-              p_shift_code: shiftCode,
-              p_notes: 'Assigned via mobile app',
-            });
-            if (rpcError) {
-              let msg = rpcError.message;
-              if (rpcError.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
-                msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
-              }
-              throw new Error(msg);
-            }
-            if (rpcData && (rpcData as any).success === false) {
-              let msg = (rpcData as any).error || 'Failed to assign operator.';
-              if (msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
-                msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
-              }
-              throw new Error(msg);
-            }
+        const { data: rosterRes, error: rosterErr } = await supabase.rpc('save_machine_roster_on_date_atomic', {
+          p_machine_id: machineToEdit.id,
+          p_operators: rosterPayload,
+          p_supervisor_ids: null,
+          p_activate_machine: false,
+          p_assignment_date: todayIst,
+        });
+
+        if (rosterErr) {
+          let msg = rosterErr.message;
+          if (rosterErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+            msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
           }
+          throw new Error(msg);
+        }
+        if (rosterRes && (rosterRes as any).success === false) {
+          let msg = (rosterRes as any).error || 'Failed to sync machine personnel.';
+          if (msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
+            msg = 'Operator is already assigned to the maximum limit of 3 active shifts (24h) across the fleet.';
+          }
+          throw new Error(msg);
         }
       }
 

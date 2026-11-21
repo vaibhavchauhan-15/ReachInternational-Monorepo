@@ -104,17 +104,12 @@ import {
   ExternalLink,
   WhatsAppIcon,
   Search,
-  X,
   ChevronRight,
   MoreVertical,
   Plus,
   Shield,
   ShieldAlert,
-  AlertTriangle,
-  RotateCcw,
   ChevronDown,
-  Building2,
-  CreditCard,
   Eye,
   EyeOff,
 } from '../ui/icon';
@@ -150,6 +145,14 @@ function formatShiftTime(start?: string | null, end?: string | null): string {
 
 function getInitials(name?: string): string {
   return getUserInitials(name);
+}
+
+function formatFileSizeMobile(bytes?: number | null): string {
+  const size = Number(bytes || 0);
+  if (!size) return 'Size n/a';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getRoleAvatarColors(role?: string, isDark?: boolean) {
@@ -1005,6 +1008,70 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
     );
   }, [documents, tabSearch]);
 
+  // Document status summary (Web parity with docStats)
+  const docStatusCounts = useMemo(() => {
+    const verified = documents.filter((d) => d.verification_status === 'verified').length;
+    const rejected = documents.filter((d) => d.verification_status === 'rejected').length;
+    return { verified, rejected, pending: Math.max(documents.length - verified - rejected, 0) };
+  }, [documents]);
+
+  // Statutory numbers on record whose scan has not been uploaded yet
+  const missingTypedDocs = useMemo(() => {
+    const has = (code: string) => documents.some((d) => d.document_type_code === code);
+    const items: Array<{
+      code: 'aadhaar' | 'driving_license' | 'bank_document';
+      label: string;
+      typedLabel: string;
+      typedValue: string;
+      copyLabel: string;
+      revealable: boolean;
+    }> = [];
+
+    if (user?.aadhaar_number && !has('aadhaar')) {
+      items.push({
+        code: 'aadhaar',
+        label: 'Aadhaar Card',
+        typedLabel: 'Aadhaar number',
+        typedValue: showFullAadhaar ? user.aadhaar_number : maskAadhaar(user.aadhaar_number),
+        copyLabel: 'Aadhaar',
+        revealable: canRevealDocs,
+      });
+    }
+    if (user?.license_number && !has('driving_license')) {
+      items.push({
+        code: 'driving_license',
+        label: 'Driving Licence',
+        typedLabel: 'Licence number',
+        typedValue: formatLicenseNumber(user.license_number),
+        copyLabel: 'Licence',
+        revealable: false,
+      });
+    }
+    if (user?.bank_account_number && !has('bank_document')) {
+      items.push({
+        code: 'bank_document',
+        label: 'Banking Document',
+        typedLabel: 'Bank account',
+        typedValue: `${showFullBankAccount ? user.bank_account_number : maskBankAccount(user.bank_account_number)} · ${
+          user.bank_ifsc_code || 'No IFSC'
+        }`,
+        copyLabel: 'Bank Account',
+        revealable: canRevealDocs && canVerifyReject,
+      });
+    }
+    return items;
+  }, [
+    documents,
+    user?.aadhaar_number,
+    user?.license_number,
+    user?.bank_account_number,
+    user?.bank_ifsc_code,
+    showFullAadhaar,
+    showFullBankAccount,
+    canRevealDocs,
+    canVerifyReject,
+  ]);
+
   if (!user) {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -1436,7 +1503,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
         </ScrollView>
 
         {/* ─── 5B. IN-TAB SEARCH TOOLBAR (100% Web Parity) ─── */}
-        {activeTab !== 'attendance' && (
+        {activeTab !== 'attendance' && activeTab !== 'documents' && (
           <View style={styles.tabSearchContainer}>
             <SearchInput
               value={tabSearch}
@@ -2139,219 +2206,54 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               <View style={styles.panelHeaderLeft}>
                 <FileText size={16} color="#0d9488" />
                 <Text variant="heading" weight="bold" style={{ color: theme.colors.ink }}>
-                  Identity & Compliance Documents
+                  Identity & KYC Documents
                 </Text>
               </View>
 
-              <Text variant="caption" style={{ color: theme.colors.mute }}>
-                Showing {filteredDocuments.length} of {totalDocumentsCount} verified files
-              </Text>
-            </View>
-
-            {/* Statutory Identity Cards: Aadhaar, Licence, Bank */}
-            <View style={styles.statutoryCardsGrid}>
-              {/* Aadhaar Card */}
-              <View
-                style={[
-                  styles.statutoryCard,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
-                <View style={styles.statutoryCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <ShieldCheck size={14} color="#0284c7" />
-                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                      Aadhaar Number
-                    </Text>
-                  </View>
-                  {user.aadhaar_number && canRevealDocs && (
-                    <Pressable
-                      variant="plain"
-                      haptic="select"
-                      hitSlopToMin48
-                      onPress={handleToggleAadhaar}
-                      accessibilityLabel={showFullAadhaar ? 'Hide Aadhaar' : 'Reveal full Aadhaar'}
-                      style={{ padding: 4 }}
-                    >
-                      {showFullAadhaar ? <EyeOff size={14} color={theme.colors.mute} /> : <Eye size={14} color={theme.colors.mute} />}
-                    </Pressable>
-                  )}
-                </View>
-                <View style={styles.statutoryCardValueRow}>
-                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                    {user.aadhaar_number
-                      ? showFullAadhaar
-                        ? user.aadhaar_number
-                        : maskAadhaar(user.aadhaar_number)
-                      : 'Not provided'}
-                  </Text>
-                  {user.aadhaar_number && canRevealDocs && (
-                    <Pressable
-                      variant="plain"
-                      haptic="tap"
-                      hitSlopToMin48
-                      onPress={() => handleCopy(user.aadhaar_number!, 'Aadhaar')}
-                      accessibilityLabel="Copy Aadhaar"
-                      style={{ padding: 4 }}
-                    >
-                      {copiedKey === 'Aadhaar' ? (
-                        <Check size={12} color="#10b981" />
-                      ) : (
-                        <Copy size={12} color={theme.colors.mute} />
-                      )}
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-
-              {/* Driving Licence Card */}
-              <View
-                style={[
-                  styles.statutoryCard,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
-                <View style={styles.statutoryCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <CreditCard size={14} color="#f59e0b" />
-                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                      Driving Licence
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.statutoryCardValueRow}>
-                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                    {user.license_number ? formatLicenseNumber(user.license_number) : 'Not provided'}
-                  </Text>
-                  {user.license_number && canRevealDocs && (
-                    <Pressable
-                      variant="plain"
-                      haptic="tap"
-                      hitSlopToMin48
-                      onPress={() => handleCopy(user.license_number!, 'Licence')}
-                      accessibilityLabel="Copy Licence"
-                      style={{ padding: 4 }}
-                    >
-                      {copiedKey === 'Licence' ? (
-                        <Check size={12} color="#10b981" />
-                      ) : (
-                        <Copy size={12} color={theme.colors.mute} />
-                      )}
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-
-              {/* Banking Credentials Card */}
-              <View
-                style={[
-                  styles.statutoryCard,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-              >
-                <View style={styles.statutoryCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Building2 size={14} color="#10b981" />
-                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                      Banking Credentials
-                    </Text>
-                  </View>
-                  {user.bank_account_number && canRevealDocs && (
-                    <Pressable
-                      variant="plain"
-                      haptic="select"
-                      hitSlopToMin48
-                      onPress={handleToggleBankAccount}
-                      accessibilityLabel={showFullBankAccount ? 'Hide Bank Account' : 'Reveal full Bank Account'}
-                      style={{ padding: 4 }}
-                    >
-                      {showFullBankAccount ? <EyeOff size={14} color={theme.colors.mute} /> : <Eye size={14} color={theme.colors.mute} />}
-                    </Pressable>
-                  )}
-                </View>
-                <View style={{ gap: 4 }}>
-                  <View style={styles.statutoryCardValueRow}>
-                    <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                      {user.bank_account_number
-                        ? showFullBankAccount
-                          ? user.bank_account_number
-                          : maskBankAccount(user.bank_account_number)
-                        : 'A/C: —'}
-                    </Text>
-                    {user.bank_account_number && canRevealDocs && (
-                      <Pressable
-                        variant="plain"
-                        haptic="tap"
-                        hitSlopToMin48
-                        onPress={() => handleCopy(user.bank_account_number!, 'Bank Account')}
-                        accessibilityLabel="Copy Bank Account"
-                        style={{ padding: 4 }}
-                      >
-                        {copiedKey === 'Bank Account' ? (
-                          <Check size={12} color="#10b981" />
-                        ) : (
-                          <Copy size={12} color={theme.colors.mute} />
-                        )}
-                      </Pressable>
-                    )}
-                  </View>
-                  <Text variant="micro" style={{ color: theme.colors.mute }}>
-                    IFSC: <Text variant="mono" weight="semibold" style={{ color: theme.colors.ink }}>{user.bank_ifsc_code || '—'}</Text>
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* DPDP Act 2023 Compliance Notice */}
-            <View style={[styles.dpdpNoticeRow, { borderTopColor: theme.colors.hairline }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Shield size={12} color={theme.colors.mute} />
-                <Text variant="micro" weight="semibold" style={{ color: theme.colors.mute }}>
-                  Complies with Aadhaar Act & DPDP Act 2023
-                </Text>
+                <Badge status="active" customLabel={`${docStatusCounts.verified} verified`} />
+                {docStatusCounts.pending > 0 && (
+                  <Badge status="pending" customLabel={`${docStatusCounts.pending} pending`} />
+                )}
+                {docStatusCounts.rejected > 0 && (
+                  <Badge status="overdue" customLabel={`${docStatusCounts.rejected} rejected`} />
+                )}
               </View>
-              <Text variant="micro" style={{ color: theme.colors.mute }}>
-                {filteredDocuments.length} files
-              </Text>
             </View>
 
             {isDocumentsLoading ? (
               <UserDocumentsSkeleton count={2} />
-            ) : filteredDocuments.length === 0 ? (
+            ) : filteredDocuments.length === 0 && missingTypedDocs.length === 0 ? (
               <EmptyState
                 title="No Identity Documents"
-                description={
-                  tabSearch
-                    ? 'No documents match your search.'
-                    : 'No statutory identity or compliance documents have been verified for this account.'
-                }
+                description="No statutory identity or compliance documents have been uploaded for this profile yet."
               />
             ) : (
               <>
                 <View style={styles.cardsList}>
                   {filteredDocuments.map((doc) => {
-                    const isVerified = doc.verification_status === "verified";
-                    const isRejected = doc.verification_status === "rejected";
+                    const isVerified = doc.verification_status === 'verified';
+                    const isRejected = doc.verification_status === 'rejected';
                     const isPending = !isVerified && !isRejected;
+                    const thumbUrl = doc.thumb_signed_url || doc.signed_url;
+                    const isPdf = (doc.mime_type || '').toLowerCase() === 'application/pdf';
 
-                    let matchedValue = "";
-                    if (doc.document_type_code === "aadhaar") {
-                      matchedValue = user.aadhaar_number ? maskAadhaar(user.aadhaar_number) : "—";
-                    } else if (doc.document_type_code === "driving_license") {
-                      matchedValue = user.license_number || "—";
-                    } else if (doc.document_type_code === "bank_document") {
-                      matchedValue = user.bank_account_number
-                        ? `${maskBankAccount(user.bank_account_number)} (${user.bank_ifsc_code || "No IFSC"})`
-                        : "—";
+                    let typedLabel = '';
+                    let typedValue = '';
+                    let revealable = false;
+                    if (doc.document_type_code === 'aadhaar' && user.aadhaar_number) {
+                      typedLabel = 'Aadhaar number';
+                      typedValue = showFullAadhaar ? user.aadhaar_number : maskAadhaar(user.aadhaar_number);
+                      revealable = canRevealDocs;
+                    } else if (doc.document_type_code === 'driving_license' && user.license_number) {
+                      typedLabel = 'Licence number';
+                      typedValue = formatLicenseNumber(user.license_number);
+                    } else if (doc.document_type_code === 'bank_document' && user.bank_account_number) {
+                      typedLabel = 'Bank account';
+                      typedValue = `${showFullBankAccount ? user.bank_account_number : maskBankAccount(user.bank_account_number)} · ${
+                        user.bank_ifsc_code || 'No IFSC'
+                      }`;
+                      revealable = canRevealDocs && canVerifyReject;
                     }
 
                     return (
@@ -2366,41 +2268,142 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                         ]}
                       >
                         <View style={styles.docLeftRow}>
-                          <View style={[styles.docIconBox, { backgroundColor: theme.colors.canvasElevated }]}>
-                            <FileText size={16} color="#0d9488" />
-                          </View>
-                          <View style={{ flex: 1 }}>
+                          {/* Scan thumbnail — tap opens the full document */}
+                          <Pressable
+                            variant="plain"
+                            haptic="tap"
+                            hitSlopToMin48
+                            onPress={() => handleViewDocument(doc)}
+                            accessibilityLabel={`View full ${doc.type_label || doc.document_type_code} document`}
+                            style={[
+                              styles.docThumbBox,
+                              { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                            ]}
+                          >
+                            {isPdf ? (
+                              <View style={{ alignItems: 'center', gap: 2 }}>
+                                <FileText size={18} color="#e11d48" />
+                                <Text variant="micro" weight="bold" style={{ color: '#e11d48' }}>
+                                  PDF
+                                </Text>
+                              </View>
+                            ) : thumbUrl ? (
+                              <Image source={{ uri: thumbUrl }} style={styles.docThumbImage} resizeMode="cover" />
+                            ) : (
+                              <View style={{ alignItems: 'center', gap: 2 }}>
+                                <FileText size={18} color="#0284c7" />
+                                <Text variant="micro" weight="bold" style={{ color: '#0284c7' }}>
+                                  IMG
+                                </Text>
+                              </View>
+                            )}
+                          </Pressable>
+
+                          <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
                                 {doc.type_label || doc.document_type_code.replace(/_/g, ' ').toUpperCase()}
                               </Text>
-                              {isVerified && (
-                                <Badge status="active" customLabel="Verified" />
-                              )}
-                              {isRejected && (
-                                <Badge status="overdue" customLabel="Rejected" />
-                              )}
+                              {isVerified && <Badge status="active" customLabel="Verified" />}
+                              {isRejected && <Badge status="overdue" customLabel="Rejected" />}
                               {isPending && (
-                                <Badge status="pending" customLabel={doc.is_pending_request ? "Pending Review" : "Pending"} />
+                                <Badge
+                                  status="pending"
+                                  customLabel={doc.is_pending_request ? 'Pending Review' : 'Pending'}
+                                />
                               )}
                             </View>
                             <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 2 }}>
-                              Uploaded {formatDate(doc.created_at)}
+                              {(doc.mime_type.split('/')[1] || '').toUpperCase()} · {formatFileSizeMobile(doc.file_size_bytes)} ·{' '}
+                              {formatDate(doc.created_at)}
                             </Text>
-                            {matchedValue ? (
-                              <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 2 }}>
-                                Registered: <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>{matchedValue}</Text>
-                              </Text>
-                            ) : null}
-                            {isRejected && doc.rejection_reason && (
+
+                            {isRejected && doc.rejection_reason ? (
                               <Text variant="micro" style={{ color: '#ef4444', marginTop: 2 }}>
                                 Reason: {doc.rejection_reason}
                               </Text>
-                            )}
+                            ) : null}
                           </View>
                         </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                        {/* Registered statutory number shown beside its own scan */}
+                        {typedLabel ? (
+                          <View
+                            style={[
+                              styles.docTypedValueBox,
+                              { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                            ]}
+                          >
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text variant="micro" weight="semibold" style={{ color: theme.colors.mute }}>
+                                {typedLabel.toUpperCase()}
+                              </Text>
+                              <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                                {typedValue}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                              {revealable && (
+                                <Pressable
+                                  variant="plain"
+                                  haptic="select"
+                                  hitSlopToMin48
+                                  onPress={
+                                    doc.document_type_code === 'aadhaar'
+                                      ? handleToggleAadhaar
+                                      : handleToggleBankAccount
+                                  }
+                                  accessibilityLabel={
+                                    (doc.document_type_code === 'aadhaar' ? showFullAadhaar : showFullBankAccount)
+                                      ? 'Hide number'
+                                      : 'Reveal full number'
+                                  }
+                                  style={{ padding: 6 }}
+                                >
+                                  {(doc.document_type_code === 'aadhaar' ? showFullAadhaar : showFullBankAccount) ? (
+                                    <EyeOff size={14} color={theme.colors.mute} />
+                                  ) : (
+                                    <Eye size={14} color={theme.colors.mute} />
+                                  )}
+                                </Pressable>
+                              )}
+                              <Pressable
+                                variant="plain"
+                                haptic="tap"
+                                hitSlopToMin48
+                                onPress={() =>
+                                  handleCopy(
+                                    doc.document_type_code === 'aadhaar'
+                                      ? user.aadhaar_number
+                                      : doc.document_type_code === 'driving_license'
+                                        ? user.license_number
+                                        : user.bank_account_number,
+                                    doc.document_type_code === 'aadhaar'
+                                      ? 'Aadhaar'
+                                      : doc.document_type_code === 'driving_license'
+                                        ? 'Licence'
+                                        : 'Bank Account'
+                                  )
+                                }
+                                accessibilityLabel="Copy registered number"
+                                style={{ padding: 6 }}
+                              >
+                                {copiedKey ===
+                                (doc.document_type_code === 'aadhaar'
+                                  ? 'Aadhaar'
+                                  : doc.document_type_code === 'driving_license'
+                                    ? 'Licence'
+                                    : 'Bank Account') ? (
+                                  <Check size={14} color="#10b981" />
+                                ) : (
+                                  <Copy size={14} color={theme.colors.mute} />
+                                )}
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <Pressable
                             variant="outline"
                             haptic="tap"
@@ -2421,7 +2424,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                             ) : (
                               <>
                                 <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                                  View
+                                  View document
                                 </Text>
                                 <ChevronRight size={12} color={theme.colors.mute} />
                               </>
@@ -2449,7 +2452,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                               accessibilityLabel="Review in Approvals"
                             >
                               <Text variant="caption" weight="bold" style={{ color: '#ffffff' }}>
-                                Review in Approvals →
+                                Review in approvals →
                               </Text>
                             </Pressable>
                           )}
@@ -2540,6 +2543,110 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                       </View>
                     );
                   })}
+
+                  {/* Statutory numbers on record without a scanned file yet */}
+                  {missingTypedDocs.map((item) => (
+                    <View
+                      key={item.code}
+                      style={[
+                        styles.docListItem,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                          borderStyle: 'dashed',
+                        },
+                      ]}
+                    >
+                      <View style={styles.docLeftRow}>
+                        <View
+                          style={[
+                            styles.docThumbBox,
+                            {
+                              backgroundColor: theme.colors.canvasElevated,
+                              borderColor: theme.colors.hairline,
+                              borderStyle: 'dashed',
+                            },
+                          ]}
+                        >
+                          <FileText size={18} color={theme.colors.faint} />
+                          <Text variant="micro" weight="bold" style={{ color: theme.colors.faint, marginTop: 2 }}>
+                            NO SCAN
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
+                              {item.label}
+                            </Text>
+                            <Badge status="inactive" customLabel="Not uploaded" />
+                          </View>
+                          <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 2 }}>
+                            Number on record · no scan uploaded
+                          </Text>
+
+                          <View
+                            style={[
+                              styles.docTypedValueBox,
+                              { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                            ]}
+                          >
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text variant="micro" weight="semibold" style={{ color: theme.colors.mute }}>
+                                {item.typedLabel.toUpperCase()}
+                              </Text>
+                              <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                                {item.typedValue}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                              {item.revealable && (
+                                <Pressable
+                                  variant="plain"
+                                  haptic="select"
+                                  hitSlopToMin48
+                                  onPress={() => {
+                                    if (item.code === 'aadhaar') handleToggleAadhaar();
+                                    else handleToggleBankAccount();
+                                  }}
+                                  accessibilityLabel="Reveal full number"
+                                  style={{ padding: 6 }}
+                                >
+                                  {(item.code === 'aadhaar' ? showFullAadhaar : showFullBankAccount) ? (
+                                    <EyeOff size={14} color={theme.colors.mute} />
+                                  ) : (
+                                    <Eye size={14} color={theme.colors.mute} />
+                                  )}
+                                </Pressable>
+                              )}
+                              <Pressable
+                                variant="plain"
+                                haptic="tap"
+                                hitSlopToMin48
+                                onPress={() =>
+                                  handleCopy(
+                                    item.code === 'aadhaar'
+                                      ? user.aadhaar_number
+                                      : item.code === 'driving_license'
+                                        ? user.license_number
+                                        : user.bank_account_number,
+                                    item.copyLabel
+                                  )
+                                }
+                                accessibilityLabel={`Copy ${item.copyLabel}`}
+                                style={{ padding: 6 }}
+                              >
+                                {copiedKey === item.copyLabel ? (
+                                  <Check size={14} color="#10b981" />
+                                ) : (
+                                  <Copy size={14} color={theme.colors.mute} />
+                                )}
+                              </Pressable>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
                 </View>
 
                 <TabPaginationFooter
@@ -2552,6 +2659,19 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                 />
               </>
             )}
+
+            {/* DPDP Act 2023 Compliance Notice */}
+            <View style={[styles.dpdpNoticeRow, { borderTopColor: theme.colors.hairline }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Shield size={12} color={theme.colors.mute} />
+                <Text variant="micro" weight="semibold" style={{ color: theme.colors.mute }}>
+                  Complies with Aadhaar Act & DPDP Act 2023
+                </Text>
+              </View>
+              <Text variant="micro" style={{ color: theme.colors.mute }}>
+                {filteredDocuments.length} files
+              </Text>
+            </View>
           </View>
         )}
 
@@ -3038,13 +3158,29 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
-  docIconBox: {
-    width: 38,
-    height: 38,
+  docThumbBox: {
+    width: 56,
+    height: 72,
     borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    overflow: 'hidden',
+  },
+  docThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  docTypedValueBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
   },
   viewDocBtn: {
     flexDirection: 'row',
@@ -3160,26 +3296,6 @@ const styles = StyleSheet.create({
   tabSearchContainer: {
     paddingHorizontal: 0,
     paddingBottom: spacingNumeric.sm,
-  },
-  statutoryCardsGrid: {
-    gap: 10,
-    marginBottom: 12,
-  },
-  statutoryCard: {
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    padding: 14,
-    gap: 8,
-  },
-  statutoryCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  statutoryCardValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   dpdpNoticeRow: {
     flexDirection: 'row',

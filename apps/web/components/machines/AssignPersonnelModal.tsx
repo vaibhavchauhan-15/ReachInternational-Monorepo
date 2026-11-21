@@ -41,6 +41,8 @@ export interface MachineAssignmentItem {
 
 export interface AssignPersonnelSuccessResult {
   machineId?: string;
+  /** Date the roster was actually saved for (YYYY-MM-DD, IST). */
+  assignmentDate?: string;
   operators?: Array<{
     id: string;
     full_name: string;
@@ -74,6 +76,16 @@ export interface AssignPersonnelModalProps {
   initialMachineId?: string;
   initialOperatorId?: string;
   userRole?: UserRole | string;
+  userId?: string;
+  /**
+   * When false the composed dialogs are locked to TODAY and render no date control.
+   */
+  allowDateSelection?: boolean;
+  /**
+   * Preferred assignment date when the composed dialog opens (YYYY-MM-DD, IST).
+   * Clamped into the canonical window [today - 7 .. today + 1]; defaults to today.
+   */
+  initialAssignmentDate?: string | null;
   onSuccess?: (result?: AssignPersonnelSuccessResult) => void;
   onMachineUpdated?: (updated: Partial<MachineWithEngineer>) => void;
 }
@@ -96,6 +108,9 @@ export function AssignPersonnelModal({
   initialMachineId,
   initialOperatorId,
   userRole = "admin",
+  userId,
+  allowDateSelection = true,
+  initialAssignmentDate,
   onSuccess,
   onMachineUpdated,
 }: AssignPersonnelModalProps) {
@@ -161,6 +176,8 @@ export function AssignPersonnelModal({
         onClose={onClose}
         operator={resolvedOperator}
         userRole={typeof userRole === "string" ? userRole : undefined}
+        allowDateSelection={allowDateSelection}
+        initialAssignmentDate={initialAssignmentDate}
         onSuccess={onSuccess}
       />
     );
@@ -177,6 +194,9 @@ export function AssignPersonnelModal({
       supervisors={supervisors}
       operators={operators}
       userRole={userRole}
+      userId={userId}
+      allowDateSelection={allowDateSelection}
+      initialAssignmentDate={initialAssignmentDate}
       onSuccess={onSuccess}
       onMachineUpdated={onMachineUpdated}
     />

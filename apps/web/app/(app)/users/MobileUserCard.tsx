@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { highlightText } from "./user-search";
@@ -8,69 +8,56 @@ import {
   AnimatedMail,
   AnimatedPhone,
   AnimatedMapPin,
-  AnimatedChevronRight,
 } from "@/components/ui/animated-icons";
-import { Wrench } from "lucide-react";
+import { Wrench, User as SupervisorIcon } from "lucide-react";
 import { maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import type { User } from "@/lib/types/database";
+
+/** Long-press duration (ms) that promotes a card into multi-select mode. */
+const LONG_PRESS_MS = 450;
 
 interface MobileUserCardProps {
   user: User;
   currentUser: User;
-  loadingId?: { type: string; id: string } | null;
   selectable?: boolean;
   isSelected?: boolean;
+  /** True once multi-select mode has been entered (via long press). */
+  selectionMode?: boolean;
   onToggleSelect?: (userId: string) => void;
-  onResetPassword?: (userId: string) => void;
-  onToggleStatus?: (userId: string) => void;
+  onLongPressSelect?: (userId: string) => void;
   searchTerm?: string;
 }
 
+const ROLE_BADGE_CLASS: Record<string, string> = {
+  super_admin:
+    "bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/80",
+  admin:
+    "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/80",
+  manager:
+    "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/80",
+  supervisor:
+    "bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800/80",
+  hr: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80",
+  operator:
+    "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/80",
+};
+
+function formatRoleLabel(role: string): string {
+  if (!role) return "User";
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function getRoleBadge(role: string) {
-  switch (role) {
-    case "super_admin":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 shadow-xs whitespace-nowrap">
-          Super Admin
-        </span>
-      );
-    case "admin":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
-          Admin
-        </span>
-      );
-    case "manager":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 shadow-xs whitespace-nowrap">
-          Manager
-        </span>
-      );
-    case "supervisor":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 shadow-xs whitespace-nowrap">
-          Supervisor
-        </span>
-      );
-    case "hr":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs whitespace-nowrap">
-          HR
-        </span>
-      );
-    case "operator":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
-          Operator
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs whitespace-nowrap">
-          {role ? role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "User"}
-        </span>
-      );
-  }
+  const tone =
+    ROLE_BADGE_CLASS[role] ??
+    "bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border-[var(--color-hairline)]";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-1.5 py-[1px] text-[10px] font-semibold leading-4 whitespace-nowrap shrink-0 ${tone}`}
+    >
+      {formatRoleLabel(role)}
+    </span>
+  );
 }
 
 function getInitials(name?: string): string {
@@ -103,25 +90,25 @@ function getStatusIndicator(status: string) {
   switch (status) {
     case "active":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-[1px] text-[10px] font-semibold leading-4 text-emerald-700 dark:text-emerald-300 whitespace-nowrap shrink-0">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
           </span>
           Active
         </span>
       );
     case "inactive":
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
-          <span className="inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-1.5 py-[1px] text-[10px] font-semibold leading-4 text-slate-600 dark:text-slate-400 whitespace-nowrap shrink-0">
+          <span className="inline-flex rounded-full h-1.5 w-1.5 bg-slate-400" />
           Inactive
         </span>
       );
     case "pending":
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
-          <span className="inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-[1px] text-[10px] font-semibold leading-4 text-amber-700 dark:text-amber-300 whitespace-nowrap shrink-0">
+          <span className="inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
           Pending
         </span>
       );
@@ -130,21 +117,60 @@ function getStatusIndicator(status: string) {
   }
 }
 
-function truncateText(str: string | null | undefined, max: number): string {
-  if (!str) return "";
-  return str.length > max ? str.slice(0, max) + "…" : str;
-}
-
 export const MobileUserCard = memo(function MobileUserCard({
   user,
   currentUser,
-  loadingId,
   selectable = false,
   isSelected = false,
+  selectionMode = false,
   onToggleSelect,
+  onLongPressSelect,
   searchTerm,
 }: MobileUserCardProps) {
   const router = useRouter();
+  const userDetailUrl = `/users/${user.employee_id || user.id}`;
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
+
+  const handlePointerDown = useCallback(() => {
+    if (!selectable || selectionMode) return;
+    clearLongPressTimer();
+    longPressFiredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      longPressFiredRef.current = true;
+      onLongPressSelect?.(user.id);
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        try {
+          navigator.vibrate(12);
+        } catch {
+          /* vibration unsupported — non-fatal */
+        }
+      }
+    }, LONG_PRESS_MS);
+  }, [clearLongPressTimer, onLongPressSelect, selectable, selectionMode, user.id]);
+
+  const handleActivate = useCallback(() => {
+    // A completed long press must not also navigate to the detail page.
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false;
+      return;
+    }
+    if (selectionMode && selectable) {
+      onToggleSelect?.(user.id);
+      return;
+    }
+    router.push(userDetailUrl);
+  }, [onToggleSelect, router, selectable, selectionMode, userDetailUrl]);
 
   const canViewContactInfo = () => {
     if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
@@ -162,20 +188,26 @@ export const MobileUserCard = memo(function MobileUserCard({
 
   const borderAccentClass =
     user.role === "super_admin"
-      ? "border-l-[3px] border-l-rose-500"
+      ? "border-l-rose-500"
       : user.role === "admin"
-      ? "border-l-[3px] border-l-amber-500"
+      ? "border-l-amber-500"
       : user.role === "manager"
-      ? "border-l-[3px] border-l-indigo-500"
+      ? "border-l-indigo-500"
       : user.role === "supervisor"
-      ? "border-l-[3px] border-l-teal-500"
+      ? "border-l-teal-500"
       : user.role === "hr"
-      ? "border-l-[3px] border-l-emerald-500"
+      ? "border-l-emerald-500"
       : user.role === "operator"
-      ? "border-l-[3px] border-l-amber-500"
-      : "border-l-[3px] border-l-slate-400";
+      ? "border-l-amber-500"
+      : "border-l-slate-400";
 
-  const userDetailUrl = `/users/${user.employee_id || user.id}`;
+  const locationLabel = user.city || user.location || user.district || "";
+  const locationSuffix = user.state && user.state !== locationLabel ? user.state : "";
+  const supervisorName =
+    user.supervisors && user.supervisors.length > 0
+      ? user.supervisors.map((s) => s.full_name).join(", ")
+      : user.supervisor?.full_name || "";
+  const hasKyc = Boolean(user.aadhaar_number || user.license_number);
 
   return (
     <motion.div
@@ -183,145 +215,178 @@ export const MobileUserCard = memo(function MobileUserCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      whileTap={{ scale: 0.98 }}
+      whileTap={{ scale: 0.985 }}
       transition={{ duration: 0.2, type: "spring", stiffness: 350, damping: 25 }}
-      onClick={() => router.push(userDetailUrl)}
-      className={`p-3.5 rounded-xl border ${
+      role="button"
+      tabIndex={0}
+      aria-label={`${user.full_name}${user.employee_id ? `, ${user.employee_id}` : ""}, ${formatRoleLabel(
+        user.role
+      )}, ${user.status}`}
+      onPointerDown={handlePointerDown}
+      onPointerUp={clearLongPressTimer}
+      onPointerLeave={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
+      onContextMenu={(e) => {
+        if (selectable) e.preventDefault();
+      }}
+      onClick={handleActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleActivate();
+        }
+      }}
+      className={`p-3 rounded-xl border ${
         isSelected
-          ? "border-[var(--color-ink)] dark:border-white ring-1 ring-[var(--color-ink)] dark:ring-white bg-[var(--color-link-soft)]/20"
+          ? "border-[var(--color-ink)] dark:border-white ring-1 ring-[var(--color-ink)]/70 dark:ring-white/70 bg-[var(--color-link-soft)]/20"
           : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]"
-      } shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-md transition-all flex flex-col gap-2.5 relative overflow-hidden group cursor-pointer ${borderAccentClass}`}
+      } shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-sm transition-all flex flex-col gap-2 relative overflow-hidden group cursor-pointer border-l-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-link)]/50 ${borderAccentClass}`}
     >
-      {/* Top Header section: Checkbox, Avatar, Name, Status, Chevron */}
-      <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {selectable && (
-            <div onClick={(e) => e.stopPropagation()} className="flex items-center shrink-0">
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onToggleSelect && onToggleSelect(user.id)}
-                aria-label={`Select ${user.full_name}`}
-                className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
-              />
-            </div>
-          )}
-
-          {/* Initials Avatar */}
-          <div
-            className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${getRoleAvatarStyle(
-              user.role
-            )} font-bold text-xs border shadow-xs select-none`}
-          >
-            <span>{getInitials(user.full_name)}</span>
+      {/* ── Identity: selection box (select mode only) · avatar · name ── */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        {selectable && selectionMode && (
+          <div onClick={(e) => e.stopPropagation()} className="flex items-center shrink-0">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelect?.(user.id)}
+              aria-label={`Select ${user.full_name}`}
+              className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+            />
           </div>
+        )}
 
-          <div className="flex flex-col min-w-0 flex-1">
-            <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
-              {highlightText(user.full_name, searchTerm)}
-            </h3>
-            {user.employee_id ? (
-              <span className="font-mono text-[11px] text-[var(--color-mute)] tracking-tight mt-0.5">
-                {highlightText(user.employee_id, searchTerm)}
-              </span>
-            ) : null}
-          </div>
+        <div
+          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${getRoleAvatarStyle(
+            user.role
+          )} font-bold text-xs border shadow-xs select-none`}
+        >
+          <span>{getInitials(user.full_name)}</span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {getStatusIndicator(user.status)}
-          <AnimatedChevronRight
-            size={16}
-            className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] group-hover:translate-x-0.5 transition-all"
-          />
-        </div>
+        <h3
+          className="text-[15px] font-bold text-[var(--color-ink)] truncate leading-tight min-w-0 flex-1 group-hover:text-[var(--color-link)] transition-colors"
+          title={user.full_name}
+        >
+          {highlightText(user.full_name, searchTerm)}
+        </h3>
       </div>
 
-      {/* Metadata Row: Contact on Left, Role Badge on Bottom Right */}
-      <div className="pt-2 border-t border-[var(--color-hairline)] flex items-end justify-between gap-2 text-xs text-[var(--color-mute)]">
-        <div className="flex flex-col gap-1 min-w-0 flex-1">
-          {showContact ? (
-            <>
-              <div className="flex items-center gap-1.5 font-mono text-xs truncate">
-                <AnimatedMail size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                <span className="truncate" title={user.email}>{highlightText(user.email, searchTerm)}</span>
-              </div>
-              {user.phone && (
-                <div className="flex items-center gap-1.5 font-mono text-xs truncate">
-                  <AnimatedPhone size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                  <span>{highlightText(user.phone, searchTerm)}</span>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-xs text-[var(--color-mute)] italic">
-              Restricted contact
-            </div>
-          )}
-          {(user.city || user.state || user.location) && (
-            <div className="flex items-start gap-1.5 text-xs">
-              <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60 mt-0.5" />
-              <div className="flex flex-col min-w-0 leading-tight">
-                <span className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                  {user.city || user.location || "—"}
-                </span>
-                {user.state && (
-                  <span className="text-[11px] text-[var(--color-mute)] truncate">
-                    {user.state}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-          {(user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name ? (
-            <div className="flex items-center gap-1.5 text-xs truncate">
-              <span className="text-[var(--color-mute)] font-medium">Sup:</span>
-              <span className="text-[var(--color-ink)] font-semibold truncate">
-                {user.supervisors && user.supervisors.length > 0
-                  ? user.supervisors.map((s) => s.full_name).join(", ")
-                  : user.supervisor?.full_name}
-              </span>
-            </div>
-          ) : null}
-          {user.role === "operator" && (
-            <div className="flex items-center gap-1.5 text-xs truncate">
-              <Wrench size={12} className={`flex-shrink-0 ${user.machine_category ? "text-amber-600 dark:text-amber-400" : "text-[var(--color-mute)]"}`} />
-              <span className="text-[var(--color-mute)] font-medium">Machine:</span>
-              <span className={`truncate ${user.machine_category ? "text-[var(--color-ink)] font-semibold" : "text-[var(--color-mute)] italic"}`}>
-                {user.machine_category || "Unassigned"}
-              </span>
-            </div>
-          )}
-          {user.working_location?.name && (
-            <div className="flex items-center gap-1.5 text-xs truncate">
-              <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
-              <span className="text-[var(--color-mute)] font-medium">Base:</span>
-              <span className="text-[var(--color-ink)] font-semibold truncate">{user.working_location.name}</span>
-            </div>
-          )}
-          {(user.aadhaar_number || user.license_number) && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pt-1 border-t border-[var(--color-hairline)]/60 text-xs font-mono">
-              {user.aadhaar_number && (
-                <div className="flex items-center gap-1 text-[var(--color-ink)]">
-                  <span className="text-[10px] font-sans font-bold uppercase text-[var(--color-mute)]">Aadhaar:</span>
-                  <span className="text-[11px] font-medium">{maskAadhaar(user.aadhaar_number)}</span>
-                </div>
-              )}
-              {user.license_number && (
-                <div className="flex items-center gap-1 text-[var(--color-ink)]">
-                  <span className="text-[10px] font-sans font-bold uppercase text-[var(--color-mute)]">DL:</span>
-                  <span className="text-[11px] font-medium truncate max-w-[150px]">{formatLicenseNumber(user.license_number)}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Role Badge shifted to Bottom Right of card */}
-        <div className="shrink-0 self-end">
+      {/* ── Identity chips: employee ID left, status + role pushed to the right ── */}
+      <div className="flex items-center justify-between gap-x-2 gap-y-1 flex-wrap min-w-0">
+        {user.employee_id ? (
+          <span className="font-mono text-[10px] leading-4 tracking-tight text-[var(--color-mute)] whitespace-nowrap truncate min-w-0">
+            {highlightText(user.employee_id, searchTerm)}
+          </span>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          {getStatusIndicator(user.status)}
           {getRoleBadge(user.role)}
         </div>
       </div>
+
+      {/* ── Details: contact · location · reporting · machine ── */}
+      <div className="pt-2 mt-0.5 border-t border-[var(--color-hairline)] flex flex-col gap-1 text-xs text-[var(--color-mute)] min-w-0 flex-1">
+        {showContact ? (
+          <>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <AnimatedMail size={12} className="flex-shrink-0 text-[var(--color-mute)]" />
+              <span className="truncate" title={user.email}>
+                {highlightText(user.email, searchTerm)}
+              </span>
+            </div>
+            {user.phone && (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <AnimatedPhone size={12} className="flex-shrink-0 text-[var(--color-mute)]" />
+                <span className="truncate font-mono text-[11px]">{highlightText(user.phone, searchTerm)}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-[11px] italic">Restricted contact</div>
+        )}
+
+        {(locationLabel || locationSuffix) && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-mute)]" />
+            <span className="truncate text-[var(--color-ink)] font-medium" title={`${locationLabel}${locationSuffix ? `, ${locationSuffix}` : ""}`}>
+              {locationLabel || "—"}
+              {locationSuffix ? (
+                <span className="text-[var(--color-mute)] font-normal">{`, ${locationSuffix}`}</span>
+              ) : null}
+            </span>
+          </div>
+        )}
+
+        {supervisorName && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <SupervisorIcon
+              size={12}
+              className="flex-shrink-0 text-teal-600 dark:text-teal-400"
+              aria-label="Supervisor"
+            />
+            <span className="truncate text-[var(--color-ink)] font-medium" title={supervisorName}>
+              {supervisorName}
+            </span>
+          </div>
+        )}
+
+        {user.role === "operator" && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Wrench
+              size={12}
+              className={`flex-shrink-0 ${
+                user.machine_category ? "text-amber-600 dark:text-amber-400" : "text-[var(--color-mute)]"
+              }`}
+            />
+            <span
+              className={`truncate ${
+                user.machine_category
+                  ? "text-[var(--color-ink)] font-semibold"
+                  : "text-[var(--color-mute)] italic"
+              }`}
+            >
+              {user.machine_category || "Unassigned"}
+            </span>
+          </div>
+        )}
+
+        {user.working_location?.name && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-mute)]">Base</span>
+            <span className="truncate text-[var(--color-ink)] font-medium">{user.working_location.name}</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Compliance footer: Aadhaar + DL on one line, wrapping only when tight ── */}
+      {hasKyc && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-auto pt-1.5 border-t border-[var(--color-hairline)]/70 text-[11px] font-mono min-w-0">
+          {user.aadhaar_number && (
+            <div className="flex items-baseline gap-1 whitespace-nowrap">
+              <span className="text-[9px] font-sans font-bold uppercase tracking-wide text-[var(--color-mute)]">
+                Aadhaar
+              </span>
+              <span className="text-[var(--color-ink)] font-medium">
+                {maskAadhaar(user.aadhaar_number)}
+              </span>
+            </div>
+          )}
+          {user.license_number && (
+            <div className="flex items-baseline gap-1 whitespace-nowrap">
+              <span className="text-[9px] font-sans font-bold uppercase tracking-wide text-[var(--color-mute)]">
+                DL
+              </span>
+              <span className="text-[var(--color-ink)] font-medium">
+                {formatLicenseNumber(user.license_number)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 });

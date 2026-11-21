@@ -54,6 +54,16 @@ const MachineInfoModal = dynamic<React.ComponentProps<typeof import("./MachineEd
   { ssr: false }
 );
 
+const MachineSupervisorModal = dynamic<React.ComponentProps<typeof import("./MachineEditModals").MachineSupervisorModal>>(
+  () => import("./MachineEditModals").then((mod) => mod.MachineSupervisorModal),
+  { ssr: false }
+);
+
+const MachineOperatorModal = dynamic<React.ComponentProps<typeof import("./MachineEditModals").MachineOperatorModal>>(
+  () => import("./MachineEditModals").then((mod) => mod.MachineOperatorModal),
+  { ssr: false }
+);
+
 const MachinePersonnelModal = dynamic<React.ComponentProps<typeof import("./MachineEditModals").MachinePersonnelModal>>(
   () => import("./MachineEditModals").then((mod) => mod.MachinePersonnelModal),
   { ssr: false }
@@ -182,7 +192,7 @@ const PersonnelCell = memo(function PersonnelCell({
       {visible.map((p, idx) => {
         const isLastVisible = idx === visible.length - 1;
         return (
-          <div key={p.id || idx} className="flex items-center gap-1 min-w-0">
+          <div key={`${p.id || 'person'}-${idx}`} className="flex items-center gap-1 min-w-0">
             <span
               className={`${textSizeClass} text-[var(--color-body)] group-hover:text-[var(--color-ink)] transition-colors truncate block ${
                 remainingCount > 0 && isLastVisible ? "max-w-[85px]" : "max-w-[120px]"
@@ -784,9 +794,15 @@ export function MachineListClient({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingMachine, setEditingMachine] = useState<Machine | null>(null);
 
-  // Dedicated separate 3-modal edit states
+  // Dedicated separate edit modal states
   const [editInfoModalOpen, setEditInfoModalOpen] = useState(false);
   const [editInfoMachine, setEditInfoMachine] = useState<any | null>(null);
+
+  const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
+  const [supervisorMachine, setSupervisorMachine] = useState<any | null>(null);
+
+  const [operatorModalOpen, setOperatorModalOpen] = useState(false);
+  const [operatorMachine, setOperatorMachine] = useState<any | null>(null);
 
   const [editPersonnelModalOpen, setEditPersonnelModalOpen] = useState(false);
   const [editPersonnelMachine, setEditPersonnelMachine] = useState<any | null>(null);
@@ -872,11 +888,21 @@ export function MachineListClient({
     setEditInfoModalOpen(true);
   }, []);
 
-  const handleOpenEditPersonnel = useCallback((m: Machine) => {
+  const handleOpenAssignSupervisor = useCallback((m: Machine) => {
     ensureModalOptionsLoaded();
-    setEditPersonnelMachine(m);
-    setEditPersonnelModalOpen(true);
+    setSupervisorMachine(m);
+    setSupervisorModalOpen(true);
   }, [ensureModalOptionsLoaded]);
+
+  const handleOpenAssignOperator = useCallback((m: Machine) => {
+    ensureModalOptionsLoaded();
+    setOperatorMachine(m);
+    setOperatorModalOpen(true);
+  }, [ensureModalOptionsLoaded]);
+
+  const handleOpenEditPersonnel = useCallback((m: Machine) => {
+    handleOpenAssignOperator(m);
+  }, [handleOpenAssignOperator]);
 
   const handleOpenEditClient = useCallback((m: Machine) => {
     ensureModalOptionsLoaded();
@@ -1680,7 +1706,7 @@ export function MachineListClient({
             users={row.supervisors}
             fallbackUser={row.current_supervisor}
             badgeVariant="teal"
-            onClick={() => handleOpenAssignments(row)}
+            onClick={() => (canEdit ? handleOpenAssignSupervisor(row) : handleOpenAssignments(row))}
           />
         ),
       },
@@ -1693,7 +1719,7 @@ export function MachineListClient({
             users={row.operators}
             fallbackUser={row.current_operator}
             badgeVariant="amber"
-            onClick={() => handleOpenAssignments(row)}
+            onClick={() => (canEdit || isSupervisor ? handleOpenAssignOperator(row) : handleOpenAssignments(row))}
           />
         ),
       },
@@ -1732,7 +1758,9 @@ export function MachineListClient({
             isSupervisor={isSupervisor}
             isAdmin={isAdmin}
             onEditMachine={handleOpenEditMachine}
-            onEditPersonnel={handleOpenEditPersonnel}
+            onAssignSupervisor={handleOpenAssignSupervisor}
+            onAssignOperator={handleOpenAssignOperator}
+            onEditPersonnel={handleOpenAssignOperator}
             onEditClient={handleOpenEditClient}
             onViewAudit={handleViewAudit}
             onViewLogs={handleViewLogs}
@@ -1745,7 +1773,7 @@ export function MachineListClient({
         ),
       },
     ],
-    [canEdit, isSupervisor, isAdmin, handleOpenEditMachine, handleOpenEditPersonnel, handleOpenEditClient, handleViewAudit, handleViewLogs, handleOpenDelete, handleOpenAssignments, handleOpenHistory, handleOpenDetail, localSearchTerm]
+    [canEdit, isSupervisor, isAdmin, handleOpenEditMachine, handleOpenAssignSupervisor, handleOpenAssignOperator, handleOpenEditPersonnel, handleOpenEditClient, handleViewAudit, handleViewLogs, handleOpenDelete, handleOpenAssignments, handleOpenHistory, handleOpenDetail, localSearchTerm]
   );
 
   return (
@@ -2171,7 +2199,9 @@ export function MachineListClient({
                         isSupervisor={isSupervisor}
                         searchTerm={localSearchTerm}
                         onEditMachine={handleOpenEditMachine}
-                        onEditPersonnel={handleOpenEditPersonnel}
+                        onAssignSupervisor={handleOpenAssignSupervisor}
+                        onAssignOperator={handleOpenAssignOperator}
+                        onEditPersonnel={handleOpenAssignOperator}
                         onEditClient={handleOpenEditClient}
                         onViewAudit={handleViewAudit}
                         onViewLogs={handleViewLogs}
@@ -2248,7 +2278,37 @@ export function MachineListClient({
         />
       )}
 
-      {/* 2. Dedicated Machine Personnel Modal (Supervisor & Operator) */}
+      {/* 2A. Dedicated Machine Supervisor Modal */}
+      {supervisorModalOpen && supervisorMachine && (
+        <MachineSupervisorModal
+          isOpen={supervisorModalOpen}
+          onClose={() => {
+            setSupervisorModalOpen(false);
+            setSupervisorMachine(null);
+          }}
+          machine={supervisorMachine}
+          supervisors={lazySupervisors}
+          userRole={userRole}
+          onMachineUpdated={handleMachineUpdatedFromModal}
+        />
+      )}
+
+      {/* 2B. Dedicated Machine Operator Modal (24h Shift Roster) */}
+      {operatorModalOpen && operatorMachine && (
+        <MachineOperatorModal
+          isOpen={operatorModalOpen}
+          onClose={() => {
+            setOperatorModalOpen(false);
+            setOperatorMachine(null);
+          }}
+          machine={operatorMachine}
+          operators={lazyOperators}
+          userRole={userRole}
+          onMachineUpdated={handleMachineUpdatedFromModal}
+        />
+      )}
+
+      {/* 2C. Legacy Machine Personnel Modal Fallback */}
       {editPersonnelModalOpen && editPersonnelMachine && (
         <MachinePersonnelModal
           isOpen={editPersonnelModalOpen}

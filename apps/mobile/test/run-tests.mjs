@@ -541,8 +541,8 @@ try {
   assert(machineCardCheck183.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard renders Rented/Available badge');
 
   const userTouchCardCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserTouchCard.tsx'), 'utf8').replace(/\r\n/g, '\n');
-  assert(userTouchCardCheck183.includes('<Badge\n                role={u.role}'), 'UserTouchCard reuses centralized Badge for user role');
-  assert(userTouchCardCheck183.includes('<Badge\n                status={u.status}\n                dot'), 'UserTouchCard reuses centralized Badge with dot for user status');
+  assert(/<Badge\s+role=\{u\.role\}/.test(userTouchCardCheck183), 'UserTouchCard reuses centralized Badge for user role');
+  assert(/<Badge\s+status=\{u\.status\}\s+dot/.test(userTouchCardCheck183), 'UserTouchCard reuses centralized Badge with dot for user status');
 
   const userDetailCheck183 = fs.readFileSync(path.join(__dirname, 'components/users/UserDetailModal.tsx'), 'utf8').replace(/\r\n/g, '\n');
   assert(userDetailCheck183.includes('<Badge\n                  role={user.role}'), 'UserDetailModal reuses centralized Badge for user role');

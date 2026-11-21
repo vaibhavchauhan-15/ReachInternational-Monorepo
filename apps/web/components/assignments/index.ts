@@ -17,6 +17,10 @@ export {
   type AssignSupervisorToClientDialogProps,
 } from "./AssignSupervisorToClientDialog";
 export {
+  AssignSupervisorToMachineDialog,
+  type AssignSupervisorToMachineDialogProps,
+} from "./AssignSupervisorToMachineDialog";
+export {
   AssignOperatorToMachineDialog,
   type AssignOperatorToMachineDialogProps,
   type OperatorRosterItem,

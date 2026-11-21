@@ -14,7 +14,11 @@
 import { useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '../supabase';
-import { formatTo12Hour, isAbortError, getISTDateString } from '@reachinternational/utils';
+import {
+  formatTo12Hour,
+  isAbortError,
+  getAssignmentDateWindow,
+} from '@reachinternational/utils';
 
 const EMPTY_ARRAY: any[] = Object.freeze([]) as any;
 
@@ -82,27 +86,34 @@ export interface UseAssignPersonnelModalDataOptions {
   relevantSupervisorIds?: string[];
   relevantOperatorIds?: string[];
   initialMachineId?: string;
+  /** Date-based assignment target (YYYY-MM-DD), today .. today+7 IST */
+  assignmentDate?: string | null;
 }
 
 /**
  * 1. Fleet Assignments Query
- * Fetches active assignments across the fleet for capacity & overlap validation.
+ * Fetches active assignments across the fleet for capacity & overlap validation,
+ * scoped to the SELECTED ASSIGNMENT DATE so per-date rosters stay independent.
  */
-export function useFleetAssignments(visible: boolean) {
+export function useFleetAssignments(visible: boolean, assignmentDate?: string | null) {
+  const targetDate =
+    assignmentDate && /^\d{4}-\d{2}-\d{2}$/.test(assignmentDate)
+      ? assignmentDate
+      : getAssignmentDateWindow().today;
+
   return useQuery<FleetAssignmentItem[]>({
-    queryKey: ['assign-personnel-modal-data', 'fleet-assignments'],
+    queryKey: ['assign-personnel-modal-data', 'fleet-assignments', targetDate],
     enabled: visible,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
-      const todayDate = getISTDateString();
       const { data, error } = await supabase
         .from('operator_machine_assignments')
-        .select('id, operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, machine:machines(id, machine_id, model)')
+        .select('id, operator_id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, valid_from, valid_to, machine:machines(id, machine_id, model)')
         .eq('is_active', true)
-        .lte('valid_from', todayDate)
-        .or(`valid_to.is.null,valid_to.gte.${todayDate}`)
+        .lte('valid_from', targetDate)
+        .or(`valid_to.is.null,valid_to.gte.${targetDate}`)
         .abortSignal(signal);
 
       if (error) {
@@ -266,11 +277,15 @@ export function useAssignPersonnelOperators({
   isAddOperatorOpen,
   relevantOperatorIds = EMPTY_ARRAY,
   search,
+  isSupervisorRole,
+  supervisorId,
 }: {
   visible: boolean;
   isAddOperatorOpen?: boolean;
   relevantOperatorIds?: string[];
   search?: string;
+  isSupervisorRole?: boolean;
+  supervisorId?: string;
 }) {
   const operatorIdsKey = useMemo(() => {
     if (isAddOperatorOpen) return 'all';
@@ -287,6 +302,7 @@ export function useAssignPersonnelOperators({
       'operators',
       operatorIdsKey,
       search || '',
+      isSupervisorRole ? (supervisorId || 'supervisor') : 'all',
     ],
     enabled: isEnabled,
     staleTime: 60_000,
@@ -303,6 +319,8 @@ export function useAssignPersonnelOperators({
 
       if (!isAddOperatorOpen && relevantOperatorIds.length > 0) {
         query = query.in('id', relevantOperatorIds);
+      } else if (isSupervisorRole && supervisorId && isAddOperatorOpen) {
+        query = query.eq('supervisor_id', supervisorId);
       }
 
       if (search && search.trim()) {
@@ -337,8 +355,9 @@ export function useAssignPersonnelModalData({
   relevantSupervisorIds,
   relevantOperatorIds,
   initialMachineId,
+  assignmentDate,
 }: UseAssignPersonnelModalDataOptions) {
-  const fleetQuery = useFleetAssignments(visible);
+  const fleetQuery = useFleetAssignments(visible, assignmentDate);
 
   const machinesQuery = useAssignPersonnelMachines({
     visible,
@@ -361,6 +380,8 @@ export function useAssignPersonnelModalData({
     isAddOperatorOpen,
     relevantOperatorIds,
     search: operatorSearch,
+    isSupervisorRole,
+    supervisorId,
   });
 
   const isLoading =

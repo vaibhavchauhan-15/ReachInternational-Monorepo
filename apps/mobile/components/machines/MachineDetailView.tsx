@@ -505,17 +505,23 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   // Supervisors & Operators (Direct machine assignments + Inherited client-level supervisors)
   const supervisors = useMemo(() => {
     const list: any[] = [];
+    const seen = new Set<string>();
     if (Array.isArray(machine.supervisors) && machine.supervisors.length > 0) {
       machine.supervisors.forEach((s: any) => {
-        if (s?.full_name) list.push({ ...s, is_inherited: false });
+        if (s?.full_name && s?.id && !seen.has(s.id)) {
+          seen.add(s.id);
+          list.push({ ...s, is_inherited: false });
+        }
       });
-    } else if (machine.current_supervisor?.full_name) {
+    } else if (machine.current_supervisor?.full_name && machine.current_supervisor?.id) {
+      seen.add(machine.current_supervisor.id);
       list.push({ ...machine.current_supervisor, is_inherited: false });
     }
 
     if (clientSupervisors.length > 0) {
       clientSupervisors.forEach((cs: any) => {
-        if (!list.some((existing) => existing.id === cs.id)) {
+        if (cs?.id && !seen.has(cs.id)) {
+          seen.add(cs.id);
           list.push(cs);
         }
       });
@@ -525,8 +531,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   }, [machine.supervisors, machine.current_supervisor, clientSupervisors]);
 
   const operators = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
     if (Array.isArray(machine.operators) && machine.operators.length > 0) {
-      return machine.operators.filter((o: any) => Boolean(o?.full_name));
+      machine.operators.forEach((o: any, idx: number) => {
+        if (!o?.full_name) return;
+        const key = `${o.id || idx}:${String(o.shift_code || "").trim().toUpperCase()}:${o.shift_start_time || ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push(o);
+        }
+      });
+      return list;
     }
     if (machine.current_operator?.full_name) {
       return [machine.current_operator];
@@ -1838,7 +1854,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   ) : (
                     supervisors.map((s: any, idx: number) => (
                       <View
-                        key={s.id || idx}
+                        key={`${s.id || 'sup'}-${idx}`}
                         style={[
                           styles.personnelRowCard,
                           {
@@ -1945,7 +1961,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   ) : (
                     operators.map((o: any, idx: number) => (
                       <View
-                        key={o.id || idx}
+                        key={`${o.id || 'op'}-${o.shift_code || idx}-${idx}`}
                         style={[
                           styles.personnelRowCard,
                           {

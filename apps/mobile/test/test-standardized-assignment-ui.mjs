@@ -31,8 +31,7 @@ const expectedFiles = [
   'AssignmentSelectableList.tsx',
   'AssignmentShiftPicker.tsx',
   'AssignmentSelectionSummary.tsx',
-  'AssignmentActionBar.tsx',
-  'AssignOperatorToMachineModal.tsx',
+  'AssignmentActionBar.tsx',
   'AssignMachineToOperatorModal.tsx',
   'AssignSupervisorToClientModal.tsx',
   'AssignReportingSupervisorModal.tsx',
@@ -54,8 +53,7 @@ const expectedExports = [
   'AssignmentSelectableList',
   'AssignmentShiftPicker',
   'AssignmentSelectionSummary',
-  'AssignmentActionBar',
-  'AssignOperatorToMachineModal',
+  'AssignmentActionBar',
   'AssignMachineToOperatorModal',
   'AssignSupervisorToClientModal',
   'AssignReportingSupervisorModal',
@@ -114,24 +112,16 @@ console.log('  ✓ AssignmentSelectableList renders monochromatic avatars and ac
 // ─── 3. CAPACITY LIMITS & SHIFT OVERLAP VALIDATION ────────────────────────────
 console.log('\n--- 3. Capacity Limits & Shift Overlap Validation ---');
 
-const opToMachineContent = fs.readFileSync(path.join(assignmentsDir, 'AssignOperatorToMachineModal.tsx'), 'utf8');
+// Deprecated date-less AssignOperatorToMachineModal was removed (date-based assignment only)
 assert(
-  opToMachineContent.includes('maxCapacity={3}') || opToMachineContent.includes('roster.length >= 3'),
-  'AssignOperatorToMachineModal: Enforces maximum 3 operators per machinery unit'
+  !fs.existsSync(path.join(assignmentsDir, 'AssignOperatorToMachineModal.tsx')),
+  'Deprecated date-less AssignOperatorToMachineModal.tsx has been removed'
 );
 assert(
-  opToMachineContent.includes('doRangesOverlap') && opToMachineContent.includes('shiftToMinuteRanges'),
-  'AssignOperatorToMachineModal: Enforces disjoint interval overlap validation'
+  !barrelContent.includes('AssignOperatorToMachineModal'),
+  'Barrel no longer exports the deprecated date-less AssignOperatorToMachineModal'
 );
-assert(
-  opToMachineContent.includes('occupiedShiftCodes.includes'),
-  'AssignOperatorToMachineModal: Prevents duplicate shift assignment on the same machine'
-);
-assert(
-  opToMachineContent.includes('otherAssignments.length >= 3'),
-  'AssignOperatorToMachineModal: Enforces fleet limit of 3 active shifts per operator'
-);
-console.log('  ✓ AssignOperatorToMachineModal enforces 3-operator machine cap and collision detection');
+console.log('  ✓ Deprecated date-less AssignOperatorToMachineModal removed from the native assignment surface');
 
 const machineToOpContent = fs.readFileSync(path.join(assignmentsDir, 'AssignMachineToOperatorModal.tsx'), 'utf8');
 assert(
@@ -146,22 +136,6 @@ console.log('  ✓ AssignMachineToOperatorModal enforces operator fleet capacity
 
 // ─── 4. OPTIMISTIC UPDATES & SNAPSHOT ROLLBACK ────────────────────────────────
 console.log('\n--- 4. Optimistic Updates & Snapshot Rollback ---');
-
-assert(
-  opToMachineContent.includes('savingRef = useRef(false);') &&
-  opToMachineContent.includes('savingRef.current = true;'),
-  'AssignOperatorToMachineModal: Implements synchronous savingRef mutex preventing double taps'
-);
-assert(
-  opToMachineContent.includes('queryClient.getQueryData') &&
-  opToMachineContent.includes('queryClient.setQueryData'),
-  'AssignOperatorToMachineModal: Implements cache snapshot and safe rollback on mutation failure'
-);
-assert(
-  opToMachineContent.includes('broadcastMobileAssignmentChanged'),
-  'AssignOperatorToMachineModal: Broadcasts realtime assignment changed event'
-);
-console.log('  ✓ AssignOperatorToMachineModal implements savingRef mutex, cache rollback, and realtime broadcast');
 
 assert(
   machineToOpContent.includes('savingRef = useRef(false);') &&

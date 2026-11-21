@@ -41,6 +41,7 @@ import {
   Badge,
   Skeleton,
   AppModal,
+  CustomDatePicker,
   showToast,
 } from '../ui';
 import { haptics } from '../../lib/haptics';
@@ -64,11 +65,16 @@ import {
   Shield,
   ShieldCheck,
   Lock,
+  Calendar,
 } from '../ui/icon';
 import {
   formatTo12Hour,
   parseTimeToMinutes,
   getUserInitials,
+  resolveAssignmentDate,
+  ASSIGNMENT_DATE_WINDOW_PAST_DAYS,
+  ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS,
+  getISTDateString,
 } from '@reachinternational/utils';
 import {
   useAssignPersonnelModalData,
@@ -222,7 +228,14 @@ export interface MobileAssignPersonnelModalProps {
     employee_id?: string | null;
   } | null;
   userRole?: string;
-  onSuccess?: (assignedOperators?: OperatorAssignmentRow[]) => void;
+  /**
+   * Preferred assignment date when the sheet opens (YYYY-MM-DD, IST).
+   * Clamped into the canonical window [today - 7 .. today + 1]; defaults to today.
+   * The shift monitor passes the date it is displaying so editing a historical or
+   * next-day roster row opens on that same date (Web parity).
+   */
+  initialAssignmentDate?: string | null;
+  onSuccess?: (assignedOperators?: OperatorAssignmentRow[], assignmentDate?: string) => void;
 }
 
 export type ClientShiftItem = ClientShiftOption;
@@ -385,6 +398,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   initialSupervisorId,
   targetUser,
   userRole,
+  initialAssignmentDate,
   onSuccess,
 }) => {
   const { theme, isDark } = useTheme();
@@ -402,6 +416,15 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   const [selectedSupervisorIds, setSelectedSupervisorIds] = useState<string[]>([]);
   const [machineOperators, setMachineOperators] = useState<OperatorAssignmentRow[]>([]);
   const [initialDbAssignments, setInitialDbAssignments] = useState<any[]>([]);
+
+  // Date-based assignment target — 7 past days + today + tomorrow (IST).
+  const [assignmentDate, setAssignmentDate] = useState<string>(() =>
+    resolveAssignmentDate(initialAssignmentDate),
+  );
+  const todayIst = useMemo(() => getISTDateString(), []);
+  const isTodayAssignment = assignmentDate === todayIst;
+  const isPastAssignment = assignmentDate < todayIst;
+  const isFuturePlan = assignmentDate > todayIst;
 
   // Dropdown open states
   const [isMachineDropdownOpen, setIsMachineDropdownOpen] = useState(false);
@@ -474,8 +497,13 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     if (!visible) {
       initializedSupervisorMachineIdRef.current = null;
       hasInitializedRosterMachineIdRef.current = null;
+    } else {
+      // Opening the modal always starts from the caller's preferred (in-window) date
+      initializedSupervisorMachineIdRef.current = null;
+      hasInitializedRosterMachineIdRef.current = null;
+      setAssignmentDate(resolveAssignmentDate(initialAssignmentDate));
     }
-  }, [visible]);
+  }, [visible, initialAssignmentDate]);
 
   // Derive relevant operator IDs on the active equipment to eagerly resolve metadata
   const relevantOperatorIdsKey = useMemo(() => {
@@ -498,6 +526,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
   const {
     data: modalData,
     isLoading: loadingData,
+    isFetching: isFetchingModalData,
   } = useAssignPersonnelModalData({
     visible,
     isSupervisorRole,
@@ -511,6 +540,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     relevantSupervisorIds: selectedSupervisorIds,
     relevantOperatorIds,
     initialMachineId,
+    assignmentDate,
   });
 
   const machines = modalData?.machines ?? EMPTY_ARRAY;
@@ -653,9 +683,12 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
       return activeOnThisMachine;
     });
 
-    const isNewMachineForRoster = hasInitializedRosterMachineIdRef.current !== activeMachine.id;
+    const isNewMachineForRoster = hasInitializedRosterMachineIdRef.current !== `${activeMachine.id}:${assignmentDate}`;
     if (isNewMachineForRoster) {
-      hasInitializedRosterMachineIdRef.current = activeMachine.id;
+      // Wait until the date-scoped fleet assignments have actually arrived so the roster
+      // is never seeded from the previously selected date's placeholder data.
+      if (isFetchingModalData) return;
+      hasInitializedRosterMachineIdRef.current = `${activeMachine.id}:${assignmentDate}`;
 
       const mapped: OperatorAssignmentRow[] = activeOnThisMachine.map((r) => {
         const opInfo = allOperators.find((o) => o.id === r.operator_id);
@@ -727,6 +760,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     initialSupervisorId,
     targetUser,
     clientShifts,
+    assignmentDate,
+    isFetchingModalData,
   ]);
 
   // Compute next available shift code
@@ -966,8 +1001,16 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     const relievedAssignmentsSnapshot = [...initialDbAssignments];
 
     triggerHaptic('success');
-    showToast('success', 'Assignment Saved', 'Operator assignment updated successfully.');
-    if (onSuccess) onSuccess(currentRosterSnapshot);
+    showToast(
+      'success',
+      isTodayAssignment ? 'Assignment Saved' : isPastAssignment ? 'Past Roster Updated' : 'Roster Planned',
+      isTodayAssignment
+        ? `Operator assignment saved for today.`
+        : isPastAssignment
+        ? `Corrected the roster for ${assignmentDate}. Today's assignments are untouched.`
+        : `Operator assignment planned for ${assignmentDate}.`
+    );
+    if (onSuccess) onSuccess(currentRosterSnapshot, assignmentDate);
     onClose();
 
     // Background Execution Task — Single Atomic ACID Transaction
@@ -976,7 +1019,8 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
         const { data: userAuth } = await supabase.auth.getUser();
         const currentUserId = userAuth?.user?.id || null;
 
-        const isNeedsActivation = Boolean(
+        // Machine activation is a live structural change — never triggered by future planning
+        const isNeedsActivation = assignmentDate === todayIst && Boolean(
           targetMachineSnapshot.health_status === 'breakdown' ||
           targetMachineSnapshot.health_status === 'under_maintenance' ||
           targetMachineSnapshot.status === 'under_maintenance'
@@ -990,142 +1034,37 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
           notes: 'Assigned via mobile personnel dialog',
         }));
 
-        const { data: rpcRes, error: rpcErr } = await supabase.rpc('save_machine_roster_atomic', {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('save_machine_roster_on_date_atomic', {
           p_machine_id: targetMachineSnapshot.id,
           p_operators: operatorsPayload,
           p_supervisor_ids: canEditSupervisor ? selectedSupervisorsSnapshot : null,
           p_activate_machine: isNeedsActivation,
           p_caller_id: currentUserId,
+          p_assignment_date: assignmentDate,
         });
 
         const rpcErrMsg = (rpcErr as any)?.message || '';
         const rpcErrCode = (rpcErr as any)?.code || '';
-        const isRpcMissing =
+        const isDateRpcMissing =
           Boolean(rpcErr) &&
           (rpcErrCode === 'PGRST202' ||
             rpcErrCode === '42883' ||
-            rpcErrMsg.includes('save_machine_roster_atomic') ||
+            rpcErrMsg.includes('save_machine_roster_on_date_atomic') ||
             rpcErrMsg.includes('schema cache') ||
             rpcErrMsg.includes('Could not find the function'));
 
-        if (!isRpcMissing) {
-          if (rpcErr) {
-            throw rpcErr;
-          }
-          if (rpcRes && typeof rpcRes === 'object' && (rpcRes as any).success === false) {
-            throw new Error((rpcRes as any).error || 'Failed to save machine roster');
-          }
-        } else {
-          // Fallback: Direct database updates if save_machine_roster_atomic RPC is not yet in schema cache
-          const machineUpdatePayload: any = {
-            operator_ids: Array.from(new Set(currentRosterSnapshot.map((o) => o.operatorId))),
-            current_operator_id: currentRosterSnapshot[0]?.operatorId || null,
-            updated_at: new Date().toISOString(),
-          };
-
-          if (canEditSupervisor) {
-            machineUpdatePayload.supervisor_ids = selectedSupervisorsSnapshot;
-            machineUpdatePayload.current_supervisor_id = selectedSupervisorsSnapshot[0] || null;
-          }
-
-          if (isNeedsActivation) {
-            machineUpdatePayload.health_status = 'active';
-            machineUpdatePayload.status = targetMachineSnapshot.client_id ? 'rented' : 'active';
-          }
-
-          const { error: machineUpdateError } = await supabase
-            .from('machines')
-            .update(machineUpdatePayload)
-            .eq('id', targetMachineSnapshot.id);
-
-          if (machineUpdateError) throw machineUpdateError;
-
-          // Relieve assignments that existed in DB but were removed from current roster
-          for (const initAss of relievedAssignmentsSnapshot) {
-            const stillPresent = currentRosterSnapshot.some(
-              (m) =>
-                m.operatorId === initAss.operator_id &&
-                m.shiftCode.toUpperCase() === (initAss.shift_code || '').toUpperCase()
-            );
-
-            if (!stillPresent && initAss.id) {
-              try {
-                await supabase.rpc('end_assignment_range', {
-                  p_assignment_id: initAss.id,
-                  p_caller_id: currentUserId,
-                  p_end_reason: 'Updated via mobile assign dialog',
-                });
-              } catch {
-                await supabase
-                  .from('operator_machine_assignments')
-                  .update({
-                    is_active: false,
-                    ended_at: new Date().toISOString(),
-                    ended_by: currentUserId,
-                    end_reason: 'removed',
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('id', initAss.id);
-              }
-            }
-          }
-
-          // Atomically assign/update operators on this machine
-          for (const opItem of currentRosterSnapshot) {
-            const alreadyActive = relievedAssignmentsSnapshot.some(
-              (a) =>
-                a.operator_id === opItem.operatorId &&
-                a.shift_code?.toUpperCase() === opItem.shiftCode.toUpperCase() &&
-                a.is_active !== false
-            );
-
-            if (!alreadyActive) {
-              let assignedViaRpc = false;
-              try {
-                const { error: assignRpcErr } = await supabase.rpc('assign_operator_machine_atomic', {
-                  p_machine_id: targetMachineSnapshot.id,
-                  p_operator_id: opItem.operatorId,
-                  p_shift_start_time: to24HourTime(opItem.shiftStartTime),
-                  p_shift_end_time: to24HourTime(opItem.shiftEndTime),
-                  p_shift_code: opItem.shiftCode,
-                  p_assigned_by: currentUserId,
-                  p_notes: 'Assigned via mobile personnel dialog',
-                });
-
-                if (!assignRpcErr) {
-                  assignedViaRpc = true;
-                } else {
-                  let msg = assignRpcErr.message;
-                  if (assignRpcErr.code === 'P0002' || msg.includes('MAX_OPERATOR_SHIFTS_REACHED') || msg.includes('active shifts')) {
-                    throw new Error(`${opItem.operatorName} has reached the maximum of 3 active shifts (24h) across the fleet.`);
-                  } else if (msg.includes('OVERLAPPING_SHIFT_FOR_OPERATOR') || msg.includes('overlap')) {
-                    throw new Error(`${opItem.operatorName}'s shift collides with an existing active assignment across the fleet.`);
-                  }
-                }
-              } catch (err: any) {
-                if (err.message?.includes('active shifts') || err.message?.includes('collides')) {
-                  throw err;
-                }
-                assignedViaRpc = false;
-              }
-
-              if (!assignedViaRpc) {
-                const todayIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-                await supabase.from('operator_machine_assignments').insert({
-                  machine_id: targetMachineSnapshot.id,
-                  operator_id: opItem.operatorId,
-                  shift_code: opItem.shiftCode,
-                  shift_start_time: to24HourTime(opItem.shiftStartTime),
-                  shift_end_time: to24HourTime(opItem.shiftEndTime),
-                  is_active: true,
-                  assigned_by: currentUserId,
-                  assigned_at: new Date().toISOString(),
-                  valid_from: todayIst,
-                  valid_to: null,
-                });
-              }
-            }
-          }
+        // Date-based assignment is the only supported write path: never fall back to a
+        // date-less roster write, because it would overwrite today's (or another date's) roster.
+        if (isDateRpcMissing) {
+          throw new Error(
+            'Date-based assignment is not available on this deployment yet. Please run the latest database migration (228_date_based_operator_assignment.sql).'
+          );
+        }
+        if (rpcErr) {
+          throw rpcErr;
+        }
+        if (rpcRes && typeof rpcRes === 'object' && (rpcRes as any).success === false) {
+          throw new Error((rpcRes as any).error || 'Failed to save machine roster');
         }
 
         // Real-time broadcast for instant synchronization across all connected clients
@@ -1475,6 +1414,69 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                 )}
               </View>
 
+              {/* ═══════════════════════════════════════════════════════ */}
+              {/* SECTION 1b: ASSIGNMENT DATE (7 past days + today + tomorrow) */}
+              {/* ═══════════════════════════════════════════════════════ */}
+              <View
+                style={[
+                  styles.sectionCard,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionLabelWithIcon}>
+                    <Calendar size={13} color="#0284c7" />
+                    <Text variant="micro" style={{ color: theme.colors.mute }}>
+                      ASSIGNMENT DATE
+                    </Text>
+                    <Text variant="micro" style={{ color: '#ef4444' }}>*</Text>
+                  </View>
+                  {isFuturePlan && (
+                    <Pressable
+                      variant="ghost"
+                      haptic="tap"
+                      onPress={() => {
+                        triggerHaptic('selection');
+                        setAssignmentDate(todayIst);
+                        setSubmitError(null);
+                      }}
+                      style={{ paddingVertical: 4, paddingHorizontal: 8 }}
+                    >
+                      <Text variant="caption" style={{ color: '#0284c7' }}>
+                        Back to today
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                <CustomDatePicker
+                  label="Date"
+                  showPrefix={false}
+                  value={assignmentDate}
+                  onChange={(nextDate) => {
+                    if (!nextDate) return;
+                    triggerHaptic('selection');
+                    setSubmitError(null);
+                    setAssignmentDate(resolveAssignmentDate(nextDate));
+                  }}
+                  maxDaysOld={ASSIGNMENT_DATE_WINDOW_PAST_DAYS}
+                  allowFutureDays={ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS}
+                  showRelativeBadge
+                  disabled={savingRef.current}
+                />
+
+                <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 6 }}>
+                  {isPastAssignment
+                    ? `Correcting the roster for ${assignmentDate}. Today's and tomorrow's assignments stay untouched.`
+                    : isFuturePlan
+                    ? `Planning tomorrow's roster (${assignmentDate}). Today's assignments stay untouched.`
+                    : 'Applies from today and carries forward until changed.'}
+                </Text>
+              </View>
+
               {/* Breakdown or Maintenance Warning Banner */}
               {activeMachine &&
                 (activeMachine.health_status === 'breakdown' ||
@@ -1804,7 +1806,9 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
               >
                 <View style={styles.sectionHeaderRow}>
                   <Text variant="micro" style={{ color: theme.colors.mute }}>
-                    ASSIGNED OPERATORS (24H)
+                    {!isTodayAssignment
+                      ? `ASSIGNED OPERATORS · ${assignmentDate}`
+                      : 'ASSIGNED OPERATORS (24H)'}
                   </Text>
                   <Badge
                     variant={machineOperators.length === 3 ? 'success' : 'outline'}
@@ -1827,7 +1831,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     >
                       <Users size={22} color={theme.colors.mute} style={{ opacity: 0.6 }} />
                       <Text variant="label" style={{ color: theme.colors.ink, marginTop: 4 }}>
-                        No Operators Assigned
+                        {!isTodayAssignment ? 'No Operators Assigned on this Date' : 'No Operators Assigned'}
                       </Text>
                       <Text variant="caption" style={{ color: theme.colors.mute, textAlign: 'center' }}>
                         Assign operators below to designate 24h equipment coverage.

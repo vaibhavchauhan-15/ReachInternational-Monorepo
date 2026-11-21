@@ -12,7 +12,7 @@ import {
   AnimatedMoreVertical,
   AnimatedPower,
 } from "@/components/ui/animated-icons";
-import { Button, Select, TooltipWrapper } from "@/components/ui";
+import { Button, Select, TooltipWrapper, useToast } from "@/components/ui";
 import { formatDate, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import { Wrench } from "lucide-react";
@@ -176,6 +176,22 @@ export const UserRow = memo(function UserRow({
     return false;
   };
 
+  const { toast } = useToast();
+
+  const handleCopy = useCallback(
+    async (text: string, key: string, e?: { stopPropagation: () => void }) => {
+      if (e) e.stopPropagation();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("success", `${key} copied to clipboard`);
+      } catch {
+        toast("error", `Failed to copy ${key}`);
+      }
+    },
+    [toast]
+  );
+
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
@@ -297,16 +313,28 @@ export const UserRow = memo(function UserRow({
       {/* 1. User Name & Employee ID (Feedback 1: show the emp id below the user's name with small text) */}
       <td className="py-3 px-4">
         <div className="flex flex-col min-w-0">
-          <span
-            className="text-sm font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate max-w-full"
-            title={user.full_name}
-          >
-            {highlightText(user.full_name, searchTerm)}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <TooltipWrapper content="Click to Copy" side="top">
+              <span
+                onClick={(e) => handleCopy(user.full_name, "Name", e)}
+                className="text-sm font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate max-w-[180px] min-w-0 cursor-pointer select-none"
+                title={user.full_name}
+              >
+                {highlightText(user.full_name, searchTerm)}
+              </span>
+            </TooltipWrapper>
+          </div>
           {user.employee_id ? (
-            <span className="font-mono text-[11px] text-[var(--color-mute)] tracking-tight">
-              {highlightText(user.employee_id, searchTerm)}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <TooltipWrapper content="Click to Copy" side="top">
+                <span
+                  onClick={(e) => handleCopy(user.employee_id ?? "", "Employee ID", e)}
+                  className="font-mono text-[11px] text-[var(--color-mute)] tracking-tight cursor-pointer select-none"
+                >
+                  {highlightText(user.employee_id, searchTerm)}
+                </span>
+              </TooltipWrapper>
+            </div>
           ) : (
             <span className="text-[11px] text-[var(--color-mute)] italic">—</span>
           )}
@@ -318,15 +346,34 @@ export const UserRow = memo(function UserRow({
         {canViewContactInfo(user) ? (
           <div className="flex flex-col gap-0.5 text-xs">
             {user.phone ? (
-              <span className="text-[var(--color-ink)] font-mono font-medium whitespace-nowrap">
-                {highlightText(user.phone, searchTerm)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <TooltipWrapper content="Click to Copy" side="top">
+                  <span
+                    onClick={(e) => handleCopy(user.phone ?? "", "Phone", e)}
+                    className="text-[var(--color-ink)] font-mono font-medium whitespace-nowrap cursor-pointer select-none"
+                  >
+                    {highlightText(user.phone, searchTerm)}
+                  </span>
+                </TooltipWrapper>
+              </div>
             ) : (
               <span className="text-[var(--color-mute)] italic">No Phone</span>
             )}
-            <span className="text-[var(--color-mute)] block max-w-[200px] truncate" title={user.email}>
-              {highlightText(user.email, searchTerm)}
-            </span>
+            {user.email ? (
+              <div className="flex items-center gap-1.5">
+                <TooltipWrapper content="Click to Copy" side="top">
+                  <span
+                    onClick={(e) => handleCopy(user.email, "Email", e)}
+                    className="text-[var(--color-mute)] block max-w-[180px] truncate min-w-0 cursor-pointer select-none"
+                    title={user.email}
+                  >
+                    {user.email.length > 20 ? `${user.email.slice(0, 20)}…` : highlightText(user.email, searchTerm)}
+                  </span>
+                </TooltipWrapper>
+              </div>
+            ) : (
+              <span className="text-[var(--color-mute)] italic">No Email</span>
+            )}
           </div>
         ) : (
           <span className="text-xs text-[var(--color-mute)] italic">Contact Info Restricted</span>
@@ -339,11 +386,11 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 4. Supervisor (Plain text — no chips/icons per UI feedback) */}
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 hidden xl:table-cell">
         {isSupervisedRole(user.role) ? (
           assignedSupervisors.length > 0 ? (
             <span
-              className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[200px]"
+              className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[160px]"
               title={assignedSupervisors.map((s) => s.full_name).join(", ")}
             >
               {assignedSupervisors.map((s) => s.full_name).join(", ")}
@@ -357,7 +404,7 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 5. Machine Category (Feedback 2: machine category for the operator so we can know that which machine they operate) */}
-      <td className="py-3 px-4 whitespace-nowrap">
+      <td className="py-3 px-4 whitespace-nowrap hidden 2xl:table-cell">
         {user.role === "operator" ? (
           user.machine_category ? (
             <span
@@ -376,18 +423,42 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 6. Identity / KYC (Feedback 2: Aadhaar and driving licence number) */}
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 hidden min-[1900px]:table-cell">
         {user.aadhaar_number || user.license_number ? (
           <div className="flex flex-col gap-0.5 text-xs font-mono leading-tight">
-            <div className="flex items-center gap-1 text-[var(--color-ink)]">
-              <span className="text-[10px] uppercase font-bold text-[var(--color-mute)] font-sans">Aadhaar:</span>
-              <span className="font-medium whitespace-nowrap">{user.aadhaar_number ? maskAadhaar(user.aadhaar_number) : <span className="text-[var(--color-mute)] italic font-sans font-normal">—</span>}</span>
+            <div className="flex items-center gap-1.5 text-[var(--color-ink)]">
+              {user.aadhaar_number ? (
+                <>
+                  <TooltipWrapper content="Click to Copy" side="top">
+                    <span
+                      onClick={(e) => handleCopy(maskAadhaar(user.aadhaar_number), "Aadhaar", e)}
+                      className="font-medium whitespace-nowrap cursor-pointer select-none"
+                    >
+                      {maskAadhaar(user.aadhaar_number)}
+                    </span>
+                  </TooltipWrapper>
+                </>
+              ) : (
+                <span className="text-[var(--color-mute)] italic font-sans font-normal">—</span>
+              )}
             </div>
-            <div className="flex items-center gap-1 text-[var(--color-mute)] text-[11px]">
+            <div className="flex items-center gap-1.5 text-[var(--color-mute)] text-[11px]">
               <span className="text-[10px] uppercase font-bold text-[var(--color-mute)] font-sans">DL:</span>
-              <span className="truncate max-w-[130px] whitespace-nowrap" title={user.license_number ?? undefined}>
-                {user.license_number ? formatLicenseNumber(user.license_number) : <span className="italic font-sans font-normal">—</span>}
-              </span>
+              {user.license_number ? (
+                <>
+                  <TooltipWrapper content="Click to Copy" side="top">
+                    <span
+                      onClick={(e) => handleCopy(formatLicenseNumber(user.license_number), "Licence", e)}
+                      className="truncate max-w-[130px] whitespace-nowrap min-w-0 cursor-pointer select-none"
+                      title={user.license_number}
+                    >
+                      {formatLicenseNumber(user.license_number)}
+                    </span>
+                  </TooltipWrapper>
+                </>
+              ) : (
+                <span className="italic font-sans font-normal">—</span>
+              )}
             </div>
           </div>
         ) : (
@@ -396,7 +467,7 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 7. Location (Feedback 3: in the location column show the user city+state name, above show city and below show state) */}
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 hidden 2xl:table-cell">
         {user.city || user.state || user.location ? (
           <div className="flex flex-col min-w-0 leading-tight">
             <span
@@ -423,7 +494,7 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 9. Created Date */}
-      <td suppressHydrationWarning className="py-3 px-4 text-xs font-mono text-[var(--color-mute)] whitespace-nowrap">
+      <td suppressHydrationWarning className="py-3 px-4 text-xs font-mono text-[var(--color-mute)] whitespace-nowrap hidden min-[1900px]:table-cell">
         {formatDate(user.created_at)}
       </td>
 

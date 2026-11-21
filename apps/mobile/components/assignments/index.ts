@@ -40,12 +40,6 @@ export {
 } from './AssignmentActionBar';
 
 export {
-  AssignOperatorToMachineModal,
-  type AssignOperatorToMachineModalProps,
-  type OperatorAssignmentItem,
-} from './AssignOperatorToMachineModal';
-
-export {
   AssignMachineToOperatorModal,
   type AssignMachineToOperatorModalProps,
   type OperatorMachineItem,

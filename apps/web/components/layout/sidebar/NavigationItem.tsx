@@ -84,21 +84,25 @@ export function NavigationItem({
         <div className="relative w-full">
           {hasSubItems ? (
             <Collapsible open={!collapsed && isMenuOpen} onOpenChange={onToggleMenu}>
-              <div
+              <SidebarMenuButton
+                as="div"
                 ref={setAnchorEl}
+                active={isActive || isFlyoutOpen}
+                aria-label={item.label}
+                aria-expanded={collapsed ? isFlyoutOpen : isMenuOpen}
                 onClick={handleSubItemTriggerClick}
                 onMouseEnter={handleIconMouseEnter}
                 onMouseLeave={handleIconMouseLeave}
-                aria-expanded={collapsed ? isFlyoutOpen : isMenuOpen}
-                className={cn(
-                  "group group/nav interactive-parent relative flex items-center w-full h-10 rounded-xl px-3 text-xs font-semibold transition-all duration-200 cursor-pointer select-none overflow-hidden",
-                  isActive || isFlyoutOpen
-                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
-                    : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                )}
               >
                 <div className="flex items-center justify-center shrink-0 w-4 h-4">
-                  <Icon ref={iconRef} size={16} className={cn("h-4 w-4 shrink-0 transition-colors", (isActive || isFlyoutOpen) && "text-sky-600 dark:text-sky-400")} />
+                  <Icon
+                    ref={iconRef}
+                    size={16}
+                    className={cn(
+                      "h-4 w-4 shrink-0 transition-colors",
+                      (isActive || isFlyoutOpen) && "text-sky-600 dark:text-sky-400"
+                    )}
+                  />
                 </div>
 
                 <span
@@ -116,7 +120,7 @@ export function NavigationItem({
                     aria-label={`Toggle ${item.label} sub-menu`}
                     className={cn(
                       "p-1 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all duration-200 cursor-pointer shrink-0 focus:outline-none focus:ring-2 focus:ring-sky-500/30",
-                      collapsed ? "opacity-0 w-0 overflow-hidden pointer-events-none p-0" : "opacity-100"
+                      collapsed ? "hidden opacity-0 w-0 max-w-0 m-0 p-0 pointer-events-none border-0" : "opacity-100"
                     )}
                   >
                     <ChevronDown
@@ -128,7 +132,7 @@ export function NavigationItem({
                     />
                   </button>
                 </CollapsibleTrigger>
-              </div>
+              </SidebarMenuButton>
 
               {!collapsed && (
                 <CollapsibleContent>
@@ -159,12 +163,6 @@ export function NavigationItem({
                 aria-label={item.label}
                 onMouseEnter={handleIconMouseEnter}
                 onMouseLeave={handleIconMouseLeave}
-                className={cn(
-                  "w-full h-10 px-3 flex items-center rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer select-none overflow-hidden",
-                  isActive
-                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
-                    : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                )}
               >
                 <div className="flex items-center justify-center shrink-0 w-4 h-4">
                   <Icon ref={iconRef} size={16} className={cn("h-4 w-4 shrink-0 transition-colors", isActive && "text-sky-600 dark:text-sky-400 font-bold")} />

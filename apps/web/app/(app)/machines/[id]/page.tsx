@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/dal";
 import {
   getMachineById,
   getMachineActiveRental,
-  getActiveSupervisors,
+  getActiveSupervisorsOnly,
   getActiveOperators,
 } from "@/lib/data/machines";
 import { getClientOptions } from "@/lib/queries/clients";
@@ -28,7 +28,7 @@ async function MachineDetailContent({ id }: { id: string }) {
   const [machine, activeRental, supervisors, operators, clients] = await Promise.all([
     getMachineById(id),
     getMachineActiveRental(id),
-    canAssignOperator ? getActiveSupervisors() : Promise.resolve([]),
+    canAssignOperator ? getActiveSupervisorsOnly() : Promise.resolve([]),
     canAssignOperator ? getActiveOperators() : Promise.resolve([]),
     canManage ? getClientOptions() : Promise.resolve([]),
   ]);

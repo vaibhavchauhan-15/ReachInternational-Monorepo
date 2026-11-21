@@ -93,6 +93,12 @@ const SUITES = [
     domain: 'Web Navigation, Actions & LiquidMetal CTA',
   },
   {
+    name: 'Sidebar Collapsed Alignment Suite',
+    cmd: 'node',
+    args: ['scripts/test-sidebar-collapsed-alignment.mjs'],
+    domain: 'Sidebar Collapsed Vertical Icon Alignment & Submenu Parity',
+  },
+  {
     name: 'RFQ System & Database Verification',
     cmd: 'node',
     args: ['supabase/tests/run_rfq_test.mjs'],
@@ -109,6 +115,12 @@ const SUITES = [
     cmd: 'node',
     args: ['apps/web/scripts/test-assignment-standardization.mjs'],
     domain: 'Assignment Dialogs, Roles, Overlap Guards & Error Handling',
+  },
+  {
+    name: 'Web Shift Filter & Timing Sort Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-shift-filter-and-timing-sort.mjs'],
+    domain: 'Shift Filter, Timing Sort, Active Roster Sync & Optimistic UI',
   },
   {
     name: 'Web Dashboard Standardization Suite',
@@ -181,6 +193,18 @@ const SUITES = [
     cmd: 'node',
     args: ['scripts/test-netlify-deployment-config.mjs'],
     domain: 'Netlify Monorepo Build, Scheduled Functions & Platform Parity',
+  },
+  {
+    name: 'Shift Entry Comprehensive Verification Suite',
+    cmd: 'node',
+    args: ['tests/operations/test-shift-entry-comprehensive.mjs'],
+    domain: 'Multi-Shift, Multi-Machine, Date Independence & Unassigned Guard (16 tests)',
+  },
+  {
+    name: 'Date-Based Operator Assignment Suite',
+    cmd: 'node',
+    args: ['tests/operations/test-date-based-assignment.mjs'],
+    domain: 'Date Picker (Today..+7), Per-Date Independence, Duplicate Prevention & Web/Native Parity',
   },
 ];
 

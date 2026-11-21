@@ -362,6 +362,117 @@ export function addDaysToDateStr(dateStr: string, days: number): string {
 }
 
 /**
+ * Maximum number of past calendar days an operator assignment can be back-dated.
+ * Combined with {@link ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS} this yields the canonical
+ * assignment window [today_IST - 7, today_IST + 1] => 9 dates (7 past + today + tomorrow).
+ * Enforced identically on Web, Native Mobile and inside the database RPCs.
+ */
+export const ASSIGNMENT_DATE_WINDOW_PAST_DAYS = 7;
+
+/**
+ * Maximum number of future calendar days an operator can be planned onto a machine.
+ * Planning is capped at TOMORROW (no long-range future planning).
+ */
+export const ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS = 1;
+
+/** Semantic bucket of an assignable date relative to today (IST). */
+export type AssignmentDateKind = "past" | "today" | "tomorrow";
+
+export interface AssignmentDateWindow {
+  /** Today in IST (YYYY-MM-DD) */
+  today: string;
+  /** Earliest selectable date (today - 7) */
+  minDate: string;
+  /** Latest selectable date (today + 1) */
+  maxDate: string;
+  /** Number of back-datable days (7) */
+  pastDays: number;
+  /** Number of plannable future days (1 == tomorrow) */
+  futureDays: number;
+  /** All 9 selectable calendar dates, ascending (today - 7 .. today + 1) */
+  dates: string[];
+}
+
+/**
+ * Canonical date-based operator assignment window
+ * (today - 7 days .. today + 1 day, IST) => 9 selectable dates.
+ * Never derives from local device time so Web and Native stay bit-identical.
+ */
+export function getAssignmentDateWindow(
+  referenceDate?: string | Date | null
+): AssignmentDateWindow {
+  const today = getISTDateString(referenceDate ?? null);
+  const minDate = addDaysToDateStr(today, -ASSIGNMENT_DATE_WINDOW_PAST_DAYS);
+  const maxDate = addDaysToDateStr(today, ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS);
+  const dates: string[] = [];
+  for (let i = -ASSIGNMENT_DATE_WINDOW_PAST_DAYS; i <= ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS; i++) {
+    dates.push(i === 0 ? today : addDaysToDateStr(today, i));
+  }
+  return {
+    today,
+    minDate,
+    maxDate,
+    pastDays: ASSIGNMENT_DATE_WINDOW_PAST_DAYS,
+    futureDays: ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS,
+    dates,
+  };
+}
+
+/**
+ * Classifies an assignment date as past / today / tomorrow relative to today (IST).
+ * Returns null when the date is not a valid calendar date.
+ */
+export function getAssignmentDateKind(
+  dateStr?: string | null,
+  referenceDate?: string | Date | null
+): AssignmentDateKind | null {
+  if (!dateStr) return null;
+  const clean = String(dateStr).trim().split("T")[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+  const parsed = new Date(`${clean}T00:00:00Z`);
+  if (isNaN(parsed.getTime())) return null;
+  if (parsed.toISOString().slice(0, 10) !== clean) return null;
+
+  const today = getISTDateString(referenceDate ?? null);
+  if (clean === today) return "today";
+  if (clean === addDaysToDateStr(today, 1)) return "tomorrow";
+  if (clean < today) return "past";
+  // Anything beyond tomorrow is still "future"; callers validate the window separately.
+  return null;
+}
+
+/**
+ * Validates that an ISO date string is a real calendar date inside the
+ * assignable window [today_IST - 7, today_IST + 1].
+ */
+export function isValidAssignmentDate(
+  dateStr?: string | null,
+  referenceDate?: string | Date | null
+): boolean {
+  if (!dateStr) return false;
+  const clean = String(dateStr).trim().split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+  const parsed = new Date(`${clean}T00:00:00Z`);
+  if (isNaN(parsed.getTime())) return false;
+  // Reject impossible calendar dates such as 2026-02-31
+  if (parsed.toISOString().slice(0, 10) !== clean) return false;
+  const { minDate, maxDate } = getAssignmentDateWindow(referenceDate);
+  return clean >= minDate && clean <= maxDate;
+}
+
+/**
+ * Resolves a requested assignment date to a safe in-window date, defaulting to today.
+ */
+export function resolveAssignmentDate(
+  dateStr?: string | null,
+  referenceDate?: string | Date | null
+): string {
+  return isValidAssignmentDate(dateStr, referenceDate)
+    ? String(dateStr).trim().split('T')[0]
+    : getAssignmentDateWindow(referenceDate).today;
+}
+
+/**
  * Parses time string (e.g. "08:00 AM", "05:30 PM", "17:00") into minutes from midnight (0..1439).
  */
 export function parseTimeToMinutes(timeStr?: string | null): number | null {

@@ -158,6 +158,12 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
   - Next.js searchParams passthrough in `app/(app)/users/page.tsx` supports URL bookmarking, deep linking, and zero client-side filter computation.
   - Full Web-to-Mobile parity synchronized in `apps/mobile/app/(app)/users.tsx` with `debouncedSearch` (500ms timer, min 2-character requirement) and `applyOptimizedUserSearch(query, debouncedSearch)`.
 
+- **User Row Click-to-Copy Behavior (`/users` desktop table)**:
+  - Phone, email, name, employee ID and driving licence cells show a "Click to Copy" hover tooltip; clicking the text copies the value to the clipboard with a toast confirmation and an inline check/check-copy indicator.
+  - Emails longer than 20 characters truncate with "…" (full value in `title`); clicking copies the full email. Empty-space clicks in any table cell still open `/users/${user.employee_id || user.id}`.
+  - Aadhaar label removed; only the masked number (`XXXX XXXX 6959`) is shown, copyable — the full Aadhaar remains RBAC-gated on `/users/[id]` with audit logging (no PII masking boundary bypass).
+  - Copy targets call `e.stopPropagation()` so row-level navigation (Enter/Space/click) is never triggered by a copy action.
+
 ## Profile Edit Architecture & Form Sections (`/profile/edit`)
 - **Shared Primitives**: `apps/web/components/profile/ProfileEditForm.tsx` & `apps/mobile/components/profile/ProfileEditForm.tsx`.
 - **Streamlined Personal Details Form**:
@@ -165,3 +171,51 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
   - Backed by database trigger `public.prevent_self_role_status_mutation()` (`164_allow_user_self_edit_name_and_phone.sql`) permitting self-service updates of `full_name` and `phone` while strictly guarding `role`, `status`, `email`, KYC, and banking fields.
   - Secondary sections (Shift Timing, Address, Banking Details, Compensation) and KYC attachments (Aadhaar & Licence) are decoupled from the self-edit profile form and managed via master profile views (`/profile`) and admin management (`/users`).
   - **Action Button Ergonomics**: Cancel and Save Changes buttons formatted in a single balanced row at the bottom of the form inside the scrollable content with generous safe area bottom clearance (`paddingBottom: Math.max(insets.bottom + 90, 120)`), eliminating overlap with `MobileBottomNav`.
+
+## Users Directory UI — Card & Table Responsive Spec (Web + Native)
+> Added 2026-11-21. Preserve this anatomy when touching `/users`.
+
+### Touch card anatomy (Web `MobileUserCard.tsx` / Native `UserTouchCard.tsx`)
+1. **Identity row**: avatar (role-tinted gradient initials) + full name + chevron (Web only).
+2. **Identity chips row (one line)**: employee ID (`EMP-0491`, Geist Mono, deliberately smaller — Web `text-[10.5px]`, Native `variant="micro"` = 11 px) · **status pill** (Active / Inactive / Pending, with status dot) · **role pill**. These three must never be split across rows on mobile.
+3. **Details block**: email → phone → **city and state on the same row** → supervisor → machine (operators) → base location.
+4. **Compliance footer**: `AADHAAR XXXX XXXX 1953` and `DL MH04 FSH5258` side by side, pinned to the card bottom (`mt-auto`) so equal-height grid cards align.
+
+### Selection model (no checkboxes by default)
+- Checkboxes are **hidden until multi-select mode is entered by a long press (≥450 ms)** on a card. Web suppresses the context menu, fires `navigator.vibrate(12)`, converts the follow-up click into a no-op, and resets the guard on `pointerdown`.
+- Native uses the existing long-press → `isSelectMode` flow (checkbox replaces the avatar).
+- Selection mode is derived (`selectionMode && selectedUserIds.length > 0`), so clearing the selection instantly restores the clean card.
+- The floating bulk bar sits above the mobile bottom nav, is one row tall, and offers `Select All` / `Deselect` / `Clear` + Excel / CSV / PDF / Delete (icon-only exports on mobile with ARIA labels).
+
+### Breakpoints
+| Tier | Layout |
+| --- | --- |
+| Mobile (≤640 px) | 1-column touch cards, KPI tiles 2-up, search + Filter bar |
+| Tablet (641–1023 px) | 2-column card grid, KPI tiles 2-up, header actions stacked under the title |
+| Desktop (≥1024 px) | High-density table, KPI tiles 4-up (5 with profile requests) |
+| ≥1280 px | Table adds Supervisor |
+| ≥1536 px | Table adds Machine + Location |
+| ≥1900 px | Table adds Identity/KYC + Joined Date |
+
+Name / email / supervisor cells are width-capped so no horizontal scrollbar appears at 1024–1600 px.
+
+## Employee Profile Detail — `/users/[id]` KYC, Layout & Audit Spec (Web + Native)
+> Added 2026-11-21. Preserve this anatomy when touching the profile detail page.
+
+### Page anatomy (top → bottom)
+1. **Breadcrumb** (desktop only): `Back to Users` + `Home › Users › {name}`.
+2. **Hero** (`<section>`): status-dot avatar, mono `EMPLOYEE PROFILE` eyebrow, name, chip row (employee ID copy · role · machine category · status), meta row (location · shift · joined · reports to), desktop quick-contact cluster (mail / call / WhatsApp) + `Edit Profile` + 3-dot menu. The hero is stacked until `xl` — at tablet widths the actions drop below the identity block instead of squeezing it.
+3. **Profile Details** (one card, four hairline-divided groups): Contact (email truncate + copy, phone copy, WhatsApp), Employment (employee ID copy, joining date, supervisor/category or supervised operators), Shift & Pay (shift hours, PL quota, salary when `canManage`), Location (city/district, state, street). Long values truncate with a `title` tooltip and always keep their copy button.
+4. **Operational snapshot**: 1px-gap metric cells — Fleet/Machines · Operators or Running Hours · Days Worked · Documents (pending count in the hint, rose tone when pending).
+5. **Sticky tab strip**: `sticky top-12 md:top-0`, wraps at every breakpoint (never clips a pill), active pill = ink fill. Contextual search renders only for row tables — **never** for `documents` or `attendance`.
+6. **Panels**: every tab is a shared `Panel` (tinted icon tile, title + subtitle, right-side actions, optional footer note). Tables at `lg+`, touch cards below.
+
+### KYC & Documents rules
+- There are **no separate statutory value cards**. Aadhaar / licence / bank numbers live inside the card of their own document (`getTypedValueForDoc()` / native equivalent), masked by default, with an audit-logged reveal (`logSensitiveRevealAction`) and copy action.
+- Each card shows a 3:4 thumbnail (`thumb_signed_url || signed_url`, `object-cover`, PDF/IMG fallback) — **clicking the thumbnail or "View document" opens the full viewer** (`DocumentViewerModal` / `MobileDocumentViewerModal`).
+- Registered numbers whose scan is missing render a dashed **"No scan"** card so the value is never hidden.
+- File meta uses `formatFileSize()` (B / KB / MB, `Size n/a` when the row has no stored size). Document search must not be added back.
+
+### Audit trail rules
+- Compact timeline: category glyph rail, humanised action, category + severity chips, actor initials/name/role, relative time with the absolute date as `title`, and expandable `details` rendered as a key/value grid (max 12 entries).
+- Progressive disclosure: first **10** events, then `Show 15 more` — never render all 50 at once.

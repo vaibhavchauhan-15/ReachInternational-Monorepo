@@ -139,20 +139,26 @@ async function fetchOperationsAssignmentsData(): Promise<OperationsAssignmentsRe
     };
   });
 
-  // Calculate statistics
+  // Calculate statistics in O(machines + assignments) using a single roll-up map
+  // (previously machines × assignments — 3M+ comparisons on a 1k-machine / 3k-assignment fleet).
   const totalMachines = rawMachines.length;
   const activeAssignments = assignments.length;
+
+  const assignmentsPerMachine = new Map<string, number>();
+  for (const a of assignments) {
+    const machineKey = a.machine_id || a.machine?.id;
+    if (!machineKey) continue;
+    assignmentsPerMachine.set(machineKey, (assignmentsPerMachine.get(machineKey) || 0) + 1);
+  }
 
   let fullyAssigned = 0;
   let unassigned = 0;
 
-  rawMachines.forEach((m: any) => {
-    const machAssCount = assignments.filter(
-      (a: any) => a.machine_id === m.id || a.machine?.id === m.id
-    ).length;
+  for (const m of rawMachines) {
+    const machAssCount = assignmentsPerMachine.get(m.id) || 0;
     if (machAssCount >= 3) fullyAssigned++;
     if (machAssCount === 0) unassigned++;
-  });
+  }
 
   return {
     machines: rawMachines,

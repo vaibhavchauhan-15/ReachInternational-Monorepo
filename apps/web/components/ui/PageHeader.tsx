@@ -50,14 +50,14 @@ export function PageHeader({
         </nav>
       )}
 
-      {/* Main Title Row */}
-      <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
+      {/* Main Title Row — actions drop below the title until there is desktop room */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4 w-full">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl md:text-[32px] md:leading-[40px] font-bold text-[var(--color-ink)] tracking-tight truncate leading-tight">{title}</h1>
           {badge}
         </div>
 
-        {actions && <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">{actions}</div>}
+        {actions && <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 lg:justify-end">{actions}</div>}
       </div>
 
       {description && <p className="body-md text-[var(--color-body)] max-w-3xl">{description}</p>}

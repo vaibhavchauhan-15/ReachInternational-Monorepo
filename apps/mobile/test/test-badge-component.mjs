@@ -178,8 +178,8 @@ const clientsScreenContent = fs.readFileSync(clientsScreenPath, 'utf8').replace(
 
 assert(machineCardContent.includes('<Badge status="active" dot') && machineCardContent.includes('customLabel="Active"'), 'MobileMachineCard uses Badge with dot for Active status');
 assert(machineCardContent.includes("status={machine.status === 'rented' ? 'rented' : 'available'}"), 'MobileMachineCard uses Badge for Rented / Available status');
-assert(userTouchCardContent.includes('<Badge\n                role={u.role}'), 'UserTouchCard reuses centralized Badge for user role');
-assert(userTouchCardContent.includes('<Badge\n                status={u.status}\n                dot'), 'UserTouchCard reuses centralized Badge with dot for user status');
+assert(/<Badge\s+role=\{u\.role\}/.test(userTouchCardContent), 'UserTouchCard reuses centralized Badge for user role');
+assert(/<Badge\s+status=\{u\.status\}\s+dot/.test(userTouchCardContent), 'UserTouchCard reuses centralized Badge with dot for user status');
 assert(userDetailModalContent.includes('<Badge\n                  role={user.role}'), 'UserDetailModal reuses centralized Badge for user role');
 assert(userDetailModalContent.includes('<Badge\n                  status={user.status}\n                  dot'), 'UserDetailModal reuses centralized Badge with dot for user status');
 assert(todayShiftCardContent.includes('<Badge\n            status='), 'MobileTodayShiftCard reuses centralized Badge for shift log status');

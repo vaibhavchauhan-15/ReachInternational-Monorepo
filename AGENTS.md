@@ -360,8 +360,9 @@ Never rely only on frontend validation for critical business rules.
 - **Organization**: `ljzofzlvjtfiqoffaaua`
 - **Development Project (Default Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
 - **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`)
+- **AUTOMATIC DEV DB MIGRATION PUSH (WITHOUT ASKING)**: Whenever ANY migration is created or updated in `supabase/migrations/`, every AI agent MUST automatically push and apply it to the Development database (`vlmxciuogczumumrwyot`) immediately **WITHOUT ASKING THE USER**. Development database schema and RPCs must always reflect the latest migration files.
+- **ZERO UNAPPROVED PRODUCTION MODIFICATIONS (STRICT PERMISSION ONLY)**: AI agents can ONLY perform WRITE operations (e.g., `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP`, `CREATE`, applying migrations, deploying edge functions, DDL/DML mutations) in the Production DB (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP **WHEN THE USER EXPLICITLY INSTRUCTS TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB**. Without explicit user instruction, write operations to production are strictly forbidden.
 - **READ-ONLY ANYTIME IN PRODUCTION**: AI agents can ALWAYS execute READ-ONLY operations (e.g., `SELECT` queries, inspecting schemas, tables, columns, constraints, RPC definitions, triggers, RLS policies, migrations, and querying logs via Supabase CLI or MCP) in the Production DB (`dhbbgfzbyatzvqafnsqp`) at ANY TIME without restriction.
-- **WRITE OPERATIONS REQUIRE EXPLICIT USER INSTRUCTION**: AI agents can ONLY perform WRITE operations (e.g., `INSERT`, `UPDATE`, `DELETE`, `ALTER`, `DROP`, `CREATE`, applying migrations, deploying edge functions, DDL/DML mutations) in the Production DB (`dhbbgfzbyatzvqafnsqp`) via Supabase CLI or MCP **WHEN THE USER EXPLICITLY INSTRUCTS TO MAKE CHANGES OR MODIFY SOMETHING IN THE PRODUCTION DB**. Without explicit user instruction, write operations to production are strictly forbidden.
 - **Development Default for Writes & Testing**: For normal feature development, testing, schema experimentation, and seeding, all write operations and migrations MUST default to the Development project (`vlmxciuogczumumrwyot`).
 - When using Supabase MCP tools (`execute_sql`, `apply_migration`, etc.), agents MUST explicitly verify the target `project_id`: default to `"vlmxciuogczumumrwyot"` for development writes, and target `"dhbbgfzbyatzvqafnsqp"` for read-only inspection or when explicitly directed by the user for production modifications.
 
@@ -659,3 +660,14 @@ Immediately **STOP** implementation and report the issue if:
 - A security boundary would need to be weakened.
 
 **Do not silently choose an interpretation.**
+
+<!-- BEGIN:turborepo-agent-rules -->
+
+# This is NOT the Turborepo you know
+
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
+
+Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
+
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+<!-- END:turborepo-agent-rules -->

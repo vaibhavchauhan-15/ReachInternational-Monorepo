@@ -88,9 +88,49 @@ interface DecodedImageSource {
 
 /**
  * Decodes a File or Blob into a renderable CanvasImageSource using dual-strategy decoding.
+ * Prioritizes HTMLImageElement with img.decode() to guarantee that raster pixels are 100%
+ * decompressed in memory before canvas operations, avoiding Android Chrome GPU texture drops.
  */
 async function decodeImageSource(file: File | Blob): Promise<DecodedImageSource> {
-  // Strategy 1: createImageBitmap with orientation handling (fast, off-main-thread)
+  // Strategy 1: HTMLImageElement with img.decode() (most reliable on Android Chrome & mobile browsers)
+  if (typeof window !== "undefined" && typeof Image !== "undefined") {
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      const decodedImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = async () => {
+          try {
+            if (typeof img.decode === "function") {
+              await img.decode();
+            }
+          } catch {
+            // img.decode() non-fatal; image is already loaded via onload
+          }
+          resolve(img);
+        };
+        img.onerror = () => {
+          reject(new Error("HTMLImageElement failed to load file."));
+        };
+        img.src = objectUrl;
+      });
+
+      const w = decodedImg.naturalWidth || decodedImg.width;
+      const h = decodedImg.naturalHeight || decodedImg.height;
+      if (w > 0 && h > 0) {
+        return {
+          source: decodedImg,
+          width: w,
+          height: h,
+          cleanup: () => URL.revokeObjectURL(objectUrl),
+        };
+      }
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      // Fall through to Strategy 2: createImageBitmap
+    }
+  }
+
+  // Strategy 2: createImageBitmap fallback (for Web Workers or environments without DOM Image)
   if (typeof createImageBitmap === "function") {
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -103,7 +143,6 @@ async function decodeImageSource(file: File | Blob): Promise<DecodedImageSource>
         };
       }
     } catch {
-      // Strategy 1b: Try without options in case browser doesn't support the options dictionary
       try {
         const bitmap = await createImageBitmap(file);
         if (bitmap.width > 0 && bitmap.height > 0) {
@@ -115,46 +154,53 @@ async function decodeImageSource(file: File | Blob): Promise<DecodedImageSource>
           };
         }
       } catch {
-        // Fall through to HTMLImageElement fallback
+        // Fall through
       }
     }
   }
 
-  // Strategy 2: HTMLImageElement fallback (reliable across all browser engines)
-  if (typeof window !== "undefined" && typeof Image !== "undefined") {
-    return new Promise<DecodedImageSource>((resolve, reject) => {
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      img.onload = () => {
-        const w = img.naturalWidth || img.width;
-        const h = img.naturalHeight || img.height;
-        if (w > 0 && h > 0) {
-          resolve({
-            source: img,
-            width: w,
-            height: h,
-            cleanup: () => URL.revokeObjectURL(objectUrl),
-          });
-        } else {
-          URL.revokeObjectURL(objectUrl);
-          reject(new Error("Unable to determine image dimensions."));
-        }
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(
-          new Error("Unsupported or corrupted image file. Please choose a valid JPG, PNG, or WEBP.")
-        );
-      };
-      img.src = objectUrl;
-    });
-  }
-
-  throw new Error("Canvas rendering API not available in current environment.");
+  throw new Error("Unable to decode document image. Please upload a valid JPG, PNG, or WEBP.");
 }
 
 /**
- * Renders a CanvasImageSource to a JPEG Blob using OffscreenCanvas (or HTMLCanvasElement fallback).
+ * Checks if a rendered 2D canvas is entirely solid black by sampling 9 key points.
+ * Returns true if all sampled pixels have R, G, B <= 8 (pure black).
+ */
+function isCanvasPureBlack(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const points = [
+    [Math.floor(width * 0.5), Math.floor(height * 0.5)],
+    [Math.floor(width * 0.25), Math.floor(height * 0.25)],
+    [Math.floor(width * 0.75), Math.floor(height * 0.25)],
+    [Math.floor(width * 0.25), Math.floor(height * 0.75)],
+    [Math.floor(width * 0.75), Math.floor(height * 0.75)],
+    [Math.floor(width * 0.5), Math.floor(height * 0.25)],
+    [Math.floor(width * 0.5), Math.floor(height * 0.75)],
+    [Math.floor(width * 0.25), Math.floor(height * 0.5)],
+    [Math.floor(width * 0.75), Math.floor(height * 0.5)],
+  ];
+
+  for (const [x, y] of points) {
+    try {
+      const pixel = ctx.getImageData(x, y, 1, 1).data;
+      if (pixel[0] > 8 || pixel[1] > 8 || pixel[2] > 8) {
+        return false; // Found a non-black pixel
+      }
+    } catch {
+      // If tainted canvas security exception occurs, do not falsely flag as black
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Renders a CanvasImageSource to a JPEG Blob.
+ *
+ * Industrial-standard hardening:
+ * 1. Prioritizes standard DOM <canvas> on main-thread to avoid Android Chrome OffscreenCanvas GPU texture drops.
+ * 2. Mandatory white background (#FFFFFF) fill prevents transparent areas from converting to black in JPEG.
+ * 3. Micro-yield gives mobile GPU pipelines time to flush draw commands before serialization.
+ * 4. Zero-black guard verifies canvas is not solid black before blob generation.
  */
 async function renderToJpegBlob(
   source: CanvasImageSource,
@@ -165,22 +211,27 @@ async function renderToJpegBlob(
   const safeW = Math.max(1, Math.round(width));
   const safeH = Math.max(1, Math.round(height));
 
-  if (typeof OffscreenCanvas !== "undefined") {
-    const canvas = new OffscreenCanvas(safeW, safeH);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not acquire 2D context from OffscreenCanvas.");
-    ctx.drawImage(source, 0, 0, safeW, safeH);
-    return canvas.convertToBlob({ type: "image/jpeg", quality });
-  }
-
-  // Fallback for older Safari or environments without OffscreenCanvas
+  // ── Strategy A: Standard DOM HTMLCanvasElement (Most resilient on Android Chrome & Safari) ──
   if (typeof document !== "undefined" && typeof document.createElement === "function") {
     const canvas = document.createElement("canvas");
     canvas.width = safeW;
     canvas.height = safeH;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) throw new Error("Could not acquire 2D context from HTMLCanvasElement.");
+
+    // Fill white background first: ensures non-square or transparent documents never turn black
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, safeW, safeH);
     ctx.drawImage(source, 0, 0, safeW, safeH);
+
+    // Guard: Check if canvas rendered solid black (Android GPU compositor dropped frame)
+    if (isCanvasPureBlack(ctx, safeW, safeH)) {
+      // Micro-yield and retry draw
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, safeW, safeH);
+      ctx.drawImage(source, 0, 0, safeW, safeH);
+    }
 
     return new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
@@ -192,6 +243,19 @@ async function renderToJpegBlob(
         quality
       );
     });
+  }
+
+  // ── Strategy B: OffscreenCanvas fallback (For Web Workers without DOM) ──
+  if (typeof OffscreenCanvas !== "undefined") {
+    const canvas = new OffscreenCanvas(safeW, safeH);
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) throw new Error("Could not acquire 2D context from OffscreenCanvas.");
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, safeW, safeH);
+    ctx.drawImage(source, 0, 0, safeW, safeH);
+
+    return canvas.convertToBlob({ type: "image/jpeg", quality });
   }
 
   throw new Error("Canvas rendering API not available in current environment.");
@@ -280,10 +344,19 @@ export async function compressImageForUpload(
       throw new Error("Document image exceeds maximum size of 2.5 MB.");
     }
 
+    // Floor check: Valid document photos even when compressed never drop below 5 KB
+    if (blob.size < 5_000) {
+      throw new Error("Document image could not be rendered clearly. Please choose a clearer photo.");
+    }
+
     // ─── Thumbnail Generation ───────────────────────────────────────────────
     // Constrained to 480 px max edge (or original if smaller), 0.82 quality.
     const thumbDims = calculateTargetDimensions(origW, origH, 480);
     const thumbBlob = await renderToJpegBlob(decoded.source, thumbDims.width, thumbDims.height, 0.82);
+
+    if (thumbBlob.size < 2_000) {
+      throw new Error("Document preview thumbnail could not be rendered. Please try again.");
+    }
 
     // Create browser preview URL for immediate UI display
     const previewUrl = URL.createObjectURL(blob);

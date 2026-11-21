@@ -576,6 +576,7 @@ export interface ActiveOperatorOtherAssignment {
   machineId: string;
   machineCode: string;
   shiftCode?: string | null;
+  shiftName?: string | null;
   shiftStartTime: string;
   shiftEndTime: string;
 }
@@ -717,6 +718,22 @@ export interface OperatorEntryContext {
   shift_codes?: ClientShiftCode[];
   assigned_shift_code?: string | null;
   assigned_shift_codes?: string[];
+  assigned_shifts?: Array<{
+    assignment_id: string;
+    machine_id: string;
+    machine_code: string;
+    shift_code: string;
+    shift_start: string;
+    shift_end: string;
+    raw_shift_start: string;
+    raw_shift_end: string;
+  }>;
+  assigned_machines?: Array<{
+    id: string;
+    machine_id: string;
+    model?: string | null;
+    serial_number?: string | null;
+  }>;
   today_logged_shift_codes?: string[];
   today_logs?: Array<{
     id?: string;

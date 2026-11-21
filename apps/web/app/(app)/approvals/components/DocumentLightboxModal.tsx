@@ -12,6 +12,8 @@ import {
   FileText,
   Loader2,
   ShieldCheck,
+  AlertTriangle,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { AttachedDocumentSummary } from "@reachinternational/types";
 import { Button } from "@/components/ui/Button";
@@ -45,6 +47,13 @@ export function DocumentLightboxModal({
   const [imageError, setImageError] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
 
+  // Auto-detect black or corrupted original document (e.g. 7,508 bytes Android Chrome canvas drop)
+  const isCorruptedOriginal = Boolean(
+    doc?.file_size_bytes && doc.file_size_bytes <= 9000 && doc.thumb_signed_url
+  );
+
+  const [viewMode, setViewMode] = useState<"original" | "thumbnail">("original");
+
   useEffect(() => {
     setImageLoading(true);
     setImageError(false);
@@ -54,6 +63,13 @@ export function DocumentLightboxModal({
     if (!doc) {
       setResolvedUrl(null);
       return;
+    }
+
+    // Auto-switch to thumbnail if the original is detected as a corrupted black file
+    if (doc.file_size_bytes && doc.file_size_bytes <= 9000 && doc.thumb_signed_url) {
+      setViewMode("thumbnail");
+    } else {
+      setViewMode("original");
     }
 
     // Always prioritize the full original document (signed_url)
@@ -87,7 +103,14 @@ export function DocumentLightboxModal({
 
   if (!isOpen || !doc) return null;
 
-  const imageUrl = resolvedUrl || doc.signed_url || doc.thumb_signed_url;
+  const originalUrl = resolvedUrl || doc.signed_url;
+  const thumbnailUrl = doc.thumb_signed_url;
+
+  // Resolved active image URL depending on viewMode and fallback
+  const imageUrl =
+    viewMode === "thumbnail" && thumbnailUrl
+      ? thumbnailUrl
+      : originalUrl || thumbnailUrl || null;
 
   const isPdf =
     doc.mime_type === "application/pdf" ||
@@ -143,8 +166,47 @@ export function DocumentLightboxModal({
             </div>
           </div>
 
-          {/* Controls: Zoom, Rotate, Open in Tab, Close */}
+          {/* Controls: Mode Switcher, Zoom, Rotate, Open in Tab, Close */}
           <div className="flex items-center gap-1 shrink-0">
+            {/* View Mode Toggle (Original vs Verified Thumbnail) */}
+            {thumbnailUrl && originalUrl && (
+              <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] p-0.5 text-xs mr-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode("original");
+                    setImageLoading(true);
+                  }}
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                    viewMode === "original"
+                      ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xs"
+                      : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                  }`}
+                  title="View original uploaded file"
+                >
+                  Original
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode("thumbnail");
+                    setImageLoading(true);
+                  }}
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 ${
+                    viewMode === "thumbnail"
+                      ? "bg-[var(--color-canvas-elevated)] text-sky-600 dark:text-sky-400 shadow-2xs"
+                      : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                  }`}
+                  title="View verified high-resolution thumbnail preview"
+                >
+                  Thumbnail
+                  {isCorruptedOriginal && (
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  )}
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleZoomOut}
@@ -175,7 +237,7 @@ export function DocumentLightboxModal({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 rounded-lg text-[var(--color-ink-muted)] hover:text-sky-600 hover:bg-[var(--color-canvas)] transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
-                title="Open original image in new tab"
+                title="Open image in new tab"
               >
                 <ExternalLink size={16} />
               </a>
@@ -193,6 +255,25 @@ export function DocumentLightboxModal({
 
         {/* Image Preview Canvas */}
         <div className="relative flex-1 min-h-[320px] max-h-[68vh] overflow-auto p-4 flex items-center justify-center bg-neutral-900/40 select-none">
+          {/* Corrupted Original Auto-Switch Notification */}
+          {isCorruptedOriginal && viewMode === "thumbnail" && (
+            <div className="absolute top-3 left-4 right-4 z-20 flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs shadow-sm backdrop-blur-md">
+              <div className="flex items-center gap-1.5 truncate">
+                <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+                <span className="truncate">
+                  <strong>Verified Thumbnail View:</strong> Original mobile upload was a blank file ({doc.file_size_bytes} B). Displaying verified thumbnail photo.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewMode("original")}
+                className="text-[11px] font-semibold underline hover:no-underline text-amber-800 dark:text-amber-200 shrink-0"
+              >
+                Show Original
+              </button>
+            </div>
+          )}
+
           {imageLoading && !imageError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-neutral-400 gap-2">
               <Loader2 size={24} className="animate-spin text-sky-500" />
@@ -231,8 +312,14 @@ export function DocumentLightboxModal({
                 className="max-w-full max-h-[62vh] object-contain rounded-lg shadow-xl"
                 onLoad={() => setImageLoading(false)}
                 onError={() => {
-                  setImageLoading(false);
-                  setImageError(true);
+                  if (viewMode === "original" && thumbnailUrl && thumbnailUrl !== imageUrl) {
+                    // Smooth automatic fallback to thumbnail if original fails to render
+                    setViewMode("thumbnail");
+                    setImageLoading(true);
+                  } else {
+                    setImageLoading(false);
+                    setImageError(true);
+                  }
                 }}
               />
             </div>

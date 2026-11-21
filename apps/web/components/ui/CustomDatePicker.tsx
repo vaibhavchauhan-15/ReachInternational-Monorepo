@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronDown,
   RotateCcw,
+  Lock,
 } from "lucide-react";
 import { formatDate } from "@reachinternational/utils";
 import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
@@ -77,6 +78,123 @@ function parseYMD(dateStr?: string): Date {
   return isNaN(fallback.getTime()) ? new Date() : fallback;
 }
 
+// Tooltip classification for calendar cells
+export type DayTooltipType = "today" | "tomorrow" | "yesterday" | "past" | "future" | "locked";
+
+export interface DayTooltipInfo {
+  type: DayTooltipType;
+  badge: string;
+  label: string;
+  reason: string;
+  isLocked: boolean;
+}
+
+export function getDayTooltip(
+  cell: {
+    date: Date;
+    dateStr: string;
+    dayNumber: number;
+    diffDays: number;
+    isSelectable: boolean;
+    isToday: boolean;
+  },
+  maxDaysOld: number,
+  allowFutureDays: number,
+  allowAnyPast: boolean,
+  allowAnyFuture: boolean
+): DayTooltipInfo {
+  const isLocked = !cell.isSelectable;
+  const diffDays = cell.diffDays;
+
+  if (isLocked) {
+    if (diffDays < 0) {
+      return {
+        type: "locked",
+        badge: "Locked",
+        label: "Locked (Future)",
+        reason: allowFutureDays === 1 ? "Only tomorrow is selectable" : "Future date locked",
+        isLocked: true,
+      };
+    }
+    return {
+      type: "locked",
+      badge: "Locked",
+      label: "Locked",
+      reason: `${diffDays} days ago (> ${maxDaysOld}d limit)`,
+      isLocked: true,
+    };
+  }
+
+  if (cell.isToday || diffDays === 0) {
+    return {
+      type: "today",
+      badge: "Today",
+      label: "Today",
+      reason: "Current active date",
+      isLocked: false,
+    };
+  }
+
+  if (diffDays === -1) {
+    return {
+      type: "tomorrow",
+      badge: "Tomorrow",
+      label: "Tomorrow",
+      reason: "Next day plan (+1d)",
+      isLocked: false,
+    };
+  }
+
+  if (diffDays === 1) {
+    return {
+      type: "yesterday",
+      badge: "Yesterday",
+      label: "Yesterday",
+      reason: "1 day ago (-1d)",
+      isLocked: false,
+    };
+  }
+
+  if (diffDays >= 2 && diffDays <= 7) {
+    return {
+      type: "past",
+      badge: `${diffDays}d ago`,
+      label: `${diffDays} days ago`,
+      reason: `${diffDays} days ago (-${diffDays}d)`,
+      isLocked: false,
+    };
+  }
+
+  if (diffDays > 7 && (allowAnyPast || diffDays <= maxDaysOld)) {
+    return {
+      type: "past",
+      badge: `${diffDays}d ago`,
+      label: `${diffDays} days ago`,
+      reason: `${diffDays} days ago (-${diffDays}d)`,
+      isLocked: false,
+    };
+  }
+
+  if (diffDays < -1) {
+    const ahead = Math.abs(diffDays);
+    return {
+      type: "future",
+      badge: `+${ahead}d`,
+      label: `${ahead} days ahead`,
+      reason: `+${ahead} days plan`,
+      isLocked: false,
+    };
+  }
+
+  return {
+    type: "past",
+    badge: "Date",
+    label: cell.dateStr,
+    reason: "",
+    isLocked: false,
+  };
+}
+
 export function CustomDatePicker({
   value,
   onChange,
@@ -98,6 +216,7 @@ export function CustomDatePicker({
   showIcon = false,
 }: CustomDatePickerProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -196,6 +315,20 @@ export function CustomDatePicker({
     if (allowAnyPast) {
       return null;
     }
+    // Future side of the window (e.g. allowFutureDays={1} => tomorrow is the only future date)
+    if (diffDays < -1) {
+      const aheadDays = Math.abs(diffDays);
+      if (!allowAnyFuture && aheadDays <= allowFutureDays) {
+        return {
+          label: `+${aheadDays}d`,
+          colorClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
+        };
+      }
+      return {
+        label: "Locked",
+        colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+      };
+    }
     if (diffDays > 1 && diffDays <= maxDaysOld) {
       return {
         label: `${diffDays}d ago`,
@@ -204,7 +337,7 @@ export function CustomDatePicker({
     }
     if (diffDays > maxDaysOld) {
       return {
-        label: "Locked (>7d)",
+        label: "Locked",
         colorClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
       };
     }
@@ -212,7 +345,7 @@ export function CustomDatePicker({
       label: "Future",
       colorClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
     };
-  }, [value, today, maxDaysOld, showRelativeBadge, allowAnyPast]);
+  }, [value, today, maxDaysOld, allowFutureDays, allowAnyFuture, showRelativeBadge, allowAnyPast]);
 
   // Month navigation handlers
   const canGoPrevMonth = useMemo(() => {
@@ -323,6 +456,7 @@ export function CustomDatePicker({
   const handleSelectDate = (dateStr: string) => {
     onChange(dateStr);
     setIsCalendarOpen(false);
+    setHoveredDate(null);
   };
 
   const handleOpenToggle = () => {
@@ -330,9 +464,27 @@ export function CustomDatePicker({
     const nextState = !isCalendarOpen;
     if (nextState) {
       updatePosition();
+    } else {
+      setHoveredDate(null);
     }
     setIsCalendarOpen(nextState);
   };
+
+  const hoveredCell = useMemo(() => {
+    if (!hoveredDate) return null;
+    return calendarDays.find((c) => c.dateStr === hoveredDate) || null;
+  }, [hoveredDate, calendarDays]);
+
+  const hoveredTooltip = useMemo(() => {
+    if (!hoveredCell) return null;
+    return getDayTooltip(
+      hoveredCell,
+      maxDaysOld,
+      allowFutureDays,
+      allowAnyPast,
+      allowAnyFuture
+    );
+  }, [hoveredCell, maxDaysOld, allowFutureDays, allowAnyPast, allowAnyFuture]);
 
   const formattedDisplayValue = useMemo(() => {
     if (!value) return placeholder;
@@ -374,7 +526,9 @@ export function CustomDatePicker({
             </label>
             {showWindowBadge && (
               <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">
-                <span className="hidden xs:inline">Allowed: </span>7d window
+                {allowAnyPast && allowAnyFuture
+                  ? "Any date"
+                  : `${allowAnyPast ? "Any past" : `${maxDaysOld}d back`} · ${allowAnyFuture ? "Any future" : `${allowFutureDays}d ahead`}`}
               </span>
             )}
           </div>
@@ -512,57 +666,160 @@ export function CustomDatePicker({
                 </div>
 
                 {/* Month Grid Cells */}
-                <div className="grid grid-cols-7 gap-1 p-2.5">
-                  {calendarDays.map((cell) => {
+                <div
+                  className="grid grid-cols-7 gap-1 p-2.5 relative"
+                  onMouseLeave={() => setHoveredDate(null)}
+                >
+                  {calendarDays.map((cell, idx) => {
                     const isCellDisabled = !cell.isSelectable;
                     const isSelected = cell.isSelected;
                     const isToday = cell.isToday;
+                    const isHovered = hoveredDate === cell.dateStr;
+                    const tooltip = getDayTooltip(
+                      cell,
+                      maxDaysOld,
+                      allowFutureDays,
+                      allowAnyPast,
+                      allowAnyFuture
+                    );
+
+                    const colIdx = idx % 7;
+                    const rowIdx = Math.floor(idx / 7);
+                    const isTopRow = rowIdx < 2;
+                    const horizontalClass =
+                      colIdx === 0
+                        ? "left-0"
+                        : colIdx === 6
+                        ? "right-0"
+                        : "left-1/2 -translate-x-1/2";
 
                     return (
-                      <button
+                      <div
                         key={cell.dateStr}
-                        type="button"
-                        disabled={isCellDisabled}
-                        onClick={() => handleSelectDate(cell.dateStr)}
-                        title={
-                          isCellDisabled
-                            ? cell.diffDays < 0
-                              ? "Future dates are disabled"
-                              : "Dates older than 7 days are locked"
-                            : cell.isToday
-                            ? "Today"
-                            : `${cell.diffDays} day${cell.diffDays === 1 ? "" : "s"} ago`
+                        className="relative flex items-center justify-center w-full"
+                        onMouseEnter={() => setHoveredDate(cell.dateStr)}
+                        onMouseLeave={() =>
+                          setHoveredDate((curr) => (curr === cell.dateStr ? null : curr))
                         }
-                        className={`relative h-9 sm:h-9.5 w-full rounded-xl text-xs flex flex-col items-center justify-center transition-all ${
-                          isSelected
-                            ? "bg-sky-600 text-white font-extrabold shadow-md ring-2 ring-sky-500/30 scale-105 z-10"
-                            : isCellDisabled
-                            ? "text-[var(--color-mute)] opacity-20 cursor-not-allowed"
-                            : "text-[var(--color-ink)] font-bold hover:bg-sky-500/15 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer"
-                        } ${!cell.isCurrentMonth && !isSelected ? "opacity-30" : ""}`}
                       >
-                        <span className="leading-none">{cell.dayNumber}</span>
-                        {/* Today subtle indicator dot */}
-                        {isToday && !isSelected && (
-                          <span className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500" />
+                        <button
+                          type="button"
+                          aria-disabled={isCellDisabled}
+                          tabIndex={isCellDisabled ? -1 : 0}
+                          onClick={() => {
+                            if (isCellDisabled) {
+                              setHoveredDate(cell.dateStr);
+                              return;
+                            }
+                            handleSelectDate(cell.dateStr);
+                          }}
+                          onFocus={() => setHoveredDate(cell.dateStr)}
+                          onBlur={() =>
+                            setHoveredDate((curr) => (curr === cell.dateStr ? null : curr))
+                          }
+                          onTouchStart={() => setHoveredDate(cell.dateStr)}
+                          title={`${tooltip.label} · ${cell.date.toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                          })}`}
+                          className={`relative h-9 sm:h-9.5 w-full rounded-xl text-xs flex flex-col items-center justify-center transition-all ${
+                            isSelected
+                              ? "bg-sky-600 text-white font-extrabold shadow-md ring-2 ring-sky-500/30 scale-105 z-10"
+                              : isCellDisabled
+                              ? "text-[var(--color-mute)] opacity-25 cursor-not-allowed hover:bg-rose-500/10"
+                              : "text-[var(--color-ink)] font-bold hover:bg-sky-500/15 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer"
+                          } ${!cell.isCurrentMonth && !isSelected ? "opacity-30" : ""}`}
+                        >
+                          <span className="leading-none">{cell.dayNumber}</span>
+                          {/* Today subtle indicator dot */}
+                          {isToday && !isSelected && (
+                            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500" />
+                          )}
+                          {/* Locked subtle indicator icon on disabled cells */}
+                          {isCellDisabled && !isSelected && (
+                            <span className="absolute bottom-0.5 right-1 opacity-40">
+                              <Lock size={8} />
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Floating Tooltip */}
+                        {isHovered && (
+                          <div
+                            role="tooltip"
+                            className={`absolute z-[80] pointer-events-none transition-all duration-150 animate-in fade-in-0 zoom-in-95 ${
+                              isTopRow ? "top-full mt-1.5" : "bottom-full mb-1.5"
+                            } ${horizontalClass} bg-neutral-900/95 dark:bg-neutral-100/95 text-white dark:text-neutral-900 border border-neutral-700/80 dark:border-neutral-300/80 px-2.5 py-1 rounded-lg shadow-2xl backdrop-blur-sm flex items-center gap-1.5 whitespace-nowrap select-none`}
+                          >
+                            {tooltip.isLocked ? (
+                              <Lock size={11} className="text-rose-400 dark:text-rose-600 shrink-0" />
+                            ) : (
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                  tooltip.type === "today"
+                                    ? "bg-emerald-400 dark:bg-emerald-600"
+                                    : tooltip.type === "tomorrow"
+                                    ? "bg-indigo-400 dark:bg-indigo-600"
+                                    : tooltip.type === "yesterday"
+                                    ? "bg-sky-400 dark:bg-sky-600"
+                                    : "bg-amber-400 dark:bg-amber-600"
+                                }`}
+                              />
+                            )}
+                            <span className="text-[11px] font-bold tracking-tight leading-none">
+                              {tooltip.label}
+                            </span>
+                            <span className="text-[10px] opacity-70 font-mono font-medium leading-none">
+                              · {cell.date.toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                              })}
+                            </span>
+                          </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
               </div>
 
               {/* Calendar Footer Info & Reset */}
-              <div className="p-2.5 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 flex items-center justify-between text-[10px] text-[var(--color-mute)] shrink-0">
-                <span className="font-medium flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Green dot: Today
-                </span>
+              <div className="p-2.5 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 flex items-center justify-between text-[10px] text-[var(--color-mute)] shrink-0 min-h-[38px]">
+                {hoveredCell ? (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {hoveredTooltip?.isLocked ? (
+                      <Lock size={11} className="text-rose-500 shrink-0" />
+                    ) : (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          hoveredTooltip?.type === "today"
+                            ? "bg-emerald-500"
+                            : hoveredTooltip?.type === "tomorrow"
+                            ? "bg-indigo-500"
+                            : hoveredTooltip?.type === "yesterday"
+                            ? "bg-sky-500"
+                            : "bg-amber-500"
+                        }`}
+                      />
+                    )}
+                    <span className="font-bold text-[var(--color-ink)] truncate text-[11px]">
+                      {hoveredTooltip?.label}
+                    </span>
+                    <span className="text-[10px] text-[var(--color-mute)] truncate hidden sm:inline">
+                      · {hoveredTooltip?.reason}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="font-medium flex items-center gap-1">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Green dot: Today
+                  </span>
+                )}
 
                 <button
                   type="button"
                   onClick={() => handleSelectDate(todayStr)}
-                  className="font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
+                  className="font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer flex items-center gap-1 shrink-0 ml-auto"
                 >
                   <RotateCcw className="h-3 w-3" /> Select Today
                 </button>

@@ -150,7 +150,7 @@ export function MachineAssignmentsQuickModal({
                     const operator = assignment.operator;
                     return (
                       <div
-                        key={assignment.id || idx}
+                        key={`${assignment.id || 'assign'}-${idx}`}
                         className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-[var(--color-hairline-soft-surface)]/40 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">

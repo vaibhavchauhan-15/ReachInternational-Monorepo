@@ -31,6 +31,7 @@ export interface AssignmentSelectionSummaryProps {
   conflictMessage?: string | null;
   disabled?: boolean;
   className?: string;
+  isLoading?: boolean;
 }
 
 export function formatShiftBadge(shiftCode: string, shiftName?: string | null): string {
@@ -59,6 +60,7 @@ export function AssignmentSelectionSummary({
   conflictMessage,
   disabled = false,
   className,
+  isLoading = false,
 }: AssignmentSelectionSummaryProps) {
   const currentCount = items.length;
   const isFull = currentCount >= maxCapacity;
@@ -107,8 +109,22 @@ export function AssignmentSelectionSummary({
         </div>
       )}
 
-      {/* Empty State */}
-      {items.length === 0 ? (
+      {/* Loading Skeleton */}
+      {isLoading ? (
+        <div className="divide-y divide-[var(--color-hairline)] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden text-xs">
+          {[1, 2].map((idx) => (
+            <div key={idx} className="flex items-center justify-between gap-3 p-3 animate-pulse">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="h-8 w-8 rounded-lg bg-[var(--color-hairline-soft-surface)] shrink-0" />
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="h-3 w-32 rounded bg-[var(--color-hairline-soft-surface)]" />
+                  <div className="h-2.5 w-20 rounded bg-[var(--color-hairline-soft-surface)]" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
         <div className="py-6 px-4 text-center rounded-xl border border-dashed border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/30 space-y-1">
           <Users className="h-6 w-6 mx-auto text-[var(--color-mute)] mb-1" />
           <p className="text-xs font-semibold text-[var(--color-ink)]">{emptyTitle}</p>

@@ -612,14 +612,17 @@ export async function submitOperatorHourLogAction(payload: {
   let targetClientId = payload.clientId || null;
   let targetLocation = payload.location?.trim() || null;
   let activeAssignments: Array<{ id: string; shift_code: string | null }> | null = null;
+  let mData: { status: string; health_status: string | null; client_id: string | null; hour_meter: number | null } | null = null;
 
   // BUG-OP-08 & BUG-OP-05: Check machine status and client deployment alignment
   try {
-    const { data: mData } = await supabase
+    const { data: fetchedMachine } = await supabase
       .from("machines")
-      .select("status, health_status, client_id")
+      .select("status, health_status, client_id, hour_meter")
       .eq("id", payload.machineId)
       .single();
+
+    mData = fetchedMachine;
 
     if (mData) {
       if (mData.status === "inactive" || mData.health_status === "under_maintenance" || ["maintenance", "decommissioned"].includes(mData.status)) {
@@ -653,6 +656,15 @@ export async function submitOperatorHourLogAction(payload: {
       .or(`valid_to.is.null,valid_to.gte.${timing.resolvedStartDate}`);
 
     activeAssignments = fetchedAssignments;
+
+    // Hardened Guard: Non-assisted operator submissions require an active assignment covering log_date
+    if (!isAssisted && (!activeAssignments || activeAssignments.length === 0)) {
+      await failIdempotencyKey(currentIdempotencyKey);
+      return {
+        success: false,
+        error: `Operator is not authorized to submit shift logs for this equipment on date ${timing.resolvedStartDate}. You must have an active assignment covering this work date.`,
+      };
+    }
 
     const activeAssignedShiftCodes = (activeAssignments || [])
       .map((a: any) => a.shift_code?.trim())
@@ -695,6 +707,13 @@ export async function submitOperatorHourLogAction(payload: {
   let rpcSucceeded = false;
   let resultData: unknown = null;
 
+  // Resolve shift-matched assignment ID (protects against multi-shift assignment collision on the same machine)
+  const normalizedRequestedShift = (payload.shiftCode || payload.shift || "").replace(/^shift\s*/i, "").trim().toUpperCase();
+  const matchedAssignment = payload.assignmentId
+    ? activeAssignments?.find((a: any) => a.id === payload.assignmentId)
+    : activeAssignments?.find((a: any) => a.shift_code && a.shift_code.replace(/^shift\s*/i, "").trim().toUpperCase() === normalizedRequestedShift);
+  const resolvedAssignmentId = matchedAssignment?.id || payload.assignmentId || activeAssignments?.[0]?.id || null;
+
   // Try atomic PostgreSQL RPC execution first (1 round-trip for log insert + machine update + audit)
   try {
     const { data: rpcResult, error: rpcError } = await supabase.rpc("submit_operator_hour_log_atomic", {
@@ -723,6 +742,7 @@ export async function submitOperatorHourLogAction(payload: {
       p_remarks: finalRemarks || null,
       p_idempotency_key: currentIdempotencyKey,
       p_entered_by: user.id,
+      p_assignment_id: resolvedAssignmentId,
     });
 
     if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
@@ -747,6 +767,7 @@ export async function submitOperatorHourLogAction(payload: {
         rpcError.message?.includes("Duplicate entries are not permitted") ||
         rpcError.message?.includes("already been recorded") ||
         rpcError.message?.includes("Not authorized to submit shift log") ||
+        rpcError.message?.includes("valid assignment covering this work date") ||
         rpcError.message?.includes("assigned to Shift") ||
         rpcError.message?.includes("unassigned shift") ||
         rpcError.message?.includes("previous 7 days") ||
@@ -770,7 +791,7 @@ export async function submitOperatorHourLogAction(payload: {
 
   // Resilient Fallback Path: Guarantees 100% successful log registration & status update
   if (!rpcSucceeded) {
-    const fallbackAssignmentId = payload.assignmentId || activeAssignments?.[0]?.id || null;
+    const fallbackAssignmentId = resolvedAssignmentId;
     // 1. Insert machine hour log (Fallback path with graceful column fallback)
     const insertPayload: Record<string, any> = {
       machine_id: payload.machineId,
@@ -831,10 +852,10 @@ export async function submitOperatorHourLogAction(payload: {
       return { success: false, error: formatOperatorDatabaseError(logError) };
     }
 
-    // 2. Update current hour meter, operator & health_status on machine
+    // 2. Update current hour meter, operator & health_status on machine (NON-REGRESSING GREATEST)
     // NOTE: Strictly updates health_status ('breakdown' | 'active'), NEVER rental status!
     const machineUpdate: Record<string, unknown> = {
-      hour_meter: endMtr,
+      hour_meter: Math.max(Number(mData?.hour_meter) || 0, endMtr),
       current_operator_id: targetOperatorId,
       updated_at: new Date().toISOString(),
     };
@@ -1636,14 +1657,20 @@ export async function getOperatorHistoryLogsAction(limit: number = 100): Promise
 }
 
 /**
- * Server action: fetch today's shift log monitor data.
- * RBAC enforced at DB level (supervisor sees own operators only).
+ * Server action: fetch a single day's shift log monitor roster.
+ * RBAC enforced at DB level (supervisor sees own operators / machines / client sites only).
+ *
+ * All filtering beyond date is intentionally resolved client-side by
+ * `TodayShiftMonitorTab` because the whole day's roster is already in memory:
+ * search, client, shift and sort therefore cost zero network round-trips.
  */
 export async function getTodayShiftMonitorAction(
   logDate?: string,
   search?: string,
-  bypassCache: boolean = false,
-  clientId?: string
+  bypassCache: boolean = true,
+  clientId?: string,
+  shiftCode?: string,
+  sort?: string
 ): Promise<{
   success: boolean;
   data?: import("@/lib/data/operations/today-shift-monitor").TodayShiftMonitorRow[];
@@ -1657,7 +1684,15 @@ export async function getTodayShiftMonitorAction(
 
   try {
     const { getTodayShiftLogMonitor } = await import("@/lib/data/operations/today-shift-monitor");
-    const data = await getTodayShiftLogMonitor(user.id, logDate || undefined, search || undefined, bypassCache, clientId || undefined);
+    const data = await getTodayShiftLogMonitor(
+      user.id,
+      logDate || undefined,
+      search || undefined,
+      clientId || undefined,
+      shiftCode || undefined,
+      sort || undefined,
+      bypassCache
+    );
     return { success: true, data };
   } catch (err) {
     console.error("[getTodayShiftMonitorAction] Exception:", err);

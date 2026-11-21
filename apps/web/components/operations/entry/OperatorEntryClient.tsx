@@ -35,6 +35,44 @@ const OperatorHistoryTab = dynamic(
 
 const DRAFT_KEY = "reach_operator_log_draft";
 
+/**
+ * Shared `operations-roster` broadcast channel.
+ *
+ * Created exactly once per browser session. Previously a brand new channel was created
+ * and subscribed on EVERY submission and never removed — leaking an open Realtime
+ * subscription (and its websocket listeners) on each saved log.
+ */
+let rosterChannelPromise: Promise<any> | null = null;
+
+function getRosterBroadcastChannel(): Promise<any> {
+  if (rosterChannelPromise) return rosterChannelPromise;
+  rosterChannelPromise = new Promise((resolve) => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase.channel("operations-roster");
+    let resolved = false;
+    const settle = () => {
+      if (resolved) return;
+      resolved = true;
+      resolve(channel);
+    };
+    channel.subscribe((status: string) => {
+      if (status === "SUBSCRIBED") settle();
+    });
+    // Never block a submission on the realtime handshake.
+    setTimeout(settle, 2000);
+  });
+  return rosterChannelPromise;
+}
+
+/**
+ * Fire-and-forget roster broadcast used to wake supervisor / admin monitors instantly.
+ */
+function broadcastRosterEvent(event: string, payload: Record<string, unknown>): void {
+  void getRosterBroadcastChannel()
+    .then((channel) => channel.send({ type: "broadcast", event, payload }))
+    .catch((err: unknown) => console.warn("[operations-roster] broadcast failed:", err));
+}
+
 interface OperatorEntryClientProps {
   initialContext: OperatorEntryContext;
   user: User;
@@ -73,16 +111,26 @@ export function OperatorEntryClient({
     if (!user?.id) return;
 
     const supabase = createSupabaseBrowserClient();
+    let isActive = true;
+    let hasSyncedNotifications = false;
+    let isSyncing = false;
 
-    // 1. Sync any notifications persisted while the operator was offline
+    // 1. Sync notifications persisted while the operator was offline (at most ONCE per
+    //    mount — previously re-fired on every channel re-SUBSCRIBE event).
     const syncOfflineNotifications = async () => {
+      if (isSyncing || hasSyncedNotifications || !isActive) return;
+      isSyncing = true;
       try {
         const { data: unreadNotifications } = await supabase
           .from("notifications")
           .select("id, title, message, metadata")
           .eq("user_id", user.id)
           .eq("is_read", false)
-          .order("created_at", { ascending: true });
+          .order("created_at", { ascending: true })
+          .limit(20);
+
+        if (!isActive) return;
+        hasSyncedNotifications = true;
 
         if (unreadNotifications && unreadNotifications.length > 0) {
           const ids: string[] = [];
@@ -95,10 +143,12 @@ export function OperatorEntryClient({
             .update({ is_read: true, read_at: new Date().toISOString() })
             .in("id", ids);
 
-          router.refresh();
+          if (isActive) router.refresh();
         }
       } catch (err) {
         console.warn("[WebNotifications] Offline sync notice:", err);
+      } finally {
+        isSyncing = false;
       }
     };
 
@@ -144,6 +194,7 @@ export function OperatorEntryClient({
       });
 
     return () => {
+      isActive = false;
       supabase.removeChannel(alertChannel);
     };
   }, [user?.id, router, toast]);
@@ -339,31 +390,10 @@ export function OperatorEntryClient({
     }
   }, [resolvedInitialShift, searchParams, availableShifts, handleSelectShiftCode]);
 
-  // Eager re-fetch guard: If initialContext had no assigned_shift_code, fetch fresh context in background
-  useEffect(() => {
-    if (!initialContext.assigned_shift_code && !initialContext.operator?.shift_code && user?.id) {
-      getOperatorEntryContextAction(user.id)
-        .then((res) => {
-          if (res.success && res.data) {
-            const freshShifts = res.data.shift_codes && res.data.shift_codes.length > 0
-              ? res.data.shift_codes
-              : DEFAULT_CLIENT_SHIFTS;
-            const freshDefault = resolveDefaultOperatorShift(res.data, freshShifts);
-            if (freshDefault) {
-              setSelectedShiftCode(freshDefault.code);
-              const s = formatTo12Hour(freshDefault.start_time || freshDefault.raw_start_time);
-              const e = formatTo12Hour(freshDefault.end_time || freshDefault.raw_end_time);
-              if (s) setStartTime(s);
-              if (e) setEndTime(e);
-              if (freshDefault.default_ot_minutes && freshDefault.default_ot_minutes > 0) {
-                setOvertimeHours((freshDefault.default_ot_minutes / 60).toString());
-              }
-            }
-          }
-        })
-        .catch((e) => console.warn("[OperatorEntryClient] Fresh context fetch error:", e));
-    }
-  }, [initialContext.assigned_shift_code, initialContext.operator?.shift_code, user?.id]);
+  // NOTE: the entry context is fetched server-side (SSR) and re-fetched whenever the
+  // operator changes the log date. No extra "eager" client fetch is performed on mount:
+  // that used to issue a duplicate RPC on every page load for operators whose assignment
+  // is stored as an effective-dated range rather than on the user profile.
 
   // Breakdown state (Lazy)
   const [isBreakdown, setIsBreakdown] = useState<boolean>(false);
@@ -477,6 +507,16 @@ export function OperatorEntryClient({
 
     if (submitting || submittingRef.current) return;
 
+    // Strict Unassigned Operator Guard
+    if (user.role === "operator" && (!context.machine?.id || assignedShiftCodes.length === 0)) {
+      toast(
+        "error",
+        "Not Assigned On This Date",
+        `You were not assigned to any equipment or shift on ${logDate}. Operators cannot submit shift logs for dates they were not assigned.`
+      );
+      return;
+    }
+
     if (!context.machine?.id) {
       toast("error", "No Machine Assigned", "You cannot submit a log without an assigned machine.");
       return;
@@ -545,10 +585,16 @@ export function OperatorEntryClient({
     const effectiveShift = (selectedShiftCode || "").replace(/^shift\s*/i, "").trim().toUpperCase();
     const deterministicKey = `ihl_web_${context.machine.id}_${user.id}_${logDate}_${effectiveShift || "S1"}`;
 
+    // Resolve shift-matched assignment ID to prevent multi-shift collision on same machine
+    const matchedAss = context.assigned_shifts?.find(
+      (s) => (s.shift_code || "").replace(/^shift\s*/i, "").trim().toUpperCase() === effectiveShift
+    );
+    const effectiveAssignmentId = matchedAss?.assignment_id || context.assignment_id || undefined;
+
     try {
       const res = await submitOperatorHourLogAction({
         machineId: context.machine.id,
-        assignmentId: context.assignment_id || undefined,
+        assignmentId: effectiveAssignmentId,
         clientId: context.client?.id || undefined,
         location: context.client?.site || undefined,
         startDate: logDate,
@@ -573,29 +619,15 @@ export function OperatorEntryClient({
 
         // Broadcast log_entered to operations-roster channel for supervisors/admins
         if (context.machine?.id) {
-          try {
-            const supabase = createSupabaseBrowserClient();
-            const rosterChannel = supabase.channel("operations-roster");
-            rosterChannel.subscribe((status: string) => {
-              if (status === "SUBSCRIBED") {
-                rosterChannel.send({
-                  type: "broadcast",
-                  event: "log_entered",
-                  payload: {
-                    machineId: context.machine!.id,
-                    operatorId: user.id,
-                    shiftCode: selectedShiftCode || undefined,
-                    startMeter: startNum,
-                    endMeter: endNum,
-                    runningHours,
-                    logDate,
-                  },
-                });
-              }
-            });
-          } catch (bcastErr) {
-            console.warn("Failed to broadcast operator log_entered:", bcastErr);
-          }
+          broadcastRosterEvent("log_entered", {
+            machineId: context.machine.id,
+            operatorId: user.id,
+            shiftCode: selectedShiftCode || undefined,
+            startMeter: startNum,
+            endMeter: endNum,
+            runningHours,
+            logDate,
+          });
         }
 
         const newlyLoggedCode = selectedShiftCode;
@@ -679,6 +711,12 @@ export function OperatorEntryClient({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {user.role === "operator" && (!context.machine?.id || assignedShiftCodes.length === 0) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+                <span className="font-semibold">No Active Assignment:</span> You were not assigned to any equipment or shift on {logDate}. Operators cannot submit shift logs for dates without an active assignment.
+              </div>
+            )}
+
             {/* Section A: Assigned Machine & Client Info */}
             <OperatorMachineInfo
               machine={context.machine}
@@ -756,7 +794,7 @@ export function OperatorEntryClient({
                   type="submit"
                   variant="primary"
                   loading={submitting || isContextLoading}
-                  disabled={!context.machine?.id || !endMeter.trim() || endNum < startNum}
+                  disabled={!context.machine?.id || (user.role === "operator" && assignedShiftCodes.length === 0) || !endMeter.trim() || endNum < startNum}
                   icon={<Send className="h-3.5 w-3.5" />}
                   className="flex-1 sm:flex-none text-xs font-semibold"
                 >

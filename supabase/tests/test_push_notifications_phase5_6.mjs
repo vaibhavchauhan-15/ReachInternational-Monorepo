@@ -86,16 +86,19 @@ async function run() {
     assert.ifError(mErr);
     testMachine = mData;
 
-    // Pick existing operator Rohit Singh
+    // Pick existing supervisor and operator
+    const supervisorId = '13841eaa-c894-448f-b60f-093b341605e7'; // supervisor@reachinternational.co.in
     const operatorId = 'b3400740-3e79-44c7-9aec-a0ec3ccd22ce';
 
-    // Insert a breakdown hour log 2 days ago (non-overlapping within 7-day window and older than 24h)
-    const testDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Insert a breakdown hour log 4 days ago (non-overlapping within 7-day window and older than 24h)
+    const testDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
     const { data: lData, error: logErr } = await admin
       .from('machine_hour_logs')
       .insert({
         machine_id: testMachine.id,
         operator_id: operatorId,
+        entered_by: supervisorId,
         log_date: testDate,
         start_meter: 100,
         end_meter: 108,
@@ -104,7 +107,7 @@ async function run() {
         shift_code: 'S1',
         is_breakdown: true,
         remarks: 'Hydraulic failure test',
-        entry_source: 'operator',
+        entry_source: 'supervisor',
       })
       .select('id')
       .single();
@@ -124,7 +127,6 @@ async function run() {
 
     // 3. Test AS1 Assisted Log Trigger
     console.log('3. Testing AS1 Assisted Log Event Trigger...');
-    const supervisorId = '13841eaa-c894-448f-b60f-093b341605e7'; // supervisor@reachinternational.co.in
     const asTestDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const { data: asData, error: asErr } = await admin
       .from('machine_hour_logs')

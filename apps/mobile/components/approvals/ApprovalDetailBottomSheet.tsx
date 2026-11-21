@@ -167,11 +167,12 @@ export function ApprovalDetailBottomSheet({
           return;
         }
 
-        // Batch resolve signed URLs
-        const pathsToSign = docs
-          .map((d) => d.storage_path)
-          .filter(Boolean)
-          .map((p) => p.replace(/^\/+/, ""));
+        // Batch resolve signed URLs for both full document and thumbnail
+        const pathsToSign: string[] = [];
+        docs.forEach((d) => {
+          if (d.storage_path) pathsToSign.push(d.storage_path.replace(/^\/+/, ""));
+          if (d.thumb_path) pathsToSign.push(d.thumb_path.replace(/^\/+/, ""));
+        });
 
         const { data: signedUrls } = await supabase.storage
           .from("user_files")
@@ -188,10 +189,14 @@ export function ApprovalDetailBottomSheet({
         }
 
         const enriched: AttachedUserDoc[] = docs.map((d) => {
-          const cleanP = d.storage_path.replace(/^\/+/, "");
+          const cleanP = d.storage_path ? d.storage_path.replace(/^\/+/, "") : "";
+          const cleanThumb = d.thumb_path ? d.thumb_path.replace(/^\/+/, "") : "";
+          const signedUrl = cleanP ? urlMap.get(cleanP) || null : null;
+          const thumbUrl = cleanThumb ? urlMap.get(cleanThumb) || null : null;
           return {
             ...d,
-            signedUrl: urlMap.get(cleanP) || null,
+            signedUrl: signedUrl || thumbUrl || null,
+            thumbUrl: thumbUrl || signedUrl || null,
           };
         });
 

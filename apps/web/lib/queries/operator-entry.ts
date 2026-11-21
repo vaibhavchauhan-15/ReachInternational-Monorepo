@@ -55,6 +55,12 @@ async function fetchOperatorEntryContextFromDb(
       assigned_shift_codes: Array.isArray(res?.assigned_shift_codes)
         ? (res.assigned_shift_codes as string[])
         : (res?.assigned_shift_code ? [res.assigned_shift_code as string] : []),
+      assigned_shifts: Array.isArray(res?.assigned_shifts)
+        ? (res.assigned_shifts as OperatorEntryContext["assigned_shifts"])
+        : [],
+      assigned_machines: Array.isArray(res?.assigned_machines)
+        ? (res.assigned_machines as OperatorEntryContext["assigned_machines"])
+        : [],
       today_logged_shift_codes: Array.isArray(res?.today_logged_shift_codes)
         ? (res.today_logged_shift_codes as string[])
         : [],

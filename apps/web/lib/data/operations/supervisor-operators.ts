@@ -20,8 +20,13 @@ export async function isOperatorUnderSupervisor(
 
   const supabase = createSupabaseAdminClient();
 
-  // 1. If machineId is provided, check if supervisor supervises this equipment directly or via client
-  if (machineId) {
+  /**
+   * Direct machine / client-site supervision check.
+   * Runs concurrently with the authoritative RPC below: previously these were two
+   * sequential round-trips on every assisted shift entry.
+   */
+  const machineScopeCheck = (async (): Promise<boolean> => {
+    if (!machineId) return false;
     try {
       const { data: machine } = await supabase
         .from("machines")
@@ -29,39 +34,47 @@ export async function isOperatorUnderSupervisor(
         .eq("id", machineId)
         .maybeSingle();
 
-      if (machine) {
-        if (machine.current_supervisor_id === supervisorId) return true;
-        if (Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.includes(supervisorId)) return true;
+      if (!machine) return false;
+      if (machine.current_supervisor_id === supervisorId) return true;
+      if (Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.includes(supervisorId)) return true;
 
-        if (machine.client_id) {
-          const { data: clientSup } = await supabase
-            .from("client_supervisors")
-            .select("id")
-            .eq("client_id", machine.client_id)
-            .eq("supervisor_id", supervisorId)
-            .maybeSingle();
+      if (machine.client_id) {
+        const { data: clientSup } = await supabase
+          .from("client_supervisors")
+          .select("id")
+          .eq("client_id", machine.client_id)
+          .eq("supervisor_id", supervisorId)
+          .maybeSingle();
 
-          if (clientSup) return true;
-        }
+        if (clientSup) return true;
       }
+      return false;
     } catch {
-      // Non-blocking, continue to operator pathways
+      // Non-blocking, fall through to operator pathways
+      return false;
     }
-  }
+  })();
 
-  // 2. Try atomic PostgreSQL RPC
-  try {
-    const { data, error } = await supabase.rpc("is_operator_under_supervisor", {
-      p_supervisor_id: supervisorId,
-      p_operator_id: operatorId,
-    });
-
-    if (!error && typeof data === "boolean") {
-      return data;
+  // Authoritative atomic PostgreSQL RPC
+  const rpcScopeCheck = (async (): Promise<boolean | null> => {
+    try {
+      const { data, error } = await supabase.rpc("is_operator_under_supervisor", {
+        p_supervisor_id: supervisorId,
+        p_operator_id: operatorId,
+      });
+      if (!error && typeof data === "boolean") return data;
+      return null;
+    } catch {
+      return null;
     }
-  } catch {
-    // Non-blocking fallback to direct resilient table queries
-  }
+  })();
+
+  const [machineScope, rpcScope] = await Promise.all([machineScopeCheck, rpcScopeCheck]);
+
+  // Preserve the original short-circuit order: an explicit machine match wins,
+  // then the authoritative RPC verdict.
+  if (machineScope) return true;
+  if (rpcScope !== null) return rpcScope;
 
   // 3. Resilient Fallback: Direct table queries
   try {

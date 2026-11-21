@@ -31,6 +31,7 @@ import {
 } from './AssignmentSelectionSummary';
 import { AssignmentActionBar } from './AssignmentActionBar';
 import { Text } from '../ui/Text';
+import { CustomDatePicker } from '../ui';
 import { useTheme } from '../ui/ThemeProvider';
 import { useToast } from '../ui';
 import { haptics } from '../../lib/haptics';
@@ -42,6 +43,11 @@ import {
   formatTo12Hour,
   shiftToMinuteRanges,
   doRangesOverlap,
+  getAssignmentDateWindow,
+  resolveAssignmentDate,
+  ASSIGNMENT_DATE_WINDOW_PAST_DAYS,
+  ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS,
+  getISTDateString,
 } from '@reachinternational/utils';
 import {
   useAssignPersonnelMachines,
@@ -49,7 +55,7 @@ import {
   MachineOptionItem,
   DEFAULT_MODAL_SHIFTS,
 } from '../../lib/hooks/useAssignPersonnelModalData';
-import { Plus, Truck, X } from '../ui/icon';
+import { Plus, Truck, X, Calendar } from '../ui/icon';
 import { Pressable } from '../ui/touch/Pressable';
 
 export interface OperatorMachineItem {
@@ -105,6 +111,13 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
 
   const operatorId = operator?.id;
 
+  // Date-based assignment (today .. today + 7 days, IST) — defaults to today
+  const [assignmentDate, setAssignmentDate] = useState<string>(() => getAssignmentDateWindow().today);
+  const todayIst = getISTDateString();
+  const isTodayAssignment = assignmentDate === todayIst;
+  const isPastAssignment = assignmentDate < todayIst;
+  const isFuturePlan = assignmentDate > todayIst;
+
   // Active machines query
   const { data: machines = [], isLoading: isLoadingMachines } = useAssignPersonnelMachines({
     visible,
@@ -112,18 +125,20 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
     search: '',
   });
 
-  // Current active assignments for this operator
+  // Current assignments for this operator on the selected assignment date
   const { data: activeAssignments = [], isLoading: isLoadingAssignments } = useQuery<any[]>({
-    queryKey: ['assign-machine-operator-modal', 'assignments', operatorId],
+    queryKey: ['assign-machine-operator-modal', 'assignments', operatorId, assignmentDate],
     enabled: Boolean(visible && operatorId),
     staleTime: 30_000,
     queryFn: async () => {
       if (!operatorId) return [];
       const { data, error } = await supabase
         .from('operator_machine_assignments')
-        .select('id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, machine:machines(id, machine_id, model, serial_number, client_id, client:clients(id, company_name))')
+        .select('id, machine_id, shift_code, shift_start_time, shift_end_time, is_active, valid_from, valid_to, machine:machines(id, machine_id, model, serial_number, client_id, client:clients(id, company_name))')
         .eq('operator_id', operatorId)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .lte('valid_from', assignmentDate)
+        .or(`valid_to.is.null,valid_to.gte.${assignmentDate}`);
       if (error) return [];
       return data || [];
     },
@@ -153,7 +168,7 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
     Boolean(selectedCandidateMachine)
   );
 
-  // Initialize or reset on open
+  // Initialize or reset on open (assignment date always defaults back to today)
   useEffect(() => {
     if (!visible || !operatorId) return;
 
@@ -164,6 +179,11 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
     setSelectedMachineId('');
     setSelectedShiftCode('S1');
     setMachineSearchQuery('');
+    setAssignmentDate(getAssignmentDateWindow().today);
+  }, [visible, operatorId]);
+
+  useEffect(() => {
+    if (!visible || !operatorId) return;
 
     const mapped: OperatorMachineItem[] = activeAssignments.map((a) => ({
       machineId: a.machine_id,
@@ -302,13 +322,13 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
     setIsSaving(true);
     setSubmitError(null);
 
-    const previousAssignments = queryClient.getQueryData(['assign-machine-operator-modal', 'assignments', operatorId]);
+    const previousAssignments = queryClient.getQueryData(['assign-machine-operator-modal', 'assignments', operatorId, assignmentDate]);
     const previousUserDetail = queryClient.getQueryData(['userDetail', operatorId]);
 
     try {
       const currentUserId = user?.id || null;
 
-      // 1. Relieve assignments removed from roster
+      // 1. Relieve assignments removed from the roster, as of the selected assignment date
       for (const initAss of initialSnapshot) {
         const stillPresent = roster.some(
           (m) =>
@@ -317,15 +337,23 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
         );
 
         if (!stillPresent && initAss.assignmentId) {
-          await supabase.rpc('end_operator_machine_assignment_atomic', {
+          // Date-aware relief: truncates the covered range and re-opens the continuation
+          // the day after the edited date, so back-dating never wipes today's coverage.
+          const { error: endErr } = await supabase.rpc('end_assignment_on_date_atomic', {
             p_assignment_id: initAss.assignmentId,
-            p_ended_by: currentUserId,
-            p_end_reason: 'Updated via operator equipment dialog',
+            p_effective_date: assignmentDate,
+            p_caller_id: currentUserId,
+            p_end_reason: 'reassigned',
+            p_reopen_continuation: true,
           });
+
+          if (endErr) {
+            throw new Error(endErr.message || 'Failed to relieve previous assignment.');
+          }
         }
       }
 
-      // 2. Assign added equipment in roster
+      // 2. Assign added equipment in the roster for the selected date
       for (const rItem of roster) {
         const alreadyActive = initialSnapshot.some(
           (a) =>
@@ -335,7 +363,7 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
         );
 
         if (!alreadyActive) {
-          const { error: rpcErr } = await supabase.rpc('assign_operator_machine_atomic', {
+          const { error: rpcErr } = await supabase.rpc('assign_operator_machine_on_date_atomic', {
             p_machine_id: rItem.machineId,
             p_operator_id: operatorId,
             p_shift_start_time: to24HourTime(rItem.shiftStartTime),
@@ -343,6 +371,7 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
             p_shift_code: rItem.shiftCode,
             p_assigned_by: currentUserId,
             p_notes: 'Assigned via mobile operator equipment dialog',
+            p_assignment_date: assignmentDate,
           });
 
           if (rpcErr) {
@@ -372,13 +401,19 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
       queryClient.invalidateQueries({ queryKey: ['machines'] });
 
       haptics.confirm();
-      toast('success', 'Equipment Assigned', `Updated machinery assignments for ${operator?.full_name || 'operator'}.`);
+      toast(
+        'success',
+        isTodayAssignment ? 'Equipment Assigned' : isPastAssignment ? `Past Roster Updated` : `Plan Saved for ${assignmentDate}`,
+        !isTodayAssignment
+          ? `Shift plan stored for ${assignmentDate}. Today's assignments stay untouched.`
+          : `Updated machinery assignments for ${operator?.full_name || 'operator'}.`
+      );
       onSuccess?.(roster);
       onClose();
     } catch (err: any) {
       // Rollback
       if (previousAssignments) {
-        queryClient.setQueryData(['assign-machine-operator-modal', 'assignments', operatorId], previousAssignments);
+        queryClient.setQueryData(['assign-machine-operator-modal', 'assignments', operatorId, assignmentDate], previousAssignments);
       }
       if (previousUserDetail) {
         queryClient.setQueryData(['userDetail', operatorId], previousUserDetail);
@@ -420,6 +455,66 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
         />
       }
     >
+      {/* 0. Assignment Date (today .. today + 7 days, IST) */}
+      <View
+        style={[
+          styles.dateSection,
+          { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+        ]}
+      >
+        <View style={styles.dateHeaderRow}>
+          <View style={styles.dateLabelRow}>
+            <Calendar size={13} color="#0284c7" />
+            <Text variant="micro" style={{ color: theme.colors.mute }}>
+              ASSIGNMENT DATE
+            </Text>
+            <Text variant="micro" style={{ color: '#ef4444' }}>
+              *
+            </Text>
+          </View>
+          {isFuturePlan && (
+            <Pressable
+              variant="ghost"
+              haptic="tap"
+              onPress={() => {
+                haptics.select();
+                setAssignmentDate(todayIst);
+                setSubmitError(null);
+              }}
+              style={{ paddingVertical: 4, paddingHorizontal: 8 }}
+            >
+              <Text variant="caption" style={{ color: '#0284c7' }}>
+                Back to today
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        <CustomDatePicker
+          label="Date"
+          showPrefix={false}
+          value={assignmentDate}
+          onChange={(nextDate) => {
+            if (!nextDate) return;
+            haptics.select();
+            setSubmitError(null);
+            setAssignmentDate(resolveAssignmentDate(nextDate));
+          }}
+          maxDaysOld={ASSIGNMENT_DATE_WINDOW_PAST_DAYS}
+          allowFutureDays={ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS}
+          showRelativeBadge
+          disabled={isSaving}
+        />
+
+        <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 6 }}>
+          {isPastAssignment
+            ? `Correcting equipment shifts for ${assignmentDate}. Today's and tomorrow's assignments stay untouched.`
+            : isFuturePlan
+            ? `Planning tomorrow's equipment shifts (${assignmentDate}). Today's assignments stay untouched.`
+            : 'Applies from today and carries forward until changed.'}
+        </Text>
+      </View>
+
       {/* 1. Current Equipment Assignments Summary */}
       <AssignmentSelectionSummary
         items={roster.map((r) => ({
@@ -546,6 +641,23 @@ export const AssignMachineToOperatorModal: React.FC<AssignMachineToOperatorModal
 };
 
 const styles = StyleSheet.create({
+  dateSection: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.md,
+    marginBottom: spacingNumeric.xs,
+  },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  dateLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   addSectionContainer: {
     marginTop: spacingNumeric.xs,
   },

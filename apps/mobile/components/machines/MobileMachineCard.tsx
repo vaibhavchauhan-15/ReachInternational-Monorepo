@@ -68,17 +68,30 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
     return '#10b981';
   };
 
-  const supervisors = Array.isArray(machine.supervisors) && machine.supervisors.length > 0
+  const rawSupervisors = Array.isArray(machine.supervisors) && machine.supervisors.length > 0
     ? machine.supervisors.filter((s: any) => Boolean(s?.full_name))
     : machine.current_supervisor?.full_name
     ? [machine.current_supervisor]
     : [];
+  const supSeen = new Set<string>();
+  const supervisors = rawSupervisors.filter((s: any) => {
+    if (!s?.id || supSeen.has(s.id)) return false;
+    supSeen.add(s.id);
+    return true;
+  });
 
-  const operators = Array.isArray(machine.operators) && machine.operators.length > 0
+  const rawOperators = Array.isArray(machine.operators) && machine.operators.length > 0
     ? machine.operators.filter((o: any) => Boolean(o?.full_name))
     : machine.current_operator?.full_name
     ? [machine.current_operator]
     : [];
+  const opSeen = new Set<string>();
+  const operators = rawOperators.filter((o: any, idx: number) => {
+    const key = `${o?.id || idx}:${String(o?.shift_code || "").trim().toUpperCase()}`;
+    if (opSeen.has(key)) return false;
+    opSeen.add(key);
+    return true;
+  });
 
   const clientName = machine.client?.company_name || machine.customer_name || '—';
 
@@ -256,7 +269,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 const isLast = idx === Math.min(supervisors.length, 3) - 1;
                 const remaining = supervisors.length > 3 ? supervisors.length - 3 : 0;
                 return (
-                  <View key={s.id || idx} style={styles.personnelRow}>
+                  <View key={`${s.id || 'sup'}-${idx}`} style={styles.personnelRow}>
                     <Text
                       variant="caption"
                       weight="semibold"
@@ -294,7 +307,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
                 const isLast = idx === Math.min(operators.length, 3) - 1;
                 const remaining = operators.length > 3 ? operators.length - 3 : 0;
                 return (
-                  <View key={o.id || idx} style={styles.personnelRow}>
+                  <View key={`${o.id || 'op'}-${idx}`} style={styles.personnelRow}>
                     <Text
                       variant="caption"
                       weight="semibold"

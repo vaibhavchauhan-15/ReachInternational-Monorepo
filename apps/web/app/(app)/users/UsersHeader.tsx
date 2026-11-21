@@ -90,6 +90,7 @@ export function UsersHeader({
   const activeCount = aggregates?.active ?? aggregates?.activeUsers ?? 0;
   const operatorCount = aggregates?.operators ?? aggregates?.operatorCount ?? aggregates?.engineers ?? aggregates?.engineerCount ?? 0;
   const newRegistrationsCount = aggregates?.new_registrations ?? pendingCount;
+  const hasProfileRequests = !readOnly && profileRequestsCount > 0;
 
   return (
     <>
@@ -342,24 +343,24 @@ export function UsersHeader({
       />
 
       {/* Metrics Snapshot Header Cards */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${!readOnly && profileRequestsCount > 0 ? "lg:grid-cols-5" : ""} gap-3.5`}>
+      <div className={`grid grid-cols-2 lg:grid-cols-4 ${hasProfileRequests ? "lg:grid-cols-5" : ""} gap-3 sm:gap-3.5 items-stretch`}>
         <motion.div
           whileTap={{ scale: 0.98 }}
           onClick={() => {
             onRoleFilterChange("all");
             onStatusFilterChange("all");
           }}
-          className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
+          className={`cursor-pointer p-3 sm:p-3.5 rounded-[var(--radius-md)] border transition-all flex flex-col justify-between gap-2 min-h-[74px] sm:min-h-[86px] ${
             roleFilter === "all" && statusFilter === "all"
               ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
           }`}
         >
-          <div className="flex items-center justify-between text-[var(--color-mute)]">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Total Users</span>
-            <AnimatedUsers size={16} className="text-[var(--color-ink)]" />
+          <div className="flex items-start justify-between gap-1.5 text-[var(--color-mute)]">
+            <span className="min-w-0 flex-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight leading-tight">Total Users</span>
+            <AnimatedUsers size={14} className="text-[var(--color-ink)] shrink-0" />
           </div>
-          <div className="text-2xl font-extrabold text-[var(--color-ink)] mt-1">
+          <div className="text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] leading-none">
             <AnimatedCounter value={totalUsersCount} />
           </div>
         </motion.div>
@@ -367,17 +368,17 @@ export function UsersHeader({
         <motion.div
           whileTap={{ scale: 0.98 }}
           onClick={() => onStatusFilterChange(statusFilter === "active" ? "all" : "active")}
-          className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
+          className={`cursor-pointer p-3 sm:p-3.5 rounded-[var(--radius-md)] border transition-all flex flex-col justify-between gap-2 min-h-[74px] sm:min-h-[86px] ${
             statusFilter === "active"
               ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
           }`}
         >
-          <div className="flex items-center justify-between text-[var(--color-mute)]">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-start justify-between gap-1.5 text-[var(--color-mute)]">
+            <span className="min-w-0 flex-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight leading-tight text-emerald-600 dark:text-emerald-400">
               Active Accounts
             </span>
-            <AnimatedUserCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <AnimatedUserCheck size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
           </div>
           <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1">
             <AnimatedCounter value={activeCount} />
@@ -387,17 +388,17 @@ export function UsersHeader({
         <motion.div
           whileTap={{ scale: 0.98 }}
           onClick={() => onRoleFilterChange(roleFilter === "operator" ? "all" : "operator")}
-          className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
+          className={`cursor-pointer p-3 sm:p-3.5 rounded-[var(--radius-md)] border transition-all flex flex-col justify-between gap-2 min-h-[74px] sm:min-h-[86px] ${
             roleFilter === "operator"
               ? "bg-amber-50/40 border-amber-500 shadow-xs ring-1 ring-amber-500/20 dark:bg-amber-950/20"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-amber-500/40"
           }`}
         >
-          <div className="flex items-center justify-between text-[var(--color-mute)]">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+          <div className="flex items-start justify-between gap-1.5 text-[var(--color-mute)]">
+            <span className="min-w-0 flex-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight leading-tight text-amber-600 dark:text-amber-400">
               Operators
             </span>
-            <AnimatedShieldCheck size={16} className="text-amber-600 dark:text-amber-400" />
+            <AnimatedShieldCheck size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
           </div>
           <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 mt-1">
             <AnimatedCounter value={operatorCount} />
@@ -412,17 +413,17 @@ export function UsersHeader({
                 onScrollToPendingApprovals();
               }
             }}
-            className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
+            className={`cursor-pointer p-3 sm:p-3.5 rounded-[var(--radius-md)] border transition-all flex flex-col justify-between gap-2 min-h-[74px] sm:min-h-[86px] ${
               pendingCount > 0
                 ? "bg-amber-50/40 border-amber-500 shadow-xs dark:bg-amber-950/20"
                 : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)]"
             }`}
           >
-            <div className="flex items-center justify-between text-[var(--color-mute)]">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            <div className="flex items-start justify-between gap-1.5 text-[var(--color-mute)]">
+              <span className="min-w-0 flex-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight leading-tight text-amber-600 dark:text-amber-400">
                 New Registrations
               </span>
-              <AnimatedShieldAlert size={16} className="text-amber-600 dark:text-amber-400" />
+              <AnimatedShieldAlert size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
             </div>
             <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 mt-1">
               <AnimatedCounter value={newRegistrationsCount} />
@@ -438,13 +439,13 @@ export function UsersHeader({
                 onScrollToProfileRequests();
               }
             }}
-            className="cursor-pointer p-4 rounded-[var(--radius-md)] border border-indigo-500/40 bg-indigo-50/30 dark:bg-indigo-950/20 shadow-xs ring-1 ring-indigo-500/20 hover:border-indigo-500 transition-all col-span-2 sm:col-span-1"
+            className="cursor-pointer p-3 sm:p-3.5 rounded-[var(--radius-md)] border border-indigo-500/40 bg-indigo-50/30 dark:bg-indigo-950/20 shadow-xs ring-1 ring-indigo-500/20 hover:border-indigo-500 transition-all col-span-2 sm:col-span-1 flex flex-col justify-between gap-2 min-h-[74px] sm:min-h-[86px]"
           >
-            <div className="flex items-center justify-between text-[var(--color-mute)]">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+            <div className="flex items-start justify-between gap-1.5 text-[var(--color-mute)]">
+              <span className="min-w-0 flex-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight leading-tight text-indigo-700 dark:text-indigo-300">
                 Profile Updates
               </span>
-              <AnimatedShieldAlert size={16} className="text-indigo-600 dark:text-indigo-400" />
+              <AnimatedShieldAlert size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
             </div>
             <div className="text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 mt-1">
               <AnimatedCounter value={profileRequestsCount} />
@@ -460,13 +461,13 @@ export function UsersHeader({
                 onScrollToDeletionRequests();
               }
             }}
-            className="cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
+            className="cursor-pointer p-3 sm:p-3.5 rounded-[var(--radius-md)] border transition-all flex flex-col justify-between gap-2 min-h-[74px] sm:min-h-[86px] bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
           >
-            <div className="flex items-center justify-between text-[var(--color-mute)]">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            <div className="flex items-start justify-between gap-1.5 text-[var(--color-mute)]">
+              <span className="min-w-0 flex-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight leading-tight text-rose-600 dark:text-rose-400">
                 Account Deletions
               </span>
-              <Trash2 size={16} className="text-rose-600 dark:text-rose-400" />
+              <Trash2 size={14} className="text-rose-600 dark:text-rose-400 shrink-0" />
             </div>
             <div className="text-2xl font-extrabold text-rose-700 dark:text-rose-300 mt-1">
               <AnimatedCounter value={deletionRequestsCount} />

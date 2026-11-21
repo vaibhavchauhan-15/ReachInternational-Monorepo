@@ -56,39 +56,78 @@ interface OperatorHistoryTabProps {
   initialLogs?: OperatorHourLog[];
 }
 
+/**
+ * Session-level history cache.
+ *
+ * `OperatorHistoryTab` is code-split and unmounts whenever the operator switches to the
+ * Entry tab, so every Entry → History toggle used to re-fetch the full page of history
+ * logs. Caching the last payload per operator for a short window removes that repeated
+ * request while still re-validating on genuine navigation.
+ */
+const HISTORY_CACHE_TTL_MS = 60_000;
+const historyCache = new Map<string, { logs: OperatorHourLog[]; fetchedAt: number }>();
+
+function readHistoryCache(userId: string): OperatorHourLog[] | null {
+  const entry = historyCache.get(userId);
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > HISTORY_CACHE_TTL_MS) {
+    historyCache.delete(userId);
+    return null;
+  }
+  return entry.logs;
+}
+
+function writeHistoryCache(userId: string, logs: OperatorHourLog[]): void {
+  historyCache.set(userId, { logs, fetchedAt: Date.now() });
+}
+
 export function OperatorHistoryTab({
   user,
   assignedMachine,
   initialLogs = [],
 }: OperatorHistoryTabProps) {
   const { toast } = useToast();
-  const [logsList, setLogsList] = useState<OperatorHourLog[]>(initialLogs);
-  const [loading, setLoading] = useState<boolean>(initialLogs.length === 0);
-
-  // Fetch on mount if initialLogs was empty (lazy loaded pattern)
-  useEffect(() => {
-    if (initialLogs.length === 0) {
-      let isMounted = true;
-      getOperatorHistoryLogsAction(100)
-        .then((res) => {
-          if (isMounted) {
-            if (res.success && res.logs) {
-              setLogsList(res.logs as OperatorHourLog[]);
-            }
-            setLoading(false);
-          }
-        })
-        .catch((err: unknown) => {
-          if (isMounted) {
-            console.error("Failed to load history logs:", err);
-            setLoading(false);
-          }
-        });
-      return () => {
-        isMounted = false;
-      };
+  const [logsList, setLogsList] = useState<OperatorHourLog[]>(() => {
+    if (initialLogs.length > 0) {
+      writeHistoryCache(user.id, initialLogs);
+      return initialLogs;
     }
-  }, [initialLogs.length]);
+    return readHistoryCache(user.id) || [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (initialLogs.length > 0) return false;
+    return readHistoryCache(user.id) === null;
+  });
+
+  const initialLogsCount = initialLogs.length;
+
+  // Fetch on mount only when neither SSR data nor a warm cache is available.
+  useEffect(() => {
+    if (initialLogsCount > 0) return;
+    if (readHistoryCache(user.id)) return;
+
+    let isMounted = true;
+    getOperatorHistoryLogsAction(100)
+      .then((res) => {
+        if (isMounted) {
+          if (res.success && res.logs) {
+            const logs = res.logs as OperatorHourLog[];
+            setLogsList(logs);
+            writeHistoryCache(user.id, logs);
+          }
+          setLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (isMounted) {
+          console.error("Failed to load history logs:", err);
+          setLoading(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [initialLogsCount, user.id]);
 
 // Preset options for FilterDropdown components
 const DATE_FILTER_OPTIONS: FilterDropdownOption[] = [
@@ -435,8 +474,8 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
   }, []);
 
   const handleLogUpdated = useCallback((updatedLog: MachineHourLog) => {
-    setLogsList((prev) =>
-      prev.map((l) =>
+    setLogsList((prev) => {
+      const next = prev.map((l) =>
         l.id === updatedLog.id
           ? ({
               ...l,
@@ -445,10 +484,13 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
               client: updatedLog.client || l.client,
             } as OperatorHourLog)
           : l
-      )
-    );
+      );
+      // Keep the session cache in sync so tab switches never resurrect stale rows.
+      writeHistoryCache(user.id, next);
+      return next;
+    });
     setEditingLog(null);
-  }, []);
+  }, [user.id]);
 
   return (
     <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-6 shadow-sm space-y-4 animate-in fade-in duration-200">

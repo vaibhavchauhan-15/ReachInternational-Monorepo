@@ -21,6 +21,8 @@ interface MobileMachineCardProps {
   isSupervisor?: boolean;
   searchTerm?: string;
   onEditMachine?: (machine: Machine) => void;
+  onAssignSupervisor?: (machine: Machine) => void;
+  onAssignOperator?: (machine: Machine) => void;
   onEditPersonnel?: (machine: Machine) => void;
   onEditClient?: (machine: Machine) => void;
   onViewAudit?: (machine: Machine) => void;
@@ -39,6 +41,8 @@ export function MobileMachineCard({
   isSupervisor = false,
   searchTerm = "",
   onEditMachine,
+  onAssignSupervisor,
+  onAssignOperator,
   onEditPersonnel,
   onEditClient,
   onViewAudit,
@@ -249,7 +253,7 @@ export function MobileMachineCard({
                   {visible.map((s, idx) => {
                     const isLast = idx === visible.length - 1;
                     return (
-                      <div key={s.id || idx} className="flex items-center gap-1 min-w-0">
+                      <div key={`${s.id || 'sup'}-${idx}`} className="flex items-center gap-1 min-w-0">
                         <span className={`${textSize} text-[var(--color-ink)] truncate block`}>
                           {s.full_name}
                         </span>
@@ -288,7 +292,7 @@ export function MobileMachineCard({
                   {visible.map((o, idx) => {
                     const isLast = idx === visible.length - 1;
                     return (
-                      <div key={o.id || idx} className="flex items-center gap-1 min-w-0">
+                      <div key={`${o.id || 'op'}-${idx}`} className="flex items-center gap-1 min-w-0">
                         <span className={`${textSize} text-[var(--color-ink)] truncate block`}>
                           {o.full_name}
                         </span>
@@ -320,6 +324,8 @@ export function MobileMachineCard({
               isSupervisor={isSupervisor}
               isAdmin={isAdmin}
               onEditMachine={onEditMachine}
+              onAssignSupervisor={onAssignSupervisor}
+              onAssignOperator={onAssignOperator}
               onEditPersonnel={onEditPersonnel}
               onEditClient={onEditClient}
               onViewAudit={onViewAudit}

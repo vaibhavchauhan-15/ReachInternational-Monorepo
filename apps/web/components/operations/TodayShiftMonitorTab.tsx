@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { getTodayShiftMonitorAction, activateMachineAction } from "@/app/actions/operators";
 import { Badge, useToast, Button, EmptyState, ErrorState, CustomDatePicker, FilterDropdown, type FilterDropdownOption } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
-import { getISTDateString, formatDate, classifyError } from "@reachinternational/utils";
+import { getISTDateString, formatDate, classifyError, parseTimeToMinutes } from "@reachinternational/utils";
 import type { TodayShiftMonitorRow } from "@reachinternational/types";
 import { dedupeShiftMonitorRows } from "@/lib/utils/shift-monitor";
-import type { User, CRMClient, Machine } from "@/lib/types/database";
+import type { User, Machine } from "@/lib/types/database";
 import { UserCheck, Clock, AlertCircle, UserPlus, Calendar, Wrench, Edit2, MoreVertical } from "lucide-react";
 import { ClipboardCheck } from "@/components/icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -51,7 +51,6 @@ interface TodayShiftMonitorProps {
   user: User;
   userRole?: string;
   machines?: Machine[];
-  dbClients?: CRMClient[];
   operators?: User[];
   initialRows?: TodayShiftMonitorRow[];
   initialDate?: string;
@@ -61,7 +60,6 @@ export function TodayShiftMonitorTab({
   user,
   userRole,
   machines = [],
-  dbClients = [],
   operators = [],
   initialRows,
   initialDate,
@@ -73,9 +71,14 @@ export function TodayShiftMonitorTab({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "entered" | "unassigned" | "breakdown" | "maintenance">("all");
   const [selectedClient, setSelectedClient] = useState<string>("all");
+  const [shiftFilter, setShiftFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"time_asc" | "time_desc">("time_asc");
   const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || getISTDateString());
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
+  // Search runs entirely against the in-memory day roster: `useDeferredValue` keeps
+  // typing instant on large rosters without a single network round-trip.
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const isSearching = searchQuery !== deferredSearchQuery;
   const [selectedRowForEntry, setSelectedRowForEntry] = useState<TodayShiftMonitorRow | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignModalMachineId, setAssignModalMachineId] = useState<string | undefined>();
@@ -92,14 +95,25 @@ export function TodayShiftMonitorTab({
   const [isWarningDialogOpen, setIsWarningDialogOpen] = useState(false);
   const [activeMenuCardKey, setActiveMenuCardKey] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const broadcastDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const fetchDataRef = useRef<((dateToFetch?: string, search?: string, bypassCache?: boolean) => Promise<void>) | null>(null);
+  const backgroundSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastOptimisticEditRef = useRef<number>(0);
   const selectedDateRef = useRef(selectedDate);
   selectedDateRef.current = selectedDate;
-  const searchQueryRef = useRef(searchQuery);
-  searchQueryRef.current = searchQuery;
-  const abortRef = useRef<AbortController | null>(null);
+  const assignMachineIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    assignMachineIdRef.current = assignModalMachineId;
+  }, [assignModalMachineId]);
+
+  // Request coalescing: a newer roster request always supersedes an older in-flight one,
+  // so rapid date/filter/realtime changes can never apply a stale response.
+  const requestSeqRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const lastFetchedAtRef = useRef(0);
+  const hasLoadedOnceRef = useRef<boolean>(Boolean(initialRows));
+  // Date whose roster was already streamed from the server (SSR) — avoids a duplicate fetch.
+  const serverPayloadDateRef = useRef<string | null>(initialRows ? initialDate ?? selectedDate : null);
 
   // Close card 3-dot actions menu on click outside or escape key
   useEffect(() => {
@@ -122,78 +136,128 @@ export function TodayShiftMonitorTab({
     };
   }, [activeMenuCardKey]);
 
-  // Sync selectedDate and rows with initial props if they change
+  // Sync selectedDate with the server-provided date (URL driven navigation)
   useEffect(() => {
-    if (initialDate && initialDate !== selectedDate) {
+    if (initialDate && initialDate !== selectedDateRef.current) {
       setSelectedDate(initialDate);
     }
   }, [initialDate]);
 
+  // Adopt server-streamed rows (initial render + every router.refresh)
   useEffect(() => {
-    if (initialRows) {
-      setRows(dedupeShiftMonitorRows(initialRows));
-    }
-  }, [initialRows]);
+    if (!initialRows) return;
+    setRows(dedupeShiftMonitorRows(initialRows));
+    hasLoadedOnceRef.current = true;
+    lastFetchedAtRef.current = Date.now();
+    serverPayloadDateRef.current = initialDate ?? selectedDateRef.current;
+    setLoading(false);
+  }, [initialRows, initialDate]);
 
   // Permission Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs
   const effectiveRole = userRole || user?.role || "";
   const canEnterLog = ["super_admin", "admin", "manager", "supervisor"].includes(effectiveRole);
 
-  const fetchData = useCallback(
-    async (dateToFetch?: string, search?: string, bypassCache: boolean = true) => {
-      const targetDate = dateToFetch !== undefined ? dateToFetch : selectedDate;
-      if (!search && rows.length === 0 && !initialRows) setLoading(true);
-      else if (search) setIsSearching(true);
+  /**
+   * Single roster loader. Search, client, shift and sort filtering all happen in memory
+   * (see the `filtered` memo below), so this runs only when the DATE changes or when a
+   * realtime / poll / manual refresh asks for authoritative data.
+   */
+  const fetchRoster = useCallback(
+    async (dateToFetch: string, bypassCache: boolean) => {
+      const requestId = ++requestSeqRef.current;
+      inFlightRef.current = true;
       setFetchError(null);
+
       try {
-        const clientParam =
-          selectedClient !== "all" && !selectedClient.startsWith("name:") && selectedClient !== "unassigned"
-            ? selectedClient
-            : undefined;
-        const result = await getTodayShiftMonitorAction(targetDate, search || undefined, bypassCache, clientParam);
+        const result = await getTodayShiftMonitorAction(dateToFetch, undefined, bypassCache);
+        // Discard stale responses (a newer request already started).
+        if (requestId !== requestSeqRef.current) return;
+
         if (result.success && result.data) {
-          // Robust canonical deduplication: prevent any duplicate machine + shift combinations
-          setRows(dedupeShiftMonitorRows(result.data));
+          const freshRows = dedupeShiftMonitorRows(result.data);
+          setRows((prev) => {
+            // Preserve a just-applied optimistic edit for the machine being reassigned.
+            const timeSinceEdit = Date.now() - lastOptimisticEditRef.current;
+            const optimisticMachineId = assignMachineIdRef.current;
+            if (timeSinceEdit < 1500 && optimisticMachineId) {
+              const editingMachineRows = prev.filter((r) => r.machine_id === optimisticMachineId);
+              const otherFreshRows = freshRows.filter((r) => r.machine_id !== optimisticMachineId);
+              return dedupeShiftMonitorRows([...otherFreshRows, ...editingMachineRows]);
+            }
+            return freshRows;
+          });
           setFetchError(null);
+          hasLoadedOnceRef.current = true;
         } else {
           const errInfo = classifyError(result.error || "Failed to load shift monitor data.");
           setFetchError(errInfo.message);
           toast("error", errInfo.title, errInfo.message);
         }
       } catch (err) {
+        if (requestId !== requestSeqRef.current) return;
         const errInfo = classifyError(err);
         setFetchError(errInfo.message);
         toast("error", errInfo.title, errInfo.message);
       } finally {
-        setLoading(false);
-        setIsSearching(false);
+        if (requestId === requestSeqRef.current) {
+          inFlightRef.current = false;
+          lastFetchedAtRef.current = Date.now();
+          setLoading(false);
+        }
       }
     },
-    [initialRows, rows.length, selectedDate, selectedClient, toast]
+    [toast]
   );
 
-  fetchDataRef.current = fetchData;
-  selectedDateRef.current = selectedDate;
-  searchQueryRef.current = searchQuery;
+  const refreshRoster = useCallback(
+    (bypassCache: boolean = true) => fetchRoster(selectedDateRef.current, bypassCache),
+    [fetchRoster]
+  );
+  const refreshRosterRef = useRef(refreshRoster);
 
   useEffect(() => {
-    if (!initialRows) {
-      fetchData();
-    }
-  }, [fetchData, initialRows]);
+    refreshRosterRef.current = refreshRoster;
+  }, [refreshRoster]);
 
-  // Auto-refresh every 30 seconds (fallback polling when not searching)
+  // ONE fetch per date. Skipped when the server already streamed that exact date's roster.
+  useEffect(() => {
+    if (serverPayloadDateRef.current === selectedDate) {
+      serverPayloadDateRef.current = null;
+      return;
+    }
+    if (!hasLoadedOnceRef.current) setLoading(true);
+    // Navigation uses the shared cache tier (the SSR page and the URL-driven RSC payload read
+    // the same entry), so switching dates can never cost a second database computation.
+    fetchRoster(selectedDate, false);
+  }, [selectedDate, fetchRoster]);
+
+  // Background poll: authority fallback when realtime channels are unavailable.
+  // Skipped while the tab is hidden and when a refresh already happened recently.
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!searchQueryRef.current.trim() && fetchDataRef.current) {
-        fetchDataRef.current(selectedDateRef.current, undefined, false);
-      }
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (inFlightRef.current) return;
+      if (Date.now() - lastFetchedAtRef.current < 20_000) return;
+      refreshRosterRef.current(false);
     }, 30_000);
-    return () => clearInterval(interval);
+
+    // Re-sync immediately when the user returns to the tab after a long absence.
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      if (inFlightRef.current) return;
+      if (Date.now() - lastFetchedAtRef.current < 15_000) return;
+      refreshRosterRef.current(false);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
-  // Real-time broadcast listener for instant roster revalidation
-  // Subscribed once on mount to prevent teardown/reconnect churn during user interactions
+  // Real-time broadcast listener for instant roster revalidation.
+  // Subscribed once on mount to prevent teardown/reconnect churn.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const rosterChannel = supabase.channel("operations-roster");
@@ -201,9 +265,7 @@ export function TodayShiftMonitorTab({
     const triggerDebouncedRefresh = () => {
       if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
       broadcastDebounceRef.current = setTimeout(() => {
-        if (fetchDataRef.current) {
-          fetchDataRef.current(selectedDateRef.current, searchQueryRef.current.trim() || undefined, true);
-        }
+        refreshRosterRef.current(true);
       }, 400);
     };
 
@@ -219,21 +281,17 @@ export function TodayShiftMonitorTab({
     };
   }, []);
 
-
-  // Debounced server-side search
+  // Search is resolved against the already-loaded day roster: zero network round-trips
+  // and zero database work per keystroke.
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetchData(selectedDate, value.trim() || undefined);
-    }, 300);
-  }, [fetchData, selectedDate]);
+  }, []);
 
-  // Cleanup debounce on unmount
+  // Cleanup pending timers on unmount
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
       if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+      if (backgroundSyncTimeoutRef.current) clearTimeout(backgroundSyncTimeoutRef.current);
     };
   }, []);
 
@@ -365,12 +423,6 @@ export function TodayShiftMonitorTab({
       }
     });
 
-    dbClients.forEach((c) => {
-      if (!clientNames.has(c.id)) {
-        clientNames.set(c.id, c.company_name);
-      }
-    });
-
     const list: FilterDropdownOption[] = [
       { value: "all", label: "All Clients", count: rows.length },
     ];
@@ -388,7 +440,23 @@ export function TodayShiftMonitorTab({
     });
 
     return list;
-  }, [rows, dbClients]);
+  }, [rows]);
+
+  const shiftOptions: FilterDropdownOption[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    rows.forEach((r) => {
+      const rawCode = (r.shift_code || "S1").trim();
+      const norm = rawCode.toUpperCase().replace(/^SHIFT\s*/i, "") || "S1";
+      counts.set(norm, (counts.get(norm) || 0) + 1);
+    });
+    const list: FilterDropdownOption[] = [{ value: "all", label: "All Shifts", count: rows.length }];
+    Array.from(counts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([code, count]) => {
+        list.push({ value: code, label: `Shift ${code}`, count });
+      });
+    return list;
+  }, [rows]);
 
   const filtered = useMemo(() => {
     let r = rows;
@@ -416,8 +484,45 @@ export function TodayShiftMonitorTab({
         return row.client_id === selectedClient;
       });
     }
+    if (shiftFilter !== "all") {
+      const target = shiftFilter.toUpperCase().replace(/^SHIFT\s*/i, "");
+      r = r.filter((row) => {
+        const rowShift = (row.shift_code || "S1").toUpperCase().replace(/^SHIFT\s*/i, "");
+        return rowShift === target;
+      });
+    }
+    const search = deferredSearchQuery.trim().toLowerCase();
+    if (search) {
+      r = r.filter((row) =>
+        [
+          row.operator_name,
+          row.operator_phone,
+          row.operator_employee_id,
+          row.machine_code,
+          row.machine_serial_number,
+          row.machine_model,
+          row.client_name,
+          row.client_code,
+          row.client_city,
+          row.site_name,
+        ].some((value) => typeof value === "string" && value.toLowerCase().includes(search))
+      );
+    }
+
+    // Always sort all rows by shift timing
+    r = [...r].sort((a, b) => {
+      const ta = parseTimeToMinutes(a.shift_start) ?? 9999;
+      const tb = parseTimeToMinutes(b.shift_start) ?? 9999;
+      if (ta !== tb) {
+        return sortBy === "time_desc" ? tb - ta : ta - tb;
+      }
+      const mComp = (a.machine_code || "").localeCompare(b.machine_code || "");
+      if (mComp !== 0) return mComp;
+      return (a.shift_code || "").localeCompare(b.shift_code || "");
+    });
+
     return r;
-  }, [rows, statusFilter, selectedClient]);
+  }, [rows, statusFilter, selectedClient, shiftFilter, sortBy, deferredSearchQuery]);
 
   const summary = useMemo(() => {
     const total = rows.length;
@@ -467,15 +572,21 @@ export function TodayShiftMonitorTab({
     setSelectedRowForEntry(row);
   }, []);
 
-  const formatTime = (t: string | null) => {
+  const formatTime = (t: string | null | undefined): string => {
     if (!t) return "—";
+    const str = t.trim();
+    if (str === "—" || str === "-" || str === "") return "—";
+    if (str.includes("AM") || str.includes("PM")) return str;
     try {
-      const [h, m] = t.split(":").map(Number);
+      const [hStr, mStr] = str.split(":");
+      const h = parseInt(hStr, 10);
+      const m = parseInt(mStr, 10) || 0;
+      if (isNaN(h)) return str;
       const ampm = h >= 12 ? "PM" : "AM";
       const h12 = h % 12 || 12;
       return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
     } catch {
-      return t;
+      return str;
     }
   };
 
@@ -574,18 +685,17 @@ export function TodayShiftMonitorTab({
           )
         );
       }
-      // Re-fetch 100% authoritative data directly from DB
-      fetchData(selectedDate, searchQuery.trim() || undefined, true);
-      router.refresh();
+      // Refresh authoritative data for the affected date only (no full-page reload)
+      refreshRoster(true);
     },
-    [fetchData, searchQuery, selectedDate, user, router]
+    [refreshRoster, user]
   );
 
   const handleDateChange = useCallback(
     (newDate: string) => {
-      if (!newDate || newDate === selectedDate) return;
+      if (!newDate || newDate === selectedDateRef.current) return;
+      // The date effect owns the fetch — setting the date triggers exactly ONE request.
       setSelectedDate(newDate);
-      fetchData(newDate, searchQuery.trim() || undefined, true);
 
       try {
         const url = new URL(window.location.href);
@@ -599,15 +709,21 @@ export function TodayShiftMonitorTab({
         // fallback
       }
     },
-    [selectedDate, searchQuery, fetchData, router]
+    [router]
   );
 
   const handleResetFilters = useCallback(() => {
+    // Every filter below is resolved in memory, so resetting them costs zero requests.
     setStatusFilter("all");
     setSelectedClient("all");
+    setShiftFilter("all");
+    setSortBy("time_asc");
     setSearchQuery("");
     const todayStr = getISTDateString();
-    setSelectedDate(todayStr);
+    const dateChanged = todayStr !== selectedDateRef.current;
+    if (dateChanged) {
+      setSelectedDate(todayStr);
+    }
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("date");
@@ -615,16 +731,18 @@ export function TodayShiftMonitorTab({
     } catch {
       // fallback
     }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    fetchData(todayStr, undefined, true);
-  }, [fetchData, router]);
+    // Only the date part needs a database read.
+    if (!dateChanged) refreshRoster(true);
+  }, [refreshRoster, router]);
 
   const isDateFiltered = selectedDate !== getISTDateString();
   const isClientFiltered = selectedClient !== "all";
+  const isShiftFiltered = shiftFilter !== "all";
   const activeFilterCount =
     (statusFilter !== "all" ? 1 : 0) +
     (isDateFiltered ? 1 : 0) +
-    (isClientFiltered ? 1 : 0);
+    (isClientFiltered ? 1 : 0) +
+    (isShiftFiltered ? 1 : 0);
 
   if (loading) {
     return (
@@ -716,6 +834,18 @@ export function TodayShiftMonitorTab({
               searchPlaceholder="Search client..."
             />
           </div>
+
+          {/* Shift Dropdown Filter */}
+          <div className="w-full sm:w-52 min-w-0">
+            <FilterDropdown
+              label="Shift"
+              value={shiftFilter}
+              onChange={(val) => setShiftFilter(val)}
+              options={shiftOptions}
+              className="w-full"
+              dropdownClassName="w-full sm:w-56"
+            />
+          </div>
         </div>
       </FilterToolbar>
 
@@ -728,7 +858,7 @@ export function TodayShiftMonitorTab({
           </div>
           <button
             type="button"
-            onClick={() => fetchData(selectedDate, undefined, true)}
+            onClick={() => refreshRoster(true)}
             className="font-semibold underline hover:no-underline cursor-pointer text-xs shrink-0"
           >
             Retry
@@ -742,7 +872,7 @@ export function TodayShiftMonitorTab({
           <ErrorState
             title="Failed to Load Shift Roster"
             description={fetchError}
-            onRetry={() => fetchData(selectedDate, undefined, true)}
+            onRetry={() => refreshRoster(true)}
           />
         </div>
       ) : rows.length === 0 ? (
@@ -795,7 +925,18 @@ export function TodayShiftMonitorTab({
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Machine</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Client</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">Shift</th>
-                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Timing</th>
+                  <th
+                    className="px-3 py-2 text-left font-semibold text-muted-foreground cursor-pointer select-none hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                    onClick={() => setSortBy((prev) => (prev === "time_asc" ? "time_desc" : "time_asc"))}
+                    title="Click to sort by shift timing"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Timing</span>
+                      <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                        {sortBy === "time_asc" ? "↑" : "↓"}
+                      </span>
+                    </div>
+                  </th>
                   <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Status</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Entered By</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">HMR</th>
@@ -1094,34 +1235,134 @@ export function TodayShiftMonitorTab({
         machines={combinedMachines}
         operators={operators}
         initialMachineId={assignModalMachineId}
+        userRole={effectiveRole}
+        userId={user.id}
+        initialAssignmentDate={selectedDate}
         onSuccess={(result?: AssignPersonnelSuccessResult) => {
-          // Fine-grained optimistic update: update only affected machine row values immediately
-          if (result?.machineId && Array.isArray(result?.operators)) {
-            setRows((prevRows) => {
-              const updated = prevRows.map((r) => {
-                if (r.machine_id !== result.machineId) return r;
-                // Match strictly by shift code
-                const matchingOp = result.operators?.find(
-                  (o) => (o.shift_code || "S1").toUpperCase() === (r.shift_code || "S1").toUpperCase()
-                );
-                if (matchingOp) {
-                  return {
-                    ...r,
-                    operator_id: matchingOp.id,
-                    operator_name: matchingOp.full_name,
-                    shift_code: matchingOp.shift_code || r.shift_code,
-                    shift_name: matchingOp.shift_name || r.shift_name,
-                    shift_start: matchingOp.shift_start_time || r.shift_start,
-                    shift_end: matchingOp.shift_end_time || r.shift_end,
-                  };
-                }
-                return r;
-              });
-              return dedupeShiftMonitorRows(updated);
+          if (!result?.machineId) return;
+
+          // The roster was saved for the date picked inside the dialog (7 past days + today +
+          // tomorrow). Only the visible day may be patched optimistically — a back-dated or
+          // tomorrow plan must never rewrite the roster currently on screen.
+          const savedDate = result.assignmentDate || getISTDateString();
+          if (savedDate !== selectedDateRef.current) return;
+
+          const machineId = result.machineId;
+          const newOps = result.operators || [];
+          lastOptimisticEditRef.current = Date.now();
+
+          // Fine-grained optimistic update: update affected machine row values immediately
+          setRows((prevRows) => {
+            const otherMachinesRows = prevRows.filter((r) => r.machine_id !== machineId);
+            const existingMachineRows = prevRows.filter((r) => r.machine_id === machineId);
+
+            const matchedMachine = combinedMachines.find((m) => m.id === machineId);
+            const templateRow = existingMachineRows[0] || (matchedMachine ? ({
+              machine_id: matchedMachine.id,
+              machine_code: matchedMachine.machine_id,
+              machine_serial_number: matchedMachine.serial_number || null,
+              machine_model: matchedMachine.model || null,
+              client_id: matchedMachine.client_id || null,
+              client_name: matchedMachine.client?.company_name || "Direct Client",
+              client_code: matchedMachine.client?.code || null,
+              client_city: matchedMachine.city || null,
+              site_name: null,
+              current_meter: matchedMachine.hour_meter || null,
+              machine_status: matchedMachine.status || "active",
+              machine_health_status: matchedMachine.health_status || "active",
+              shift_code: "S1",
+              shift_name: "Shift S1",
+              shift_start: "06:00:00",
+              shift_end: "14:00:00",
+              status: "unassigned",
+              log_id: null,
+              log_date: selectedDate,
+              operator_id: null,
+              operator_name: "Unassigned",
+              operator_phone: null,
+              operator_employee_id: null,
+              entered_by: null,
+              entered_by_name: null,
+              entry_source: null,
+              start_meter: null,
+              end_meter: null,
+              running_hours: null,
+              remarks: null,
+            } as TodayShiftMonitorRow) : null);
+
+            if (!templateRow) return prevRows;
+
+            // Preserve any existing rows that already have entered shift logs
+            const enteredLogRows = existingMachineRows.filter((r) => Boolean(r.log_id));
+
+            // 1. If 0 operators (all unassigned from this machine)
+            if (newOps.length === 0) {
+              if (enteredLogRows.length > 0) {
+                return dedupeShiftMonitorRows([...otherMachinesRows, ...enteredLogRows]);
+              }
+              const unassignedRow: TodayShiftMonitorRow = {
+                ...templateRow,
+                operator_id: null,
+                operator_name: "Unassigned",
+                operator_phone: null,
+                operator_employee_id: null,
+                shift_code: templateRow.shift_code || "S1",
+                shift_name: templateRow.shift_name || "Shift S1",
+                status: "unassigned",
+                log_id: null,
+                start_meter: null,
+                end_meter: null,
+                running_hours: null,
+                remarks: null,
+              };
+              return dedupeShiftMonitorRows([...otherMachinesRows, unassignedRow]);
+            }
+
+            // 2. If 1 or more operators assigned to shifts on this machine
+            const updatedMachineRows: TodayShiftMonitorRow[] = [...enteredLogRows];
+
+            newOps.forEach((op) => {
+              const rawCode = (op.shift_code || "S1").trim();
+              const normCode = rawCode.toUpperCase().replace(/^SHIFT\s*/i, "");
+
+              const existingEntered = enteredLogRows.find(
+                (r) => r.operator_id === op.id && (r.shift_code || "").toUpperCase().replace(/^SHIFT\s*/i, "") === normCode
+              );
+              if (existingEntered) return;
+
+              const existingForShift = existingMachineRows.find(
+                (r) => (r.shift_code || "").toUpperCase().replace(/^SHIFT\s*/i, "") === normCode
+              );
+
+              const row: TodayShiftMonitorRow = {
+                ...(existingForShift || templateRow),
+                operator_id: op.id,
+                operator_name: op.full_name || "Operator",
+                operator_phone: op.phone || null,
+                operator_employee_id: op.employee_id || null,
+                shift_code: rawCode,
+                shift_name: op.shift_name || (rawCode.toUpperCase().startsWith("SHIFT") ? rawCode : `Shift ${rawCode}`),
+                shift_start: op.shift_start_time || existingForShift?.shift_start || templateRow.shift_start || null,
+                shift_end: op.shift_end_time || existingForShift?.shift_end || templateRow.shift_end || null,
+                status: "pending",
+                log_id: null,
+                start_meter: null,
+                end_meter: null,
+                running_hours: null,
+                remarks: null,
+                log_date: selectedDate,
+              };
+              updatedMachineRows.push(row);
             });
-          }
-          // Background soft sync to verify with latest server state
-          fetchData(selectedDate, undefined, false);
+
+            return dedupeShiftMonitorRows([...otherMachinesRows, ...updatedMachineRows]);
+          });
+
+          // Soft background sync after 800ms to allow DB transaction to fully settle
+          if (backgroundSyncTimeoutRef.current) clearTimeout(backgroundSyncTimeoutRef.current);
+          backgroundSyncTimeoutRef.current = setTimeout(() => {
+            refreshRoster(false);
+          }, 800);
         }}
       />
 

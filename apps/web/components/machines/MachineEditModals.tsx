@@ -17,8 +17,6 @@ import {
 import {
   updateMachineInfoAction,
   updateMachineSupervisorsAction,
-  updateMachineOperatorsAction,
-  updateMachinePersonnelAction,
   updateMachineClientAssignmentAction,
   checkMachineSerialNumberAvailable,
   getMachineModalOptionsAction,
@@ -36,6 +34,14 @@ import {
   AssignPersonnelModal,
   type AssignPersonnelModalProps,
 } from "./AssignPersonnelModal";
+import {
+  AssignSupervisorToMachineDialog,
+  type AssignSupervisorToMachineDialogProps,
+} from "@/components/assignments/AssignSupervisorToMachineDialog";
+import {
+  AssignOperatorToMachineDialog,
+  type AssignOperatorToMachineDialogProps,
+} from "@/components/assignments/AssignOperatorToMachineDialog";
 import {
   AnimatedAlertCircle,
   AnimatedBuilding,
@@ -422,7 +428,25 @@ export function MachineInfoModal({
 }
 
 // ═════════════════════════════════════════════════════════════════
-// 2. MACHINE PERSONNEL MODAL (Supervisor & Operator Assignments)
+// 2A. MACHINE SUPERVISOR MODAL (Dedicated Supervisor Assignment)
+// ═════════════════════════════════════════════════════════════════
+export type MachineSupervisorModalProps = AssignSupervisorToMachineDialogProps;
+
+export function MachineSupervisorModal(props: MachineSupervisorModalProps) {
+  return <AssignSupervisorToMachineDialog {...props} />;
+}
+
+// ═════════════════════════════════════════════════════════════════
+// 2B. MACHINE OPERATOR MODAL (Dedicated 24h Operator Shift Roster)
+// ═════════════════════════════════════════════════════════════════
+export type MachineOperatorModalProps = AssignOperatorToMachineDialogProps;
+
+export function MachineOperatorModal(props: MachineOperatorModalProps) {
+  return <AssignOperatorToMachineDialog {...props} />;
+}
+
+// ═════════════════════════════════════════════════════════════════
+// 2C. MACHINE PERSONNEL MODAL (Backward Compatibility Alias)
 // ═════════════════════════════════════════════════════════════════
 export type MachinePersonnelModalProps = AssignPersonnelModalProps;
 

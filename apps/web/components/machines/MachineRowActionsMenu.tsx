@@ -27,6 +27,8 @@ export interface MachineRowActionsMenuProps {
   isSupervisor: boolean;
   isAdmin: boolean;
   onEditMachine?: (m: Machine) => void;
+  onAssignSupervisor?: (m: Machine) => void;
+  onAssignOperator?: (m: Machine) => void;
   onEditPersonnel?: (m: Machine) => void;
   onEditClient?: (m: Machine) => void;
   onViewAudit?: (m: Machine) => void;
@@ -60,6 +62,8 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
   isSupervisor,
   isAdmin,
   onEditMachine,
+  onAssignSupervisor,
+  onAssignOperator,
   onEditPersonnel,
   onEditClient,
   onViewAudit,
@@ -174,6 +178,28 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
     }
   };
 
+  const handleAssignSupervisorAction = () => {
+    setOpen(false);
+    if (onAssignSupervisor) {
+      onAssignSupervisor(machine);
+    } else if (onEditPersonnel) {
+      onEditPersonnel(machine);
+    } else if (onViewAssignments) {
+      onViewAssignments(machine);
+    }
+  };
+
+  const handleAssignOperatorAction = () => {
+    setOpen(false);
+    if (onAssignOperator) {
+      onAssignOperator(machine);
+    } else if (onEditPersonnel) {
+      onEditPersonnel(machine);
+    } else if (onViewAssignments) {
+      onViewAssignments(machine);
+    }
+  };
+
   const handleEditPersonnelAction = () => {
     setOpen(false);
     if (onEditPersonnel) {
@@ -214,7 +240,8 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
     }
   };
 
-  const allowPersonnelEdit = canEdit || isSupervisor;
+  const allowSupervisorEdit = canEdit;
+  const allowOperatorEdit = canEdit || isSupervisor;
   const allowClientEdit = canEdit;
 
   return (
@@ -266,15 +293,27 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                   </button>
                 )}
 
-                {/* 2. Edit Supervisor + Operator */}
-                {allowPersonnelEdit && (
+                {/* 2. Assign Supervisor */}
+                {allowSupervisorEdit && (
                   <button
                     type="button"
-                    onClick={handleEditPersonnelAction}
+                    onClick={handleAssignSupervisorAction}
                     className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
                   >
-                    <Users size={14} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                    <span>Edit Supervisor & Operator</span>
+                    <Shield size={14} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                    <span>Assign Supervisor</span>
+                  </button>
+                )}
+
+                {/* 3. Assign Operator */}
+                {allowOperatorEdit && (
+                  <button
+                    type="button"
+                    onClick={handleAssignOperatorAction}
+                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
+                  >
+                    <Users size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Assign Operator</span>
                   </button>
                 )}
 

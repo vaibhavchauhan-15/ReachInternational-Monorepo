@@ -11,19 +11,28 @@ import {
   FileText,
   Image as ImageIcon,
   ExternalLink,
-  RotateCcw,
   MoreVertical,
   Users,
+  IdCard,
+  Fingerprint,
+  Banknote,
+  UserCog,
+  LogIn,
+  KeyRound,
+  CalendarDays,
+  ChevronRight,
+  ArrowUpRight,
+  Maximize2,
+  ScanLine,
+  AlertTriangle,
+  FileCheck2,
 } from "lucide-react";
 import {
-  AnimatedUser,
   AnimatedTruck,
   AnimatedClock,
   AnimatedShieldCheck,
   AnimatedMapPin,
-  AnimatedCreditCard,
   AnimatedFileText,
-  AnimatedChevronLeft,
   AnimatedCopy,
   AnimatedCheck,
   AnimatedEdit,
@@ -33,14 +42,12 @@ import {
   AnimatedPower,
   AnimatedTrash2,
   AnimatedCalendarClock,
-  AnimatedBuilding2,
   AnimatedEye,
   AnimatedEyeOff,
-  AnimatedSearch,
   AnimatedWrench,
   AnimatedPlus,
 } from "@/components/ui/animated-icons";
-import { Button, TooltipWrapper, EmptyState, useToast, ConfirmationDialog } from "@/components/ui";
+import { Button, EmptyState, useToast, ConfirmationDialog } from "@/components/ui";
 import { DocumentViewerModal, type ViewerDocument } from "@/components/documents/DocumentViewerModal";
 import { UserEditModal } from "../UserEditModal";
 import { PasswordResetModal } from "../PasswordResetModal";
@@ -75,7 +82,7 @@ import {
   type UserDocument,
   type DocumentType,
 } from "@/app/actions/documents";
-import type { User, UserRole } from "@/lib/types/database";
+import type { User } from "@/lib/types/database";
 import type {
   UserMachineItem,
   UserRunningLogItem,
@@ -189,6 +196,195 @@ function getInitials(name?: string): string {
   return getUserInitials(name);
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Presentation primitives (shared, premium Geist surfaces)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+type PanelTone = "sky" | "teal" | "amber" | "indigo" | "emerald" | "rose" | "violet";
+
+const PANEL_TONE_CLASS: Record<PanelTone, string> = {
+  sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
+  teal: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
+  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+  violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20",
+};
+
+interface PanelProps {
+  icon: React.ReactNode;
+  tone?: PanelTone;
+  title: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}
+
+/** Standardised tab panel shell: hairline card + eyebrow header + generous body. */
+function Panel({ icon, tone = "sky", title, subtitle, actions, footer, children, className = "" }: PanelProps) {
+  return (
+    <section
+      className={`overflow-hidden rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xs ${className}`}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-hairline)] px-4 py-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${PANEL_TONE_CLASS[tone]}`}
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-[13px] font-bold leading-tight tracking-[-0.01em] text-[var(--color-ink)] sm:text-sm">
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="mt-0.5 truncate text-[10.5px] font-medium leading-tight text-[var(--color-mute)]">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      </header>
+      <div className="p-3.5 sm:p-5">{children}</div>
+      {footer && (
+        <footer className="border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 px-4 py-2.5 text-[10.5px] font-medium text-[var(--color-mute)] sm:px-5">
+          {footer}
+        </footer>
+      )}
+    </section>
+  );
+}
+
+interface DetailRowProps {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+  copied?: boolean;
+  onCopy?: () => void;
+  valueClassName?: string;
+  title?: string;
+  truncate?: boolean;
+}
+
+/** Label/value row used inside the profile detail groups. */
+function DetailRow({
+  label,
+  value,
+  mono = false,
+  copied = false,
+  onCopy,
+  valueClassName = "",
+  title,
+  truncate = false,
+}: DetailRowProps) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 first:pt-0 last:pb-0">
+      <dt className="shrink-0 text-[11px] font-medium text-[var(--color-mute)]">{label}</dt>
+      <dd className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+        <span
+          title={title}
+          className={`min-w-0 text-xs font-semibold text-[var(--color-ink)] ${truncate ? "block truncate" : "break-words"} ${
+            mono ? "font-mono" : ""
+          } ${valueClassName}`}
+        >
+          {value}
+        </span>
+        {onCopy && (
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label={`Copy ${label}`}
+            title={`Copy ${label}`}
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline)] hover:text-[var(--color-ink)] focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-[var(--color-link)]/40 cursor-pointer"
+          >
+            {copied ? (
+              <AnimatedCheck size={11} className="text-emerald-500" />
+            ) : (
+              <AnimatedCopy size={11} />
+            )}
+          </button>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function formatFileSize(bytes?: number | null): string {
+  const size = Number(bytes || 0);
+  if (!size) return "Size n/a";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function humanizeAction(action: string): string {
+  return action
+    .replace(/[_.]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+function formatAuditValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+const AUDIT_CATEGORY_ICON: Record<string, React.ReactNode> = {
+  security: <ShieldCheck className="h-3.5 w-3.5" />,
+  authentication: <LogIn className="h-3.5 w-3.5" />,
+  document: <FileCheck2 className="h-3.5 w-3.5" />,
+  documents: <FileCheck2 className="h-3.5 w-3.5" />,
+  role: <UserCog className="h-3.5 w-3.5" />,
+  permissions: <KeyRound className="h-3.5 w-3.5" />,
+  profile: <IdCard className="h-3.5 w-3.5" />,
+  machine: <AnimatedTruck size={14} />,
+  assignment: <AnimatedTruck size={14} />,
+  attendance: <AnimatedCalendarClock size={14} />,
+};
+
+function AuditCategoryGlyph({ category }: { category: string | null }) {
+  return (
+    <>{AUDIT_CATEGORY_ICON[(category || "").toLowerCase()] || <ScanLine className="h-3.5 w-3.5" />}</>
+  );
+}
+
+function DocStatusPill({ status, pendingApproval = false }: { status: string; pendingApproval?: boolean }) {
+  if (status === "verified") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+        <ShieldCheck className="h-3 w-3" />
+        Verified
+      </span>
+    );
+  }
+  if (status === "rejected") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+        <ShieldAlert className="h-3 w-3" />
+        Rejected
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+      <Shield className="h-3 w-3" />
+      {pendingApproval ? "Awaiting approval" : "Pending review"}
+    </span>
+  );
+}
+
 export function UserDetailClient({
   user: initialUser,
   currentUser,
@@ -212,7 +408,6 @@ export function UserDetailClient({
   const [assignments, setAssignments] = useState<UserAssignmentItem[]>(initialAssignments);
   const [operators, setOperators] = useState<SupervisedOperatorItem[]>(initialOperators);
   const [activeTab, setActiveTab] = useState<UserDetailTabKey>("machines");
-  const [tabSearch, setTabSearch] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [showFullBankAccount, setShowFullBankAccount] = useState(false);
@@ -594,73 +789,12 @@ export function UserDetailClient({
     }
   }, [rejectModalDoc, rejectionReasonInput, user.id, toast, handleRefreshUserData]);
 
-  // Filtered in-tab items
-  const filteredMachines = useMemo(() => {
-    if (!tabSearch.trim()) return machines;
-    const q = tabSearch.toLowerCase().trim();
-    return machines.filter(
-      (m) =>
-        m.machine_id.toLowerCase().includes(q) ||
-        m.machine_name.toLowerCase().includes(q) ||
-        m.model.toLowerCase().includes(q) ||
-        (m.serial_number && m.serial_number.toLowerCase().includes(q)) ||
-        (m.assigned_operator_name && m.assigned_operator_name.toLowerCase().includes(q)) ||
-        (m.assigned_operator_code && m.assigned_operator_code.toLowerCase().includes(q))
-    );
-  }, [machines, tabSearch]);
-
-  const filteredOperators = useMemo(() => {
-    if (!tabSearch.trim()) return operators;
-    const q = tabSearch.toLowerCase().trim();
-    return operators.filter(
-      (op) =>
-        op.full_name.toLowerCase().includes(q) ||
-        (op.employee_id && op.employee_id.toLowerCase().includes(q)) ||
-        (op.phone && op.phone.toLowerCase().includes(q)) ||
-        (op.email && op.email.toLowerCase().includes(q)) ||
-        (op.machine_category && op.machine_category.toLowerCase().includes(q)) ||
-        (op.active_machine_name && op.active_machine_name.toLowerCase().includes(q)) ||
-        (op.active_machine_code && op.active_machine_code.toLowerCase().includes(q)) ||
-        (op.city && op.city.toLowerCase().includes(q)) ||
-        (op.state && op.state.toLowerCase().includes(q))
-    );
-  }, [operators, tabSearch]);
-
-  const filteredLogs = useMemo(() => {
-    if (!tabSearch.trim()) return runningLogs;
-    const q = tabSearch.toLowerCase().trim();
-    return runningLogs.filter(
-      (l) =>
-        l.machine_code.toLowerCase().includes(q) ||
-        l.machine_name.toLowerCase().includes(q) ||
-        l.log_date.includes(q) ||
-        (l.location && l.location.toLowerCase().includes(q)) ||
-        (l.remarks && l.remarks.toLowerCase().includes(q))
-    );
-  }, [runningLogs, tabSearch]);
-
-  const filteredAssignments = useMemo(() => {
-    if (!tabSearch.trim()) return assignments;
-    const q = tabSearch.toLowerCase().trim();
-    return assignments.filter(
-      (a) =>
-        a.machine_code.toLowerCase().includes(q) ||
-        a.machine_name.toLowerCase().includes(q) ||
-        a.model.toLowerCase().includes(q)
-    );
-  }, [assignments, tabSearch]);
-
-  const filteredAuditLogs = useMemo(() => {
-    if (!tabSearch.trim()) return auditLogs;
-    const q = tabSearch.toLowerCase().trim();
-    return auditLogs.filter(
-      (a) =>
-        a.action.toLowerCase().includes(q) ||
-        (a.actor_name && a.actor_name.toLowerCase().includes(q)) ||
-        (a.actor_role && a.actor_role.toLowerCase().includes(q)) ||
-        (a.category && a.category.toLowerCase().includes(q))
-    );
-  }, [auditLogs, tabSearch]);
+  // Tab data (search box removed from profile view)
+  const filteredMachines = machines;
+  const filteredOperators = operators;
+  const filteredLogs = runningLogs;
+  const filteredAssignments = assignments;
+  const filteredAuditLogs = auditLogs;
 
   // Document viewer handler
   const handleViewDoc = async (doc: UserDocument) => {
@@ -802,505 +936,531 @@ export function UserDetailClient({
     return "09:00 AM – 06:00 PM (Standard)";
   }, [user.shift_time, user.shift_start_time, user.shift_end_time]);
 
-  return (
-    <div className="flex flex-col gap-4 sm:gap-6 pb-20 md:pb-8 max-w-7xl mx-auto px-2 sm:px-4 md:px-6 w-full">
-      {/* ─── 1. TOP BREADCRUMB & BACK NAVIGATION ─── */}
-      <div className="hidden sm:flex items-center justify-between">
-        <Link
-          href="/users"
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors group py-1"
-        >
-          <motion.div whileTap={{ scale: 0.9 }} className="flex items-center gap-1">
-            <AnimatedChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-            <span>Back to Users</span>
-          </motion.div>
-        </Link>
+  const plLeaveDisplay = useMemo(() => {
+    if (user.total_pl_quota == null) return "12 days";
+    const remaining = Math.max(Number(user.total_pl_quota) - Number(user.pl_used_as_on_date || 0), 0);
+    return `${remaining} / ${user.total_pl_quota} days`;
+  }, [user.total_pl_quota, user.pl_used_as_on_date]);
 
-        <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-mute)]">
-          <Link href="/dashboard" className="hover:text-[var(--color-ink)] transition-colors">
+  /** Current payroll month (IST) for the attendance deep link. */
+  const currentMonthIST = useMemo(
+    () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).slice(0, 7),
+    []
+  );
+
+  const docStats = useMemo(() => {
+    const verified = docList.filter((d) => d.verification_status === "verified").length;
+    const rejected = docList.filter((d) => d.verification_status === "rejected").length;
+    return { verified, rejected, pending: Math.max(docList.length - verified - rejected, 0) };
+  }, [docList]);
+
+  /** Statutory numbers whose upload has not landed yet, so they stay visible beside the rest. */
+  const missingTypedDocuments = useMemo(() => {
+    const has = (code: string) => docList.some((d) => d.document_type_code === code);
+    const items: Array<{ code: string; label: string; hint: string }> = [];
+    if (user.aadhaar_number && !has("aadhaar")) {
+      items.push({ code: "aadhaar", label: "Aadhaar Card", hint: "Number on record · no scan uploaded" });
+    }
+    if (user.license_number && !has("driving_license")) {
+      items.push({ code: "driving_license", label: "Driving Licence", hint: "Number on record · no scan uploaded" });
+    }
+    if (user.bank_account_number && !has("bank_document")) {
+      items.push({ code: "bank_document", label: "Banking Document", hint: "Account on record · no scan uploaded" });
+    }
+    return items;
+  }, [docList, user.aadhaar_number, user.license_number, user.bank_account_number]);
+
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
+  const [auditVisibleCount, setAuditVisibleCount] = useState(10);
+
+  // Statutory typed value helpers reused by the merged document cards
+  const getTypedValueForDoc = useCallback(
+    (code: string): { label: string; value: string; revealable: boolean } | null => {
+      if (code === "aadhaar") {
+        return {
+          label: "Aadhaar number",
+          value: user.aadhaar_number
+            ? showFullAadhaar
+              ? user.aadhaar_number
+              : maskAadhaar(user.aadhaar_number)
+            : "Not provided",
+          revealable: Boolean(user.aadhaar_number && canRevealDocs),
+        };
+      }
+      if (code === "driving_license") {
+        return {
+          label: "Licence number",
+          value: user.license_number ? formatLicenseNumber(user.license_number) : "Not provided",
+          revealable: false,
+        };
+      }
+      if (code === "bank_document") {
+        return {
+          label: "Bank account",
+          value: user.bank_account_number
+            ? `${showFullBankAccount ? user.bank_account_number : maskBankAccount(user.bank_account_number)} · ${
+                user.bank_ifsc_code || "No IFSC"
+              }`
+            : "Not provided",
+          revealable: Boolean(user.bank_account_number && canRevealDocs && canVerifyReject),
+        };
+      }
+      return null;
+    },
+    [
+      user.aadhaar_number,
+      user.license_number,
+      user.bank_account_number,
+      user.bank_ifsc_code,
+      showFullAadhaar,
+      showFullBankAccount,
+      canRevealDocs,
+      canVerifyReject,
+    ]
+  );
+
+  const toggleTypedReveal = useCallback(
+    (code: string) => {
+      if (code === "aadhaar") handleToggleAadhaar();
+      else if (code === "bank_document") handleToggleBankAccount();
+    },
+    [handleToggleAadhaar, handleToggleBankAccount]
+  );
+
+  return (
+    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 pb-16 sm:gap-5 md:pb-8">
+      {/* ─── 1. TOP BREADCRUMB ─── */}
+      <div className="flex items-center">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] text-[var(--color-mute)]">
+          <Link href="/dashboard" className="transition-colors hover:text-[var(--color-ink)]">
             Home
           </Link>
-          <span>/</span>
-          <Link href="/users" className="hover:text-[var(--color-ink)] transition-colors">
+          <ChevronRight className="h-3 w-3 shrink-0 text-[var(--color-faint)]" aria-hidden="true" />
+          <Link href="/users" className="transition-colors hover:text-[var(--color-ink)]">
             Users
           </Link>
-          <span>/</span>
-          <span className="text-[var(--color-ink)] font-semibold truncate max-w-[240px]">
+          <ChevronRight className="h-3 w-3 shrink-0 text-[var(--color-faint)]" aria-hidden="true" />
+          <span className="max-w-[200px] truncate font-semibold text-[var(--color-ink)] sm:max-w-[320px]">
             {user.full_name}
           </span>
         </nav>
       </div>
 
       {/* ─── 2. MASTER HERO BANNER CARD ─── */}
-      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 md:p-6 shadow-2xs relative">
-        {/* Subtle top hairline gradient accent with matching top border radius */}
-        <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-xl sm:rounded-t-2xl overflow-hidden bg-gradient-to-r from-transparent via-sky-500/50 to-transparent pointer-events-none" />
+      <section className="relative overflow-hidden rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xs">
+        {/* Subtle top hairline gradient accent (Reserved for identity emphasis only) */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-500/45 to-transparent" />
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          {/* Left: Avatar + Title & Identifiers */}
-          <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
-            <div
-              className={`flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${getRoleAvatarStyle(
-                user.role
-              )} font-bold text-base sm:text-lg border shadow-xs select-none`}
-            >
-              <span>{getInitials(user.full_name)}</span>
-            </div>
-
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <h1 className="text-base sm:text-xl md:text-2xl font-bold tracking-tight text-[var(--color-ink)] truncate leading-tight">
-                {user.full_name}
-              </h1>
-
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                {/* Monospace EMP-xxxx Badge with 1-click copy */}
-                <button
-                  type="button"
-                  onClick={() => handleCopy(user.employee_id || user.id, "Employee ID")}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-mono text-[11px] sm:text-xs font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] hover:border-[var(--color-link)]/60 hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer shadow-2xs"
-                  title="Click to copy Employee ID"
+        <div className="flex flex-col gap-4 p-4 sm:p-5 xl:p-6">
+          {/* Top Row: Avatar + Name & Chips + Desktop/Mobile Actions */}
+          <div className="flex items-start justify-between gap-3">
+            {/* Left: Avatar + Identity + Chips */}
+            <div className="flex min-w-0 flex-1 items-center gap-3.5 sm:gap-4">
+              <div className="relative shrink-0">
+                <div
+                  className={`flex h-13 w-13 items-center justify-center rounded-xl border bg-gradient-to-br font-bold text-base shadow-xs select-none sm:h-16 sm:w-16 sm:text-xl ${getRoleAvatarStyle(
+                    user.role
+                  )}`}
                 >
-                  <span>{user.employee_id || `ID: ${user.id.slice(0, 8)}`}</span>
-                  {copiedKey === "Employee ID" ? (
-                    <AnimatedCheck size={11} className="text-emerald-500 shrink-0" />
-                  ) : (
-                    <AnimatedCopy size={11} className="text-[var(--color-mute)] shrink-0" />
-                  )}
-                </button>
-
-                {getRoleBadge(user.role)}
-
-                {user.role === "operator" && user.machine_category && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80 shadow-xs">
-                    {formatMachineCategoryLabel(user.machine_category)}
-                  </span>
-                )}
-
-                {/* Status Badge */}
-                {user.status === "active" ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/80 shadow-xs">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Active
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 shadow-xs capitalize">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    {user.status}
-                  </span>
-                )}
+                  <span>{getInitials(user.full_name)}</span>
+                </div>
+                <span
+                  aria-hidden="true"
+                  className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[var(--color-canvas-elevated)] ${
+                    user.status === "active" ? "bg-emerald-500" : "bg-slate-400"
+                  }`}
+                />
               </div>
 
-              {/* Secondary details (Location & Shift) */}
-              {(user.location || (shiftDisplay && shiftDisplay !== "—")) && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-mute)] pt-0.5">
-                  {user.location && (
-                    <div className="flex items-center gap-1 min-w-0">
-                      <AnimatedMapPin size={12} className="text-sky-500 shrink-0" />
-                      <span className="truncate">{user.location}</span>
-                    </div>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <h1 className="truncate text-lg font-bold leading-tight tracking-[-0.02em] text-[var(--color-ink)] sm:text-xl lg:text-2xl">
+                  {user.full_name}
+                </h1>
+
+                {/* Primary Badges & Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  {/* Monospace EMP-xxxx Badge with 1-click copy */}
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(user.employee_id || user.id, "Employee ID")}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-2.5 py-0.5 font-mono text-[11px] font-bold text-[var(--color-ink)] shadow-2xs transition-all hover:border-[var(--color-link)]/60 hover:bg-[var(--color-hairline-soft-surface)] cursor-pointer"
+                    title="Click to copy Employee ID"
+                  >
+                    <span>{user.employee_id || `ID: ${user.id.slice(0, 8)}`}</span>
+                    {copiedKey === "Employee ID" ? (
+                      <AnimatedCheck size={11} className="shrink-0 text-emerald-500" />
+                    ) : (
+                      <AnimatedCopy size={11} className="shrink-0 text-[var(--color-mute)]" />
+                    )}
+                  </button>
+
+                  {getRoleBadge(user.role)}
+
+                  {user.role === "operator" && user.machine_category && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-700 shadow-xs dark:border-sky-800/80 dark:bg-sky-950/60 dark:text-sky-300">
+                      {formatMachineCategoryLabel(user.machine_category)}
+                    </span>
                   )}
-                  {shiftDisplay && shiftDisplay !== "—" && (
-                    <div className="flex items-center gap-1 min-w-0">
-                      <AnimatedClock size={12} className="text-amber-500 shrink-0" />
-                      <span className="truncate">{shiftDisplay}</span>
-                    </div>
+
+                  {/* Status Badge */}
+                  {user.status === "active" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/80 bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 shadow-xs dark:border-emerald-800/80 dark:bg-emerald-950/80 dark:text-emerald-300">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                      Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold capitalize text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                      {user.status}
+                    </span>
                   )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
 
-          {/* Desktop Right Action Bar (On mobile, actions are cleanly consolidated in the top header 3-dot menu) */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            {canManage && (
-              <Button
-                variant="primary"
-                onClick={() => setIsEditModalOpen(true)}
-                className="h-9 px-3.5 text-xs font-semibold rounded-md shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <AnimatedEdit size={14} className="shrink-0" />
-                <span>Edit Profile</span>
-              </Button>
-            )}
-
-            {/* Desktop Only 3-Dot Actions Menu */}
-            <div className="relative" ref={actionsMenuRef}>
-              <button
-                type="button"
-                onClick={() => setIsActionsMenuOpen((prev) => !prev)}
-                className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs cursor-pointer"
-                title="More options"
-                aria-label="More options"
-                aria-expanded={isActionsMenuOpen}
-              >
-                <MoreVertical size={16} />
-              </button>
-
-              <AnimatePresence>
-                {isActionsMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
-                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute right-0 top-full mt-1.5 min-w-[210px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-2xl space-y-0.5 z-50 backdrop-blur-md"
+            {/* Actions: Desktop Edit button + 3-Dot menu (always anchored at top right) */}
+            <div className="flex shrink-0 items-center gap-2">
+              {canManage && (
+                <div className="hidden sm:block">
+                  <Button
+                    variant="primary"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="flex h-9 cursor-pointer items-center gap-1.5 rounded-md px-3.5 text-xs font-semibold shadow-xs"
                   >
-                    {/* Edit Profile */}
-                    {canManage && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsActionsMenuOpen(false);
-                          setIsEditModalOpen(true);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
-                      >
-                        <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
-                        <span>Edit Profile</span>
-                      </button>
-                    )}
-                    {/* Assign Equipment (Operators) */}
-                    {canManage && user.role === "operator" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsActionsMenuOpen(false);
-                          setIsAssignModalOpen(true);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
-                      >
-                        <AnimatedWrench size={14} className="text-amber-500 shrink-0" />
-                        <span>Assign Equipment</span>
-                      </button>
-                    )}
+                    <AnimatedEdit size={14} className="shrink-0" />
+                    <span>Edit Profile</span>
+                  </Button>
+                </div>
+              )}
 
-                    {/* Email Option */}
-                    {user.email && (
-                      <a
-                        href={`mailto:${user.email}`}
-                        onClick={() => setIsActionsMenuOpen(false)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
-                      >
-                        <AnimatedMail size={14} className="text-sky-500 shrink-0" />
-                        <span>Send Email</span>
-                      </a>
-                    )}
+              {/* 3-Dot Actions Menu (works seamlessly on mobile & desktop) */}
+              <div className="relative" ref={actionsMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsActionsMenuOpen((prev) => !prev)}
+                  className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs cursor-pointer"
+                  title="More options"
+                  aria-label="More options"
+                  aria-expanded={isActionsMenuOpen}
+                >
+                  <MoreVertical size={16} />
+                </button>
 
-                    {/* WhatsApp Option */}
-                    {whatsappUrl && (
-                      <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setIsActionsMenuOpen(false)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
-                      >
-                        <ExternalLink size={14} className="text-emerald-500 shrink-0" />
-                        <span>Chat on WhatsApp</span>
-                      </a>
-                    )}
-
-                    {/* Reset Password */}
-                    {canManage && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsActionsMenuOpen(false);
-                          setConfirmResetOpen(true);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
-                      >
-                        <AnimatedKey size={14} className="text-amber-500 shrink-0" />
-                        <span>Reset Password</span>
-                      </button>
-                    )}
-
-                    {/* Deactivate / Activate Account */}
-                    {canManage && user.id !== currentUser.id && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsActionsMenuOpen(false);
-                          setConfirmToggleOpen(true);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
-                      >
-                        <AnimatedPower
-                          size={14}
-                          className={user.status === "active" ? "text-amber-600 shrink-0" : "text-emerald-600 shrink-0"}
-                        />
-                        <span>{user.status === "active" ? "Deactivate Account" : "Activate Account"}</span>
-                      </button>
-                    )}
-
-                    {/* Delete Account */}
-                    {isSuperAdmin && user.id !== currentUser.id && (
-                      <div className="pt-1 mt-1 border-t border-[var(--color-hairline)]">
+                <AnimatePresence>
+                  {isActionsMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute right-0 top-full mt-1.5 min-w-[210px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-2xl space-y-0.5 z-50 backdrop-blur-md"
+                    >
+                      {/* Edit Profile */}
+                      {canManage && (
                         <button
                           type="button"
                           onClick={() => {
                             setIsActionsMenuOpen(false);
-                            setConfirmDeleteOpen(true);
+                            setIsEditModalOpen(true);
                           }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer text-left"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
                         >
-                          <AnimatedTrash2 size={14} className="text-red-600 shrink-0" />
-                          <span>Delete Account</span>
+                          <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
+                          <span>Edit Profile</span>
                         </button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-      </div>
+                      )}
+                      {/* Assign Equipment (Operators) */}
+                      {canManage && user.role === "operator" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            setIsAssignModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                        >
+                          <AnimatedWrench size={14} className="text-amber-500 shrink-0" />
+                          <span>Assign Equipment</span>
+                        </button>
+                      )}
 
-      {/* ─── 3. 4-CARD HIGH-DENSITY METADATA GRID ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card 1: Contact Information */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
-        >
-          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
-              <AnimatedMail size={16} className="text-sky-500 shrink-0" />
-              Contact Information
-            </span>
-          </div>
+                      {/* Email Option */}
+                      {user.email && (
+                        <a
+                          href={`mailto:${user.email}`}
+                          onClick={() => setIsActionsMenuOpen(false)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                        >
+                          <AnimatedMail size={14} className="text-sky-500 shrink-0" />
+                          <span>Send Email</span>
+                        </a>
+                      )}
 
-          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
-            {/* Email */}
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Email</span>
-              <div className="flex items-center sm:justify-end gap-1.5 min-w-0">
-                <span className="font-semibold text-[var(--color-ink)] break-all sm:text-right" title={user.email}>
-                  {user.email}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(user.email, "Email")}
-                  className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
-                  title="Copy email"
-                >
-                  {copiedKey === "Email" ? (
-                    <AnimatedCheck size={12} className="text-emerald-500" />
-                  ) : (
-                    <AnimatedCopy size={12} />
+                      {/* WhatsApp Option */}
+                      {whatsappUrl && (
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setIsActionsMenuOpen(false)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                        >
+                          <ExternalLink size={14} className="text-emerald-500 shrink-0" />
+                          <span>Chat on WhatsApp</span>
+                        </a>
+                      )}
+
+                      {/* Reset Password */}
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            setConfirmResetOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                        >
+                          <AnimatedKey size={14} className="text-amber-500 shrink-0" />
+                          <span>Reset Password</span>
+                        </button>
+                      )}
+
+                      {/* Deactivate / Activate Account */}
+                      {canManage && user.id !== currentUser.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionsMenuOpen(false);
+                            setConfirmToggleOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer text-left"
+                        >
+                          <AnimatedPower
+                            size={14}
+                            className={user.status === "active" ? "text-amber-600 shrink-0" : "text-emerald-600 shrink-0"}
+                          />
+                          <span>{user.status === "active" ? "Deactivate Account" : "Activate Account"}</span>
+                        </button>
+                      )}
+
+                      {/* Delete Account */}
+                      {isSuperAdmin && user.id !== currentUser.id && (
+                        <div className="pt-1 mt-1 border-t border-[var(--color-hairline)]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsActionsMenuOpen(false);
+                              setConfirmDeleteOpen(true);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer text-left"
+                          >
+                            <AnimatedTrash2 size={14} className="text-red-600 shrink-0" />
+                            <span>Delete Account</span>
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
                   )}
-                </button>
-              </div>
-            </div>
-
-            {/* Phone */}
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Phone</span>
-              <div className="flex items-center sm:justify-end gap-1.5 min-w-0">
-                <span className="font-semibold font-mono text-[var(--color-ink)] break-all sm:text-right">
-                  {user.phone || "—"}
-                </span>
-                {user.phone && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(user.phone!, "Phone")}
-                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
-                    title="Copy phone"
-                  >
-                    {copiedKey === "Phone" ? (
-                      <AnimatedCheck size={12} className="text-emerald-500" />
-                    ) : (
-                      <AnimatedCopy size={12} />
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* WhatsApp */}
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">WhatsApp</span>
-              <div className="sm:text-right">
-                {whatsappUrl ? (
-                  <a
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
-                  >
-                    <span>Chat Direct</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                ) : (
-                  <span className="text-[var(--color-mute)] font-semibold">—</span>
-                )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Card 2: Employment Details */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
-        >
-          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
-              <AnimatedUser size={16} className="text-teal-500 shrink-0" />
-              Employment Details
-            </span>
-          </div>
-
-          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Employee ID</span>
-              <div className="flex items-center sm:justify-end gap-1.5 min-w-0">
-                <span className="font-semibold font-mono text-[var(--color-ink)] break-all sm:text-right">
-                  {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`, "Employee ID")}
-                  className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
-                  title="Copy Employee ID"
-                >
-                  {copiedKey === "Employee ID" ? (
-                    <AnimatedCheck size={12} className="text-emerald-500" />
-                  ) : (
-                    <AnimatedCopy size={12} />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Joining Date</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {user.doj ? formatDate(user.doj) : formatDate(user.created_at)}
+          {/* Formatted Operational Metadata Grid: Shift, Joined, Supervisor, Location */}
+          <div className="grid grid-cols-2 gap-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 text-xs sm:grid-cols-4 sm:gap-3">
+            {/* Shift Time */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--color-mute)]">
+                <AnimatedClock size={12} className="shrink-0 text-amber-500" />
+                <span>Shift Time</span>
+              </span>
+              <span className="truncate font-semibold text-[var(--color-ink)]">
+                {shiftDisplay && shiftDisplay !== "—" ? shiftDisplay : "Standard Shift"}
               </span>
             </div>
 
-            {user.role === "operator" && (
-              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Supervisor</span>
-                <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                  {assignedSupervisors.length > 0
-                    ? assignedSupervisors.map((s) => s.full_name).join(", ")
-                    : "Unassigned"}
-                </span>
-              </div>
-            )}
+            {/* Joining Date */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--color-mute)]">
+                <CalendarDays className="h-3 w-3 shrink-0 text-violet-500" />
+                <span>Joining Date</span>
+              </span>
+              <span className="truncate font-semibold text-[var(--color-ink)]">
+                {formatDate(user.doj || user.created_at)}
+              </span>
+            </div>
 
-            {user.role === "supervisor" && (
-              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Supervised Operators</span>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("operators")}
-                  className="font-semibold text-[var(--color-link)] hover:underline break-words sm:text-right cursor-pointer text-left"
-                >
-                  {operators.length} {operators.length === 1 ? "operator" : "operators"} assigned
-                </button>
-              </div>
-            )}
+            {/* Supervisor */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--color-mute)]">
+                <Users className="h-3 w-3 shrink-0 text-teal-500" />
+                <span>Supervisor</span>
+              </span>
+              <span className="truncate font-semibold text-[var(--color-ink)]">
+                {assignedSupervisors.length > 0
+                  ? assignedSupervisors.map((s) => s.full_name).join(", ")
+                  : "Unassigned"}
+              </span>
+            </div>
 
-            {user.role === "operator" && (
-              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Machine Category</span>
-                <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                  {user.machine_category ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80">
-                      {formatMachineCategoryLabel(user.machine_category)}
-                    </span>
+            {/* Location */}
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--color-mute)]">
+                <AnimatedMapPin size={12} className="shrink-0 text-sky-500" />
+                <span>Location</span>
+              </span>
+              <span className="truncate font-semibold text-[var(--color-ink)]">
+                {user.location || (user.city && user.state ? `${user.city}, ${user.state}` : user.city || "—")}
+              </span>
+            </div>
+          </div>
+
+          {/* Mobile Full-Width Action Button (Eliminates dead space on mobile) */}
+          {canManage && (
+            <div className="pt-0.5 sm:hidden">
+              <Button
+                variant="primary"
+                onClick={() => setIsEditModalOpen(true)}
+                className="flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold shadow-xs"
+              >
+                <AnimatedEdit size={14} className="shrink-0" />
+                <span>Edit Profile</span>
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ─── 3. PROFILE DETAIL GROUPS (single surface, 0 duplicate fields) ─── */}
+      <section className="overflow-hidden rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xs">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-hairline)] px-4 py-2.5 sm:px-5">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-mute)]">
+            Profile Details
+          </p>
+          <span className="hidden text-[10.5px] font-medium text-[var(--color-faint)] sm:inline">
+            Directory record · read-only
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-px bg-[var(--color-hairline)] md:grid-cols-3">
+          {/* Group 1: Contact Information */}
+          <div className="bg-[var(--color-canvas-elevated)] p-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                <AnimatedMail size={13} />
+              </span>
+              <h3 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--color-mute)]">Contact</h3>
+            </div>
+            <dl className="divide-y divide-[var(--color-hairline)]/60">
+              <DetailRow
+                label="Email"
+                value={user.email || "—"}
+                title={user.email || undefined}
+                truncate
+                copied={copiedKey === "Email"}
+                onCopy={user.email ? () => handleCopy(user.email!, "Email") : undefined}
+              />
+              <DetailRow
+                label="Phone"
+                value={user.phone || "—"}
+                mono
+                copied={copiedKey === "Phone"}
+                onCopy={user.phone ? () => handleCopy(user.phone!, "Phone") : undefined}
+              />
+              <DetailRow
+                label="WhatsApp"
+                value={
+                  whatsappUrl ? (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+                    >
+                      <span>Chat direct</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
                   ) : (
                     "—"
-                  )}
-                </span>
-              </div>
-            )}
+                  )
+                }
+              />
+            </dl>
+          </div>
+
+          {/* Group 2: Leave & Compensation */}
+          <div className="bg-[var(--color-canvas-elevated)] p-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <AnimatedClock size={13} />
+              </span>
+              <h3 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--color-mute)]">
+                Pay &amp; Leave
+              </h3>
+            </div>
+            <dl className="divide-y divide-[var(--color-hairline)]/60">
+              <DetailRow label="PL Leave Quota" value={plLeaveDisplay} />
+              {canManage && user.monthly_salary != null && Number(user.monthly_salary) > 0 ? (
+                <DetailRow
+                  label="Monthly Salary"
+                  value={`₹${Number(user.monthly_salary).toLocaleString("en-IN")}`}
+                  mono
+                  valueClassName="text-emerald-600 dark:text-emerald-400"
+                />
+              ) : (
+                <DetailRow label="Compensation" value="Standard grade" />
+              )}
+              {user.role === "supervisor" && (
+                <DetailRow
+                  label="Supervised"
+                  value={
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("operators")}
+                      className="inline-flex items-center gap-1 font-semibold text-[var(--color-link)] hover:underline cursor-pointer"
+                    >
+                      <span>
+                        {operators.length} {operators.length === 1 ? "operator" : "operators"}
+                      </span>
+                      <ChevronRight className="h-3 w-3" />
+                    </button>
+                  }
+                />
+              )}
+            </dl>
+          </div>
+
+          {/* Group 3: Residential Address */}
+          <div className="bg-[var(--color-canvas-elevated)] p-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                <AnimatedMapPin size={13} />
+              </span>
+              <h3 className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--color-mute)]">Address</h3>
+            </div>
+            <dl className="divide-y divide-[var(--color-hairline)]/60">
+              <DetailRow
+                label="Street"
+                value={user.street || user.address || "—"}
+                title={user.street || user.address || undefined}
+                truncate
+              />
+              <DetailRow
+                label="City / District"
+                value={user.city && user.district ? `${user.city}, ${user.district}` : user.city || user.district || "—"}
+              />
+              <DetailRow label="State" value={user.state || "—"} />
+            </dl>
           </div>
         </div>
+      </section>
 
-        {/* Card 3: Shift & Compensation */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
+      {/* ─── 4. TAB STRIP (Search removed from profile view) ─── */}
+      <div className="sticky top-12 z-20 -mx-3 border-b border-[var(--color-hairline)] bg-[var(--color-canvas)]/92 px-3 py-2 backdrop-blur-md sm:-mx-6 sm:px-6 md:top-0">
+        <nav
+          aria-label="Profile sections"
+          className="-mx-1 flex min-w-0 flex-wrap items-center gap-1.5 px-1 py-0.5"
         >
-          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
-              <AnimatedClock size={16} className="text-amber-500 shrink-0" />
-              Shift & Compensation
-            </span>
-          </div>
-
-          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Shift Hours</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {shiftDisplay}
-              </span>
-            </div>
-
-            {canManage && user.monthly_salary != null && Number(user.monthly_salary) > 0 && (
-              <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-                <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Monthly Salary</span>
-                <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400 break-words sm:text-right">
-                  ₹{Number(user.monthly_salary).toLocaleString("en-IN")} / mo
-                </span>
-              </div>
-            )}
-
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">PL Leave Quota</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {user.total_pl_quota != null ? `${user.total_pl_quota - (user.pl_used_as_on_date || 0)} / ${user.total_pl_quota} days` : "12 days"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Location & Address */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-4 shadow-2xs space-y-2 transition-all hover:border-[var(--color-link)]/40 hover:shadow-xs group"
-        >
-          <div className="flex items-center justify-between pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center gap-1.5">
-              <AnimatedMapPin size={16} className="text-rose-500 shrink-0" />
-              Location & Address
-            </span>
-          </div>
-
-          <div className="divide-y divide-[var(--color-hairline)]/40 text-xs">
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">City / District</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {user.city && user.district ? `${user.city}, ${user.district}` : user.city || user.district || "—"}
-              </span>
-            </div>
-
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">State</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {user.state || "—"}
-              </span>
-            </div>
-
-            <div className="py-1.5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 sm:gap-2">
-              <span className="text-[11px] sm:text-xs font-medium text-[var(--color-mute)] shrink-0">Street</span>
-              <span className="font-semibold text-[var(--color-ink)] break-words sm:text-right">
-                {user.street || user.address || "—"}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── 4. TAB STRIP & SEARCH TOOLBAR ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-hairline)] pb-3">
-        {/* Scrollable Tab Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap -mx-2 px-2 sm:mx-0 sm:px-0 py-0.5">
           {availableTabs.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -1308,18 +1468,19 @@ export function UserDetailClient({
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none ${
+                aria-current={isActive ? "page" : undefined}
+                className={`flex min-h-[36px] shrink-0 select-none items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
                   isActive
                     ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-xs ring-1 ring-[var(--color-ink)]"
-                    : "bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98"
+                    : "border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] hover:border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)]"
                 }`}
               >
                 <span>{tab.label}</span>
                 {tab.count !== undefined && (
                   <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono ${
+                    className={`rounded-full px-1.5 py-px font-mono text-[10px] font-bold ${
                       isActive
-                        ? "bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                        ? "bg-[var(--color-canvas)]/20 text-[var(--color-canvas)]"
                         : "bg-[var(--color-hairline)] text-[var(--color-mute)]"
                     }`}
                   >
@@ -1329,75 +1490,49 @@ export function UserDetailClient({
               </button>
             );
           })}
-        </div>
-
-        {/* In-Tab Search Input */}
-        {activeTab !== "attendance" && (
-          <div className="relative w-full sm:w-64 shrink-0">
-            <input
-              type="text"
-              value={tabSearch}
-              onChange={(e) => setTabSearch(e.target.value)}
-              placeholder={`Search in ${activeTab}...`}
-              className="w-full h-9 pl-8.5 pr-8 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-hidden focus:border-[var(--color-link)] transition-colors"
-            />
-            <div className="absolute left-2.5 top-2.5 text-[var(--color-mute)] pointer-events-none">
-              <AnimatedSearch size={14} />
-            </div>
-            {tabSearch && (
-              <button
-                type="button"
-                onClick={() => setTabSearch("")}
-                className="absolute right-2.5 top-2.5 text-[var(--color-mute)] hover:text-[var(--color-ink)] text-xs cursor-pointer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        )}
+        </nav>
       </div>
 
       {/* ─── 6. TAB CONTENT PANELS ─── */}
 
       {/* TAB 1: Assigned / Supervised Machinery Fleet */}
       {activeTab === "machines" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedTruck size={16} className="text-sky-500" />
-              <span>{user.role === "supervisor" ? "Supervised Machinery Fleet" : "Assigned Machinery Fleet"}</span>
-            </h3>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-[var(--color-mute)]">
-                Showing {filteredMachines.length} of {machines.length} machines
-              </span>
-              {canManage && user.role === "operator" && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsAssignModalOpen(true)}
-                  className="h-7 text-xs px-2.5 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <AnimatedPlus size={13} className="text-amber-500" />
-                  <span>Assign Equipment</span>
-                </Button>
-              )}
-            </div>
-          </div>
-
+        <Panel
+          icon={<AnimatedTruck size={15} />}
+          tone="sky"
+          title={user.role === "supervisor" ? "Supervised Machinery Fleet" : "Assigned Machinery Fleet"}
+          subtitle={`${filteredMachines.length} of ${machines.length} machines`}
+          actions={
+            canManage && user.role === "operator" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsAssignModalOpen(true)}
+                className="flex h-8 cursor-pointer items-center gap-1.5 px-2.5 text-xs shadow-2xs"
+              >
+                <AnimatedPlus size={13} className="text-amber-500" />
+                <span className="hidden sm:inline">Assign Equipment</span>
+              </Button>
+            ) : undefined
+          }
+        >
           {filteredMachines.length === 0 ? (
-            <div className="py-12 text-center flex flex-col items-center">
+            <div className="flex flex-col items-center py-10 text-center">
               <EmptyState
                 title="No Machines Found"
-                description={tabSearch ? "No assigned machines match your search." : user.role === "supervisor" ? "No machinery currently under supervision for this user or their operators." : "No machinery currently assigned to this user."}
+                description={
+                  user.role === "supervisor"
+                    ? "No machinery currently under supervision for this user or their operators."
+                    : "No machinery currently assigned to this user."
+                }
               />
-              {canManage && user.role === "operator" && !tabSearch && (
+              {canManage && user.role === "operator" && (
                 <div className="mt-3">
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={() => setIsAssignModalOpen(true)}
-                    className="h-8 text-xs px-3 flex items-center gap-1.5 cursor-pointer"
+                    className="flex h-8 cursor-pointer items-center gap-1.5 px-3 text-xs"
                   >
                     <AnimatedPlus size={14} />
                     <span>Assign Equipment to Operator</span>
@@ -1407,70 +1542,74 @@ export function UserDetailClient({
             </div>
           ) : (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                    <tr>
-                      <th className="py-2.5 px-3">Machine ID</th>
-                      <th className="py-2.5 px-3">Name / Model</th>
-                      {user.role === "supervisor" && <th className="py-2.5 px-3">Assigned Operator</th>}
-                      <th className="py-2.5 px-3">Serial Number</th>
-                      <th className="py-2.5 px-3">Manufacturer</th>
-                      <th className="py-2.5 px-3">Hour Meter</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
+              {/* Desktop table */}
+              <div className="hidden overflow-hidden rounded-lg border border-[var(--color-hairline)] lg:block">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead className="bg-[var(--color-hairline-soft-surface)]">
+                    <tr className="text-[10px] uppercase tracking-[0.06em] text-[var(--color-mute)]">
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Machine</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Name / Model</th>
+                      {user.role === "supervisor" && (
+                        <th className="whitespace-nowrap px-3 py-2.5 font-bold">Operator</th>
+                      )}
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Serial</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Manufacturer</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-bold">Hour Meter</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Status</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-bold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-hairline)]">
                     {filteredMachines.map((m) => (
-                      <tr key={m.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors group">
-                        <td className="py-2.5 px-3 font-mono font-bold text-[var(--color-ink)]">
+                      <tr key={m.id} className="transition-colors hover:bg-[var(--color-hairline-soft-surface)]">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] font-bold text-[var(--color-ink)]">
                           {m.machine_id}
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="px-3 py-2.5">
                           <div className="font-semibold text-[var(--color-ink)]">{m.machine_name}</div>
                           <div className="text-[10px] text-[var(--color-mute)]">{m.model}</div>
                         </td>
                         {user.role === "supervisor" && (
-                          <td className="py-2.5 px-3">
+                          <td className="px-3 py-2.5">
                             {m.assigned_operator_name ? (
                               <div>
                                 <div className="font-semibold text-[var(--color-ink)]">{m.assigned_operator_name}</div>
                                 {m.assigned_operator_code && (
-                                  <div className="font-mono text-[10px] text-[var(--color-mute)]">{m.assigned_operator_code}</div>
+                                  <div className="font-mono text-[10px] text-[var(--color-mute)]">
+                                    {m.assigned_operator_code}
+                                  </div>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[var(--color-mute)] italic">Unassigned</span>
+                              <span className="text-[11px] italic text-[var(--color-faint)]">Unassigned</span>
                             )}
                           </td>
                         )}
-                        <td className="py-2.5 px-3 font-mono text-[var(--color-mute)]">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-[var(--color-mute)]">
                           {m.serial_number || "—"}
                         </td>
-                        <td className="py-2.5 px-3 text-[var(--color-ink)]">
-                          {m.manufacturer || "—"}
+                        <td className="px-3 py-2.5 text-[11px] text-[var(--color-body)]">{m.manufacturer || "—"}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] text-[var(--color-ink)]">
+                          {m.hour_meter != null ? `${Number(m.hour_meter).toLocaleString("en-IN")} h` : "—"}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-[var(--color-ink)]">
-                          {m.hour_meter != null ? `${m.hour_meter} h` : "—"}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
-                            m.status === "active"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
-                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          }`}>
+                        <td className="px-3 py-2.5">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${
+                              m.status === "active"
+                                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-mute)]"
+                            }`}
+                          >
                             {m.status}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-right">
+                        <td className="px-3 py-2.5 text-right">
                           <Link
                             href={`/machines/${m.id}`}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-link)] hover:underline"
+                            className="inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-[11px] font-semibold text-[var(--color-link)] transition-colors hover:border-[var(--color-hairline)] hover:bg-[var(--color-canvas-elevated)]"
                           >
                             <span>Inspect</span>
-                            <ExternalLink className="h-3 w-3" />
+                            <ArrowUpRight className="h-3 w-3" />
                           </Link>
                         </td>
                       </tr>
@@ -1479,82 +1618,91 @@ export function UserDetailClient({
                 </table>
               </div>
 
-              {/* Mobile Cards View */}
-              <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+              {/* Tablet & mobile cards */}
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:hidden">
                 {filteredMachines.map((m) => (
-                  <div
+                  <Link
                     key={m.id}
-                    className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 text-xs"
+                    href={`/machines/${m.id}`}
+                    className="group flex flex-col gap-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 transition-colors hover:border-[var(--color-link)]/40"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-[var(--color-ink)]">{m.machine_id}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 capitalize">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[11px] font-bold text-[var(--color-ink)]">{m.machine_id}</p>
+                        <p className="truncate text-xs font-semibold text-[var(--color-ink)]">
+                          {m.machine_name}
+                          <span className="font-normal text-[var(--color-mute)]"> · {m.model}</span>
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${
+                          m.status === "active"
+                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)]"
+                        }`}
+                      >
                         {m.status}
                       </span>
                     </div>
-                    <div className="font-semibold text-[var(--color-ink)]">{m.machine_name} ({m.model})</div>
-                    {user.role === "supervisor" && m.assigned_operator_name && (
-                      <div className="text-[11px] text-[var(--color-mute)]">
-                        <span>Operator: </span>
-                        <span className="font-semibold text-[var(--color-ink)]">{m.assigned_operator_name}</span>
+
+                    {user.role === "supervisor" && (
+                      <p className="text-[11px] text-[var(--color-mute)]">
+                        Operator:{" "}
+                        <span className="font-semibold text-[var(--color-ink)]">
+                          {m.assigned_operator_name || "Unassigned"}
+                        </span>
                         {m.assigned_operator_code && (
-                          <span className="font-mono text-[10px] text-[var(--color-mute)] ml-1">({m.assigned_operator_code})</span>
+                          <span className="ml-1 font-mono text-[10px]">({m.assigned_operator_code})</span>
                         )}
-                      </div>
+                      </p>
                     )}
-                    <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)] pt-1 border-t border-[var(--color-hairline)]">
-                      <span>Meter: {m.hour_meter != null ? `${m.hour_meter} h` : "—"}</span>
-                      <Link href={`/machines/${m.id}`} className="text-[var(--color-link)] font-semibold flex items-center gap-1">
-                        <span>Inspect</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </Link>
+
+                    <div className="mt-auto flex items-center justify-between border-t border-[var(--color-hairline)] pt-2 text-[10.5px] text-[var(--color-mute)]">
+                      <span className="font-mono">
+                        Meter {m.hour_meter != null ? `${Number(m.hour_meter).toLocaleString("en-IN")} h` : "—"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-link)]">
+                        Inspect
+                        <ArrowUpRight className="h-3 w-3" />
+                      </span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </>
           )}
-        </div>
+        </Panel>
       )}
 
       {/* TAB: Supervised Operators (Supervisor Role Only) */}
       {activeTab === "operators" && user.role === "supervisor" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-              <Users size={16} className="text-teal-500" />
-              <span>Supervised Operators</span>
-            </h3>
-            <span className="text-xs text-[var(--color-mute)]">
-              Showing {filteredOperators.length} of {operators.length} operators
-            </span>
-          </div>
-
+        <Panel
+          icon={<Users className="h-3.5 w-3.5" />}
+          tone="teal"
+          title="Supervised Operators"
+          subtitle={`${filteredOperators.length} of ${operators.length} operators`}
+        >
           {filteredOperators.length === 0 ? (
-            <div className="py-12 text-center flex flex-col items-center">
+            <div className="py-10 text-center">
               <EmptyState
-                title={tabSearch ? "No Operators Found" : "No Operators Assigned"}
-                description={
-                  tabSearch
-                    ? `No operators under this supervisor match "${tabSearch}".`
-                    : "No operators are currently assigned to report to this supervisor."
-                }
+                title="No Operators Assigned"
+                description="No operators are currently assigned to report to this supervisor."
               />
             </div>
           ) : (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                    <tr>
-                      <th className="py-2.5 px-3">Operator</th>
-                      <th className="py-2.5 px-3">Contact</th>
-                      <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3">Current Equipment</th>
-                      <th className="py-2.5 px-3">Shift Hours</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-right">Profile</th>
+              {/* Desktop table */}
+              <div className="hidden overflow-hidden rounded-lg border border-[var(--color-hairline)] lg:block">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead className="bg-[var(--color-hairline-soft-surface)]">
+                    <tr className="text-[10px] uppercase tracking-[0.06em] text-[var(--color-mute)]">
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Operator</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Contact</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Category</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Equipment</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Shift</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Status</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-bold">Profile</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-hairline)]">
@@ -1565,35 +1713,36 @@ export function UserDetailClient({
                             `Hello ${op.full_name}, regarding operations under supervisor ${user.full_name}.`
                           )}`
                         : "";
-                      const shiftStr = op.shift_start_time && op.shift_end_time
-                        ? `${formatShiftTime(op.shift_start_time)} – ${formatShiftTime(op.shift_end_time)}`
-                        : "Standard";
+                      const shiftStr =
+                        op.shift_start_time && op.shift_end_time
+                          ? `${formatShiftTime(op.shift_start_time)} – ${formatShiftTime(op.shift_end_time)}`
+                          : "Standard";
 
                       return (
-                        <tr key={op.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors group">
-                          <td className="py-2.5 px-3">
+                        <tr key={op.id} className="transition-colors hover:bg-[var(--color-hairline-soft-surface)]">
+                          <td className="px-3 py-2.5">
                             <div className="flex items-center gap-2.5">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-xs border border-amber-300/60 dark:border-amber-800/60">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/25 bg-amber-500/10 text-[11px] font-bold text-amber-700 dark:text-amber-300">
                                 <span>{getInitials(op.full_name)}</span>
                               </div>
                               <div className="min-w-0">
                                 <Link
                                   href={`/users/${op.employee_id || op.id}`}
-                                  className="font-semibold text-[var(--color-ink)] hover:text-[var(--color-link)] transition-colors truncate block"
+                                  className="block truncate font-semibold text-[var(--color-ink)] transition-colors hover:text-[var(--color-link)]"
                                 >
                                   {op.full_name}
                                 </Link>
-                                <div className="flex items-center gap-1 font-mono text-[10px] text-[var(--color-mute)]">
-                                  <span>{op.employee_id || `ID: ${op.id.slice(0, 8)}`}</span>
+                                <div className="font-mono text-[10px] text-[var(--color-mute)]">
+                                  {op.employee_id || `ID: ${op.id.slice(0, 8)}`}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="px-3 py-2.5">
                             <div className="space-y-0.5">
                               {op.phone ? (
                                 <div className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-ink)]">
-                                  <AnimatedPhone size={11} className="text-teal-500 shrink-0" />
+                                  <AnimatedPhone size={11} className="shrink-0 text-teal-500" />
                                   <a href={`tel:${cleanOpPhone}`} className="hover:underline">
                                     {op.phone}
                                   </a>
@@ -1602,7 +1751,7 @@ export function UserDetailClient({
                                       href={opWhatsappUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-emerald-600 dark:text-emerald-400 hover:opacity-80 ml-0.5"
+                                      className="ml-0.5 text-emerald-600 hover:opacity-80 dark:text-emerald-400"
                                       title="WhatsApp chat"
                                     >
                                       <ExternalLink className="h-3 w-3" />
@@ -1613,62 +1762,60 @@ export function UserDetailClient({
                                 <span className="text-[var(--color-mute)]">—</span>
                               )}
                               {op.email && (
-                                <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-mute)] truncate max-w-[180px]">
-                                  <AnimatedMail size={11} className="text-sky-500 shrink-0" />
+                                <div className="flex max-w-[180px] items-center gap-1.5 truncate text-[10px] text-[var(--color-mute)]">
+                                  <AnimatedMail size={11} className="shrink-0 text-sky-500" />
                                   <span className="truncate">{op.email}</span>
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="px-3 py-2.5">
                             {op.machine_category ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80">
+                              <span className="inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 dark:border-sky-800/80 dark:bg-sky-950/60 dark:text-sky-300">
                                 {formatMachineCategoryLabel(op.machine_category)}
                               </span>
                             ) : (
                               <span className="text-[var(--color-mute)]">—</span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="px-3 py-2.5">
                             {op.active_machine_code ? (
                               <div className="space-y-0.5">
                                 <Link
                                   href={`/machines/${op.active_machine_id}`}
-                                  className="font-mono font-bold text-[11px] text-[var(--color-link)] hover:underline block"
+                                  className="block font-mono text-[11px] font-bold text-[var(--color-link)] hover:underline"
                                 >
                                   {op.active_machine_code}
                                 </Link>
-                                <div className="text-[10px] text-[var(--color-mute)] truncate max-w-[160px]">
+                                <div className="max-w-[160px] truncate text-[10px] text-[var(--color-mute)]">
                                   {op.active_machine_name}
                                 </div>
                               </div>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)]">
+                              <span className="inline-flex items-center rounded-full border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-mute)]">
                                 Unassigned
                               </span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-[11px] text-[var(--color-mute)]">
-                            {shiftStr}
-                          </td>
-                          <td className="py-2.5 px-3">
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-[var(--color-mute)]">{shiftStr}</td>
+                          <td className="px-3 py-2.5">
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${
                                 op.status === "active"
-                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
-                                  : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                  : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-mute)]"
                               }`}
                             >
                               {op.status}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-right">
+                          <td className="px-3 py-2.5 text-right">
                             <Link
                               href={`/users/${op.employee_id || op.id}`}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-link)] hover:underline"
+                              className="inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-[11px] font-semibold text-[var(--color-link)] transition-colors hover:border-[var(--color-hairline)] hover:bg-[var(--color-canvas-elevated)]"
                             >
                               <span>View</span>
-                              <ExternalLink className="h-3 w-3" />
+                              <ChevronRight className="h-3 w-3" />
                             </Link>
                           </td>
                         </tr>
@@ -1678,8 +1825,8 @@ export function UserDetailClient({
                 </table>
               </div>
 
-              {/* Tablet & Mobile Touch Cards View */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:hidden">
+              {/* Tablet & mobile touch cards */}
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:hidden">
                 {filteredOperators.map((op) => {
                   const cleanOpPhone = (op.phone || "").replace(/[^0-9+]/g, "");
                   const opWhatsappUrl = cleanOpPhone
@@ -1687,24 +1834,25 @@ export function UserDetailClient({
                         `Hello ${op.full_name}, regarding operations under supervisor ${user.full_name}.`
                       )}`
                     : "";
-                  const shiftStr = op.shift_start_time && op.shift_end_time
-                    ? `${formatShiftTime(op.shift_start_time)} – ${formatShiftTime(op.shift_end_time)}`
-                    : "Standard";
+                  const shiftStr =
+                    op.shift_start_time && op.shift_end_time
+                      ? `${formatShiftTime(op.shift_start_time)} – ${formatShiftTime(op.shift_end_time)}`
+                      : "Standard";
 
                   return (
                     <div
                       key={op.id}
-                      className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] shadow-2xs space-y-3 text-xs"
+                      className="flex flex-col gap-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-sm border border-amber-300/60 dark:border-amber-800/60">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/25 bg-amber-500/10 text-xs font-bold text-amber-700 dark:text-amber-300">
                             <span>{getInitials(op.full_name)}</span>
                           </div>
                           <div className="min-w-0">
                             <Link
                               href={`/users/${op.employee_id || op.id}`}
-                              className="font-bold text-sm text-[var(--color-ink)] hover:text-[var(--color-link)] transition-colors truncate block"
+                              className="block truncate text-[13px] font-bold text-[var(--color-ink)] transition-colors hover:text-[var(--color-link)]"
                             >
                               {op.full_name}
                             </Link>
@@ -1713,56 +1861,52 @@ export function UserDetailClient({
                             </span>
                           </div>
                         </div>
-
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold capitalize shrink-0 ${
+                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${
                             op.status === "active"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
-                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                              : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)]"
                           }`}
                         >
                           {op.status}
                         </span>
                       </div>
 
-                      <div className="space-y-1.5 text-xs text-[var(--color-mute)] border-t border-[var(--color-hairline)]/60 pt-2">
+                      <div className="space-y-1.5 border-t border-[var(--color-hairline)] pt-2 text-[11px]">
                         {op.active_machine_code && (
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px]">Equipment:</span>
+                            <span className="text-[var(--color-mute)]">Equipment</span>
                             <Link
                               href={`/machines/${op.active_machine_id}`}
-                              className="font-mono font-bold text-xs text-[var(--color-link)] hover:underline truncate"
+                              className="truncate font-mono text-[11px] font-bold text-[var(--color-link)] hover:underline"
                             >
-                              {op.active_machine_code} - {op.active_machine_name}
+                              {op.active_machine_code} · {op.active_machine_name}
                             </Link>
                           </div>
                         )}
-
                         {op.machine_category && (
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px]">Category:</span>
+                            <span className="text-[var(--color-mute)]">Category</span>
                             <span className="font-semibold text-[var(--color-ink)]">
                               {formatMachineCategoryLabel(op.machine_category)}
                             </span>
                           </div>
                         )}
-
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px]">Shift:</span>
+                          <span className="text-[var(--color-mute)]">Shift</span>
                           <span className="font-medium text-[var(--color-ink)]">{shiftStr}</span>
                         </div>
                       </div>
 
-                      {/* Touch Quick Actions */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--color-hairline)]/60">
-                        <div className="flex items-center gap-2">
+                      <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--color-hairline)] pt-2">
+                        <div className="flex items-center gap-1.5">
                           {cleanOpPhone && (
                             <a
                               href={`tel:${cleanOpPhone}`}
-                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-teal-600 dark:text-teal-400 hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs"
-                              title="Call Operator"
+                              aria-label={`Call ${op.full_name}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-teal-600 transition-colors hover:bg-[var(--color-hairline-soft-surface)] dark:text-teal-400"
                             >
-                              <AnimatedPhone size={14} />
+                              <AnimatedPhone size={13} />
                             </a>
                           )}
                           {opWhatsappUrl && (
@@ -1770,8 +1914,8 @@ export function UserDetailClient({
                               href={opWhatsappUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-emerald-600 dark:text-emerald-400 hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs"
-                              title="Chat on WhatsApp"
+                              aria-label={`WhatsApp ${op.full_name}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-emerald-600 transition-colors hover:bg-[var(--color-hairline-soft-surface)] dark:text-emerald-400"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
                             </a>
@@ -1780,10 +1924,10 @@ export function UserDetailClient({
 
                         <Link
                           href={`/users/${op.employee_id || op.id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-ink)] text-[var(--color-canvas)] hover:opacity-90 transition-opacity shadow-2xs"
+                          className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-canvas)] shadow-2xs transition-opacity hover:opacity-90"
                         >
-                          <span>View Profile</span>
-                          <AnimatedChevronLeft size={12} className="rotate-180" />
+                          <span>View profile</span>
+                          <ChevronRight className="h-3 w-3" />
                         </Link>
                       </div>
                     </div>
@@ -1792,77 +1936,75 @@ export function UserDetailClient({
               </div>
             </>
           )}
-        </div>
+        </Panel>
       )}
 
       {/* TAB 2: Shift Running Logs */}
       {activeTab === "logs" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedClock size={16} className="text-emerald-500" />
-              <span>Shift Running Logs (Recent 50)</span>
-            </h3>
-            <span className="text-xs text-[var(--color-mute)]">
-              Showing {filteredLogs.length} of {runningLogs.length} logs
-            </span>
-          </div>
-
+        <Panel
+          icon={<AnimatedClock size={15} />}
+          tone="emerald"
+          title="Shift Running Logs"
+          subtitle={`${filteredLogs.length} of ${runningLogs.length} recent logs`}
+        >
           {filteredLogs.length === 0 ? (
-            <div className="py-12 text-center">
+            <div className="py-10 text-center">
               <EmptyState
                 title="No Running Logs Found"
-                description={tabSearch ? "No logs match your search token." : "No machine operating logs recorded for this user yet."}
+                description="No machine operating logs recorded for this user yet."
               />
             </div>
           ) : (
             <>
-              {/* Desktop Table View */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                    <tr>
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Machine</th>
-                      <th className="py-2.5 px-3">Timings</th>
-                      <th className="py-2.5 px-3">Meters (Start - End)</th>
-                      <th className="py-2.5 px-3">Hours</th>
-                      <th className="py-2.5 px-3">Overtime</th>
-                      <th className="py-2.5 px-3">Location & Remarks</th>
+              {/* Desktop table */}
+              <div className="hidden overflow-hidden rounded-lg border border-[var(--color-hairline)] lg:block">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead className="bg-[var(--color-hairline-soft-surface)]">
+                    <tr className="text-[10px] uppercase tracking-[0.06em] text-[var(--color-mute)]">
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Date</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Machine</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Shift</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 font-bold">Meter</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-bold">Hours</th>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right font-bold">OT</th>
+                      <th className="px-3 py-2.5 font-bold">Location &amp; Remarks</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-hairline)]">
                     {filteredLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
-                        <td className="py-2.5 px-3 font-mono font-medium text-[var(--color-ink)] whitespace-nowrap">
+                      <tr key={log.id} className="transition-colors hover:bg-[var(--color-hairline-soft-surface)]">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] font-semibold text-[var(--color-ink)]">
                           {log.log_date}
                         </td>
-                        <td className="py-2.5 px-3">
-                          <span className="font-mono font-semibold text-[var(--color-ink)]">{log.machine_code}</span>
-                          <span className="text-[10px] text-[var(--color-mute)] block truncate max-w-[140px]">
+                        <td className="px-3 py-2.5">
+                          <span className="font-mono text-[11px] font-bold text-[var(--color-ink)]">{log.machine_code}</span>
+                          <span className="block max-w-[150px] truncate text-[10px] text-[var(--color-mute)]">
                             {log.machine_name}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-[var(--color-mute)] whitespace-nowrap">
+                        <td className="whitespace-nowrap px-3 py-2.5 text-[11px] text-[var(--color-mute)]">
                           {log.start_time && log.end_time
                             ? `${formatShiftTime(log.start_time)} – ${formatShiftTime(log.end_time)}`
                             : "—"}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-[var(--color-ink)] whitespace-nowrap">
-                          {log.start_meter != null && log.end_meter != null
-                            ? `${log.start_meter} → ${log.end_meter}`
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-[var(--color-body)]">
+                          {log.start_meter != null && log.end_meter != null ? `${log.start_meter} → ${log.end_meter}` : "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] font-bold text-[var(--color-ink)]">
+                          {Number(log.running_hours || 0).toFixed(1)} h
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-[11px] text-amber-600 dark:text-amber-400">
+                          {log.overtime_hours != null && log.overtime_hours > 0
+                            ? `${Number(log.overtime_hours).toFixed(1)} h`
                             : "—"}
                         </td>
-                        <td className="py-2.5 px-3 font-mono font-bold text-[var(--color-ink)]">
-                          {log.running_hours.toFixed(1)} h
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-amber-600 dark:text-amber-400">
-                          {log.overtime_hours != null && log.overtime_hours > 0 ? `${log.overtime_hours.toFixed(1)} h` : "—"}
-                        </td>
-                        <td className="py-2.5 px-3 text-[var(--color-mute)] max-w-xs truncate" title={log.remarks || log.location || undefined}>
+                        <td
+                          className="max-w-[260px] truncate px-3 py-2.5 text-[11px] text-[var(--color-mute)]"
+                          title={log.remarks || log.location || undefined}
+                        >
                           {log.is_breakdown && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 mr-1.5">
-                              BREAKDOWN
+                            <span className="mr-1.5 inline-flex items-center rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-700 dark:text-rose-300">
+                              Breakdown
                             </span>
                           )}
                           {log.location || log.remarks || "—"}
@@ -1873,78 +2015,98 @@ export function UserDetailClient({
                 </table>
               </div>
 
-              {/* Mobile Cards View */}
-              <div className="grid grid-cols-1 gap-2.5 sm:hidden">
+              {/* Tablet & mobile cards */}
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:hidden">
                 {filteredLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5 text-xs"
+                    className="flex flex-col gap-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3"
                   >
-                    <div className="flex items-center justify-between font-mono">
-                      <span className="font-bold text-[var(--color-ink)]">{log.log_date}</span>
-                      <span className="font-bold text-emerald-600">{log.running_hours.toFixed(1)} hrs</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[11px] font-bold text-[var(--color-ink)]">{log.log_date}</p>
+                        <p className="truncate text-xs font-semibold text-[var(--color-ink)]">
+                          {log.machine_code}
+                          <span className="font-normal text-[var(--color-mute)]"> · {log.machine_name}</span>
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                          {Number(log.running_hours || 0).toFixed(1)} h
+                        </p>
+                        {log.overtime_hours != null && log.overtime_hours > 0 && (
+                          <p className="font-mono text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                            +{Number(log.overtime_hours).toFixed(1)} OT
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="font-medium text-[var(--color-ink)] flex items-center justify-between">
-                      <span>{log.machine_code} ({log.machine_name})</span>
-                      {log.overtime_hours != null && log.overtime_hours > 0 && (
-                        <span className="text-[10px] text-amber-600 font-mono">+{log.overtime_hours}h OT</span>
+
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-[var(--color-mute)]">
+                      <span>
+                        {log.start_time && log.end_time
+                          ? `${formatShiftTime(log.start_time)} – ${formatShiftTime(log.end_time)}`
+                          : "Standard shift"}
+                      </span>
+                      {log.start_meter != null && log.end_meter != null && (
+                        <span className="font-mono">
+                          {log.start_meter} → {log.end_meter}
+                        </span>
+                      )}
+                      {log.is_breakdown && (
+                        <span className="inline-flex items-center rounded border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-700 dark:text-rose-300">
+                          Breakdown
+                        </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-[var(--color-mute)]">
-                      {log.start_time && log.end_time ? `${formatShiftTime(log.start_time)} – ${formatShiftTime(log.end_time)}` : "Standard Shift"}
-                    </div>
+
                     {log.remarks && (
-                      <div className="text-[10px] text-[var(--color-mute)] italic border-t border-[var(--color-hairline)] pt-1">
+                      <p className="mt-auto border-t border-[var(--color-hairline)] pt-2 text-[10.5px] italic text-[var(--color-mute)]">
                         {log.remarks}
-                      </div>
+                      </p>
                     )}
                   </div>
                 ))}
               </div>
             </>
           )}
-        </div>
+        </Panel>
       )}
 
       {/* TAB 3: Shift & Machine Assignments */}
       {activeTab === "assignments" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedBuilding2 size={16} className="text-indigo-500" />
-              <span>Machine Assignment History</span>
-            </h3>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-[var(--color-mute)]">
-                Showing {filteredAssignments.length} of {assignments.length} assignments
-              </span>
-              {canManage && user.role === "operator" && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setIsAssignModalOpen(true)}
-                  className="h-7 text-xs px-2.5 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <AnimatedWrench size={13} className="text-indigo-500" />
-                  <span>Manage Shifts & Equipment</span>
-                </Button>
-              )}
-            </div>
-          </div>
-
+        <Panel
+          icon={<AnimatedWrench size={15} />}
+          tone="indigo"
+          title="Machine Assignment History"
+          subtitle={`${filteredAssignments.length} of ${assignments.length} assignments`}
+          actions={
+            canManage && user.role === "operator" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsAssignModalOpen(true)}
+                className="flex h-8 cursor-pointer items-center gap-1.5 px-2.5 text-xs shadow-2xs"
+              >
+                <AnimatedWrench size={13} className="text-indigo-500" />
+                <span className="hidden sm:inline">Manage shifts &amp; equipment</span>
+              </Button>
+            ) : undefined
+          }
+        >
           {filteredAssignments.length === 0 ? (
-            <div className="py-12 text-center flex flex-col items-center">
+            <div className="flex flex-col items-center py-10 text-center">
               <EmptyState
                 title="No Assignments Found"
-                description={tabSearch ? "No assignments match your search query." : "No machine assignments registered for this user."}
+                description="No machine assignments registered for this user."
               />
-              {canManage && user.role === "operator" && !tabSearch && (
+              {canManage && user.role === "operator" && (
                 <div className="mt-3">
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={() => setIsAssignModalOpen(true)}
-                    className="h-8 text-xs px-3 flex items-center gap-1.5 cursor-pointer"
+                    className="flex h-8 cursor-pointer items-center gap-1.5 px-3 text-xs"
                   >
                     <AnimatedPlus size={14} />
                     <span>Assign Equipment to Operator</span>
@@ -1953,372 +2115,326 @@ export function UserDetailClient({
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
               {filteredAssignments.map((a) => (
                 <div
                   key={a.id}
-                  className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5 text-xs hover:border-[var(--color-link)]/40 transition-colors"
+                  className="flex flex-col gap-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 transition-colors hover:border-[var(--color-link)]/40"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-[var(--color-ink)]">{a.machine_code}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      a.is_active
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
-                        : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                    }`}>
-                      {a.is_active ? "Active Duty" : "Ended"}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/machines/${a.machine_id}`}
+                        className="font-mono text-[11px] font-bold text-[var(--color-ink)] transition-colors hover:text-[var(--color-link)]"
+                      >
+                        {a.machine_code}
+                      </Link>
+                      <p className="truncate text-xs font-semibold text-[var(--color-ink)]">{a.machine_name}</p>
+                      <p className="truncate text-[10px] text-[var(--color-mute)]">{a.model}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                        a.is_active
+                          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)]"
+                      }`}
+                    >
+                      {a.is_active ? "Active duty" : "Ended"}
                     </span>
                   </div>
 
-                  <div>
-                    <div className="font-semibold text-[var(--color-ink)]">{a.machine_name}</div>
-                    <div className="text-[10px] text-[var(--color-mute)]">{a.model}</div>
-                  </div>
-
-                  <div className="pt-2 border-t border-[var(--color-hairline)] space-y-1 text-[11px] text-[var(--color-mute)]">
-                    <div className="flex items-center justify-between">
-                      <span>Shift</span>
-                      <span className="font-medium text-[var(--color-ink)] flex items-center gap-1.5">
+                  <dl className="mt-auto divide-y divide-[var(--color-hairline)]/60 border-t border-[var(--color-hairline)] pt-1.5 text-[11px]">
+                    <div className="flex items-center justify-between gap-2 py-1.5">
+                      <dt className="text-[var(--color-mute)]">Shift</dt>
+                      <dd className="flex items-center gap-1.5 text-right font-medium text-[var(--color-ink)]">
                         {a.shift_code && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase bg-sky-500/10 text-sky-600 border border-sky-500/25">
+                          <span className="rounded border border-sky-500/25 bg-sky-500/10 px-1.5 py-px font-mono text-[10px] font-bold uppercase text-sky-700 dark:text-sky-300">
                             {a.shift_code}
                           </span>
                         )}
                         <span>
                           {a.shift_start_time && a.shift_end_time
                             ? `${formatShiftTime(a.shift_start_time)} – ${formatShiftTime(a.shift_end_time)}`
-                            : "Standard Day Shift"}
+                            : "Standard day shift"}
                         </span>
-                      </span>
+                      </dd>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span>Assigned At</span>
-                      <span className="font-mono">{formatDate(a.assigned_at)}</span>
+                    <div className="flex items-center justify-between gap-2 py-1.5">
+                      <dt className="text-[var(--color-mute)]">Assigned</dt>
+                      <dd className="font-mono text-[10.5px] font-medium text-[var(--color-ink)]">
+                        {formatDate(a.assigned_at)}
+                      </dd>
                     </div>
-                  </div>
+                    {a.ended_at && (
+                      <div className="flex items-center justify-between gap-2 py-1.5">
+                        <dt className="text-[var(--color-mute)]">Ended</dt>
+                        <dd className="font-mono text-[10.5px] font-medium text-[var(--color-ink)]">
+                          {formatDate(a.ended_at)}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </Panel>
       )}
 
       {/* TAB 4: Attendance Overview & Deep Link (Operator Role Only) */}
       {activeTab === "attendance" && user.role === "operator" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-5 sm:p-6 shadow-2xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-[var(--color-hairline)]">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[var(--color-ink)] flex items-center gap-2">
-                <AnimatedCalendarClock size={18} className="text-amber-500" />
-                <span>Attendance & Timesheet Ledger</span>
-              </h3>
-              <p className="text-xs text-[var(--color-mute)]">
-                Direct monthly attendance logs, punch-in/out telemetry, worked hours, and overtime records.
-              </p>
-            </div>
-
+        <Panel
+          icon={<AnimatedCalendarClock size={15} />}
+          tone="amber"
+          title="Attendance & Timesheet"
+          subtitle="Punch telemetry · worked hours · overtime"
+          actions={
             <Link
-              href={`/attendance/${user.id}?month=2026-09`}
-              className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-md bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-semibold hover:opacity-90 active:scale-98 transition-all shrink-0 cursor-pointer shadow-xs"
+              href={`/attendance/${user.id}?month=${currentMonthIST}`}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--color-ink)] px-3 text-[11px] font-semibold text-[var(--color-canvas)] transition-opacity hover:opacity-90"
             >
-              <span>View Full Attendance Ledger</span>
-              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Open full ledger</span>
+              <span className="sm:hidden">Ledger</span>
+              <ArrowUpRight className="h-3 w-3" />
             </Link>
+          }
+        >
+          <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-[var(--color-hairline)] bg-[var(--color-hairline)] sm:grid-cols-3">
+            <div className="bg-[var(--color-canvas)] p-3.5">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-mute)]">
+                Work days
+              </p>
+              <p className="mt-2 font-mono text-xl font-bold leading-none text-[var(--color-ink)]">
+                {kpis.totalDaysWorked}
+              </p>
+              <p className="mt-1.5 text-[10.5px] text-[var(--color-faint)]">From verified daily machine logs</p>
+            </div>
+            <div className="bg-[var(--color-canvas)] p-3.5">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-mute)]">
+                Running time
+              </p>
+              <p className="mt-2 font-mono text-xl font-bold leading-none text-emerald-600 dark:text-emerald-400">
+                {kpis.totalRunningHours} h
+              </p>
+              <p className="mt-1.5 text-[10.5px] text-[var(--color-faint)]">Cumulative operating duration</p>
+            </div>
+            <div className="bg-[var(--color-canvas)] p-3.5">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-mute)]">
+                Shift window
+              </p>
+              <p className="mt-2 text-sm font-bold leading-tight text-[var(--color-ink)]">{shiftDisplay}</p>
+              <p className="mt-1.5 text-[10.5px] text-[var(--color-faint)]">Standard operating window</p>
+            </div>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1">
-              <span className="text-xs font-medium text-[var(--color-mute)]">Total Active Work Days</span>
-              <div className="text-2xl font-bold font-mono text-[var(--color-ink)]">{kpis.totalDaysWorked}</div>
-              <span className="text-[11px] text-[var(--color-mute)]">From verified daily machine logs</span>
-            </div>
-
-            <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1">
-              <span className="text-xs font-medium text-[var(--color-mute)]">Total Shift Running Time</span>
-              <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">{kpis.totalRunningHours} h</div>
-              <span className="text-[11px] text-[var(--color-mute)]">Cumulated operating duration</span>
-            </div>
-
-            <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1">
-              <span className="text-xs font-medium text-[var(--color-mute)]">Shift Schedule</span>
-              <div className="text-base font-bold text-[var(--color-ink)] mt-1">{shiftDisplay}</div>
-              <span className="text-[11px] text-[var(--color-mute)]">Standard operating window</span>
-            </div>
-          </div>
-        </div>
+        </Panel>
       )}
 
       {/* TAB 5: KYC & Identity Documents */}
       {activeTab === "documents" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-[var(--color-hairline)]">
-            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedFileText size={16} className="text-teal-500" />
-              <span>Identity & KYC Documentation</span>
-            </h3>
-            <span className="text-xs text-[var(--color-mute)]">
-              {documents.length} uploaded files
-            </span>
-          </div>
-
-          {/* Statutory Identity Cards: Aadhaar, Licence, Bank */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Aadhaar Card */}
-            <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                  <AnimatedShieldCheck size={14} className="text-sky-500" />
-                  Aadhaar Number
-                </span>
-                {user.aadhaar_number && canRevealDocs && (
-                  <button
-                    type="button"
-                    onClick={handleToggleAadhaar}
-                    className="p-1 text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
-                    title={showFullAadhaar ? "Hide Aadhaar" : "Reveal full Aadhaar (logged for audit)"}
-                  >
-                    {showFullAadhaar ? <AnimatedEyeOff size={14} /> : <AnimatedEye size={14} />}
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-sm font-bold text-[var(--color-ink)]">
-                  {user.aadhaar_number
-                    ? showFullAadhaar
-                      ? user.aadhaar_number
-                      : maskAadhaar(user.aadhaar_number)
-                    : "Not provided"}
-                </span>
-                {user.aadhaar_number && canRevealDocs && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(user.aadhaar_number!, "Aadhaar")}
-                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] cursor-pointer"
-                  >
-                    {copiedKey === "Aadhaar" ? <AnimatedCheck size={12} className="text-emerald-500" /> : <AnimatedCopy size={12} />}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Driving Licence */}
-            <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                  <AnimatedCreditCard size={14} className="text-amber-500" />
-                  Driving Licence
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-sm font-bold text-[var(--color-ink)]">
-                  {user.license_number ? formatLicenseNumber(user.license_number) : "Not provided"}
-                </span>
-                {user.license_number && canRevealDocs && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(user.license_number!, "Licence")}
-                    className="p-1 hover:bg-[var(--color-hairline)] rounded text-[var(--color-mute)] cursor-pointer"
-                  >
-                    {copiedKey === "Licence" ? <AnimatedCheck size={12} className="text-emerald-500" /> : <AnimatedCopy size={12} />}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Bank Details */}
-            <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                  <AnimatedBuilding2 size={14} className="text-emerald-500" />
-                  Banking Credentials
-                </span>
-                {user.bank_account_number && canRevealDocs && canVerifyReject && (
-                  <button
-                    type="button"
-                    onClick={handleToggleBankAccount}
-                    className="p-1 text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
-                    title={showFullBankAccount ? "Hide Bank Account" : "Reveal full Bank Account (logged for audit)"}
-                  >
-                    {showFullBankAccount ? <AnimatedEyeOff size={14} /> : <AnimatedEye size={14} />}
-                  </button>
-                )}
-              </div>
-              <div className="space-y-0.5">
-                <div className="font-mono font-bold text-[var(--color-ink)]">
-                  {user.bank_account_number
-                    ? showFullBankAccount
-                      ? user.bank_account_number
-                      : maskBankAccount(user.bank_account_number)
-                    : "A/C: —"}
-                </div>
-                <div className="text-[11px] font-mono text-[var(--color-mute)]">
-                  IFSC: {user.bank_ifsc_code || "—"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Uploaded Documents List with Side-by-Side Verification */}
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                Uploaded Identity & Verification Files
-              </h4>
-              <span className="text-[11px] text-[var(--color-mute)]">
-                Complies with Aadhaar Act & DPDP Act 2023
+        <Panel
+          icon={<AnimatedFileText size={15} />}
+          tone="teal"
+          title="Identity & KYC Documents"
+          subtitle={`${docList.length} file${docList.length === 1 ? "" : "s"} · Aadhaar, licence, banking & compliance`}
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                {docStats.verified} verified
               </span>
+              {docStats.pending > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                  {docStats.pending} pending
+                </span>
+              )}
+              {docStats.rejected > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+                  {docStats.rejected} rejected
+                </span>
+              )}
             </div>
+          }
+          footer={
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5">
+                <Shield className="h-3 w-3" />
+                Complies with Aadhaar Act &amp; DPDP Act 2023
+              </span>
+              <span className="text-[var(--color-faint)]">Sensitive reveals are audit-logged</span>
+            </div>
+          }
+        >
+          {docList.length === 0 && missingTypedDocuments.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[var(--color-hairline)] py-10 text-center">
+              <EmptyState
+                title="No Identity Documents"
+                description="No statutory identity or compliance documents have been uploaded for this profile yet."
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              {docList.map((doc) => {
+                const docType = documentTypes.find((t) => t.code === doc.document_type_code);
+                const isVerified = doc.verification_status === "verified";
+                const isRejected = doc.verification_status === "rejected";
+                const isPending = !isVerified && !isRejected;
+                const typed = getTypedValueForDoc(doc.document_type_code);
+                const thumbUrl = doc.thumb_signed_url || doc.signed_url;
+                const isPdf = (doc.mime_type || "").toLowerCase() === "application/pdf";
+                const copyValue =
+                  doc.document_type_code === "aadhaar"
+                    ? user.aadhaar_number
+                    : doc.document_type_code === "driving_license"
+                      ? user.license_number
+                      : doc.document_type_code === "bank_document"
+                        ? user.bank_account_number
+                        : null;
+                const copyLabel =
+                  doc.document_type_code === "aadhaar"
+                    ? "Aadhaar"
+                    : doc.document_type_code === "driving_license"
+                      ? "Licence"
+                      : "Bank Account";
 
-            {docList.length === 0 ? (
-              <div className="py-8 text-center border border-dashed border-[var(--color-hairline)] rounded-xl">
-                <p className="text-xs text-[var(--color-mute)]">No document files uploaded for this profile yet.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3">
-                {docList.map((doc) => {
-                  const docType = documentTypes.find((t) => t.code === doc.document_type_code);
-                  const isVerified = doc.verification_status === "verified";
-                  const isRejected = doc.verification_status === "rejected";
-                  const isPending = !isVerified && !isRejected;
-
-                  // Corresponding typed value for side-by-side verification
-                  let matchedTypedLabel = "";
-                  let matchedTypedValue = "";
-                  if (doc.document_type_code === "aadhaar") {
-                    matchedTypedLabel = "Registered Aadhaar";
-                    matchedTypedValue = user.aadhaar_number
-                      ? (showFullAadhaar ? user.aadhaar_number : maskAadhaar(user.aadhaar_number))
-                      : "—";
-                  } else if (doc.document_type_code === "driving_license") {
-                    matchedTypedLabel = "Registered Licence";
-                    matchedTypedValue = user.license_number || "—";
-                  } else if (doc.document_type_code === "bank_document") {
-                    matchedTypedLabel = "Registered Bank A/C";
-                    matchedTypedValue = user.bank_account_number
-                      ? `${showFullBankAccount ? user.bank_account_number : maskBankAccount(user.bank_account_number)} (${user.bank_ifsc_code || "No IFSC"})`
-                      : "—";
-                  }
-
-                  return (
-                    <div
-                      key={doc.id}
-                      className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] shadow-2xs space-y-3"
+                return (
+                  <article
+                    key={doc.id}
+                    className="group flex flex-row gap-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 transition-colors hover:border-[var(--color-link)]/40"
+                  >
+                    {/* Document thumbnail — click opens the full document viewer */}
+                    <button
+                      type="button"
+                      onClick={() => handleViewDoc(doc)}
+                      aria-label={`View full ${docType?.label || doc.document_type_code} document`}
+                      className="relative h-24 w-20 shrink-0 overflow-hidden rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] cursor-zoom-in sm:h-28 sm:w-[88px]"
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div
-                          onClick={() => handleViewDoc(doc)}
-                          className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
-                          title="Click to view full preview"
-                        >
-                          {/* Document Type Icon / Image Thumbnail */}
-                          {doc.mime_type === "application/pdf" ? (
-                            <div className="h-12 w-12 rounded-lg bg-rose-500/10 border border-rose-500/25 flex flex-col items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
-                              <FileText className="h-5 w-5" />
-                              <span className="text-[8px] font-bold font-mono">PDF</span>
-                            </div>
-                          ) : (doc.thumb_signed_url || doc.signed_url) ? (
-                            <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
-                              <img
-                                src={(doc.thumb_signed_url || doc.signed_url)!}
-                                alt={docType?.label || "Document preview"}
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : (
-                            <div className="h-12 w-12 rounded-lg bg-sky-500/10 border border-sky-500/25 flex flex-col items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">
-                              <ImageIcon className="h-5 w-5" />
-                              <span className="text-[8px] font-bold font-mono">IMG</span>
-                            </div>
-                          )}
+                      {isPdf ? (
+                        <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-rose-600 dark:text-rose-400">
+                          <FileText className="h-6 w-6" />
+                          <span className="font-mono text-[8px] font-bold">PDF</span>
+                        </span>
+                      ) : thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumbUrl}
+                          alt={docType?.label || "Document preview"}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-sky-600 dark:text-sky-400">
+                          <ImageIcon className="h-6 w-6" />
+                          <span className="font-mono text-[8px] font-bold">IMG</span>
+                        </span>
+                      )}
+                      <span className="absolute inset-x-0 bottom-0 hidden items-center justify-center gap-1 bg-gradient-to-t from-black/75 to-transparent pb-1 pt-3 text-[9px] font-semibold text-white group-hover:flex">
+                        <Maximize2 className="h-2.5 w-2.5" />
+                        View
+                      </span>
+                    </button>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-bold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
-                                {docType?.label || doc.document_type_code.toUpperCase()}
-                              </p>
-                              {isVerified && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                                  <ShieldCheck className="h-3 w-3" />
-                                  Verified
-                                </span>
-                              )}
-                              {isRejected && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
-                                  <ShieldAlert className="h-3 w-3" />
-                                  Rejected
-                                </span>
-                              )}
-                              {isPending && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                                  <Shield className="h-3 w-3" />
-                                  {doc.is_pending_request ? "Pending Initial Approval" : "Pending Verification"}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-[var(--color-mute)] font-mono mt-0.5">
-                              {doc.mime_type.split("/")[1]?.toUpperCase()} · {(Number(doc.file_size_bytes || 0) / 1024).toFixed(0)} KB · Uploaded {formatDate(doc.created_at)}
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex flex-wrap items-start justify-between gap-2 sm:flex-nowrap">
+                        <p
+                          className="min-w-0 truncate text-[13px] font-bold text-[var(--color-ink)]"
+                          title={docType?.label || doc.document_type_code}
+                        >
+                          {docType?.label || doc.document_type_code.replace(/_/g, " ").toUpperCase()}
+                        </p>
+                        <DocStatusPill status={doc.verification_status || "pending"} pendingApproval={doc.is_pending_request} />
+                      </div>
+                      <p className="mt-0.5 font-mono text-[10px] text-[var(--color-mute)]">
+                        {(doc.mime_type.split("/")[1] || "").toUpperCase()} · {formatFileSize(doc.file_size_bytes)} ·{" "}
+                        {formatDate(doc.created_at)}
+                      </p>
+
+                      {/* Registered number shown beside its own scan */}
+                      {typed && (
+                        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-2.5 py-1.5">
+                          <div className="min-w-0">
+                            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-mute)]">
+                              {typed.label}
                             </p>
+                            <p className="truncate font-mono text-xs font-bold text-[var(--color-ink)]">{typed.value}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            {typed.revealable && (
+                              <button
+                                type="button"
+                                onClick={() => toggleTypedReveal(doc.document_type_code)}
+                                aria-label={
+                                  (doc.document_type_code === "aadhaar" ? showFullAadhaar : showFullBankAccount)
+                                    ? "Hide number"
+                                    : "Reveal full number"
+                                }
+                                className="rounded p-1 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline)] hover:text-[var(--color-ink)] cursor-pointer"
+                              >
+                                {(doc.document_type_code === "aadhaar" ? showFullAadhaar : showFullBankAccount) ? (
+                                  <AnimatedEyeOff size={13} />
+                                ) : (
+                                  <AnimatedEye size={13} />
+                                )}
+                              </button>
+                            )}
+                            {copyValue && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(copyValue, copyLabel)}
+                                aria-label={`Copy ${copyLabel}`}
+                                className="rounded p-1 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline)] hover:text-[var(--color-ink)] cursor-pointer"
+                              >
+                                {copiedKey === copyLabel ? (
+                                  <AnimatedCheck size={13} className="text-emerald-500" />
+                                ) : (
+                                  <AnimatedCopy size={13} />
+                                )}
+                              </button>
+                            )}
                           </div>
                         </div>
+                      )}
 
-                        {/* Action buttons (Preview & Review in Approvals) */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleViewDoc(doc)}
-                            className="h-7 text-xs px-2.5 cursor-pointer"
+                      {isRejected && doc.rejection_reason && (
+                        <p className="mt-2 rounded-md border border-rose-500/25 bg-rose-500/5 px-2.5 py-1.5 text-[10.5px] text-rose-700 dark:text-rose-300">
+                          <span className="font-semibold">Rejected:</span> {doc.rejection_reason}
+                        </p>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleViewDoc(doc)}
+                          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-2.5 text-[11px] font-semibold text-[var(--color-ink)] shadow-2xs transition-colors hover:bg-[var(--color-hairline-soft-surface)] cursor-pointer"
+                        >
+                          <Maximize2 className="h-3 w-3 text-[var(--color-mute)]" />
+                          View document
+                        </button>
+                        {isPending && canVerifyReject && (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/approvals?type=document_verify`)}
+                            className="inline-flex h-7 items-center gap-1 rounded-md bg-[var(--color-primary)] px-2.5 text-[11px] font-semibold text-white shadow-2xs transition-opacity hover:opacity-90 cursor-pointer"
                           >
-                            Preview
-                          </Button>
-
-                          {isPending && canVerifyReject && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => router.push(`/approvals?type=document_verify`)}
-                              className="h-7 text-xs px-2.5 font-semibold cursor-pointer"
-                            >
-                              Review in Approvals →
-                            </Button>
-                          )}
-                        </div>
+                            Review in approvals
+                            <ChevronRight className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
 
-                      {/* Side-by-side matching value callout */}
-                      {matchedTypedLabel && (
-                        <div className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
-                          <span className="text-[var(--color-mute)] font-medium">
-                            {matchedTypedLabel}:
-                          </span>
-                          <span className="font-mono font-bold text-[var(--color-ink)]">
-                            {matchedTypedValue}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Rejection reason callout if rejected */}
-                      {isRejected && doc.rejection_reason && (
-                        <div className="text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-200 dark:border-rose-900/50">
-                          <span className="font-semibold">Rejection Reason:</span> {doc.rejection_reason}
-                        </div>
-                      )}
-
-                      {/* Replacement Document Callout if pending replacement exists */}
+                      {/* Replacement document awaiting review */}
                       {doc.pending_replacement && (
-                        <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
-                              <AnimatedClock size={14} className="text-amber-600 dark:text-amber-400" />
-                              Replacement Document Pending Review
+                        <div className="mt-2.5 space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-amber-800 dark:text-amber-200">
+                              <AnimatedClock size={12} className="text-amber-600 dark:text-amber-400" />
+                              Replacement pending review
                             </span>
-                            <span className="text-[10px] text-[var(--color-mute)] font-mono">
-                              Uploaded {formatDate(doc.pending_replacement.created_at)}
+                            <span className="font-mono text-[9.5px] text-[var(--color-mute)]">
+                              {formatDate(doc.pending_replacement.created_at)}
                             </span>
                           </div>
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
                               onClick={() => {
                                 setActiveViewerDoc({
                                   id: doc.pending_replacement!.id,
@@ -2327,118 +2443,296 @@ export function UserDetailClient({
                                   mimeType: "image/jpeg",
                                 });
                               }}
-                              className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
-                              title="Click to view full preview of replacement"
+                              aria-label="Preview replacement document"
+                              className="h-12 w-10 shrink-0 overflow-hidden rounded border border-amber-500/40 bg-[var(--color-canvas-elevated)] cursor-zoom-in"
                             >
                               {doc.pending_replacement.thumb_signed_url ? (
-                                <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-amber-400/40 bg-[var(--color-canvas)] shrink-0 flex items-center justify-center shadow-2xs">
-                                  <img
-                                    src={doc.pending_replacement.thumb_signed_url}
-                                    alt="Replacement preview"
-                                    className="h-full w-full object-cover"
-                                    loading="lazy"
-                                  />
-                                </div>
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={doc.pending_replacement.thumb_signed_url}
+                                  alt="Replacement preview"
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
                               ) : (
-                                <div className="h-12 w-12 rounded-lg bg-amber-500/10 border border-amber-500/25 flex flex-col items-center justify-center shrink-0 text-amber-600">
-                                  <ImageIcon className="h-5 w-5" />
-                                  <span className="text-[8px] font-bold font-mono">NEW</span>
-                                </div>
+                                <span className="flex h-full w-full items-center justify-center text-amber-600">
+                                  <ImageIcon className="h-4 w-4" />
+                                </span>
                               )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
-                                  New replacement image uploaded by employee
-                                </p>
-                                <p className="text-[10px] text-[var(--color-mute)]">
-                                  Inspect and verify this image before approving replacement
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                  setActiveViewerDoc({
-                                    id: doc.pending_replacement!.id,
-                                    title: `${docType?.label || doc.document_type_code} (Replacement)`,
-                                    url: doc.pending_replacement!.signed_url || "",
-                                    mimeType: "image/jpeg",
-                                  });
-                                }}
-                                className="h-7 text-xs px-2.5 cursor-pointer"
-                              >
-                                Preview New
-                              </Button>
-                              {canVerifyReject && (
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  onClick={() => router.push(`/approvals?type=document_replace`)}
-                                  className="h-7 text-xs px-2.5 font-semibold cursor-pointer"
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[10.5px] font-semibold text-[var(--color-ink)]">
+                                New scan uploaded by employee
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveViewerDoc({
+                                      id: doc.pending_replacement!.id,
+                                      title: `${docType?.label || doc.document_type_code} (Replacement)`,
+                                      url: doc.pending_replacement!.signed_url || "",
+                                      mimeType: "image/jpeg",
+                                    });
+                                  }}
+                                  className="inline-flex h-6 items-center rounded border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-2 text-[10px] font-semibold text-[var(--color-ink)] cursor-pointer"
                                 >
-                                  Review Replacement in Approvals →
-                                </Button>
-                              )}
+                                  Preview
+                                </button>
+                                {canVerifyReject && (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/approvals?type=document_replace`)}
+                                    className="inline-flex h-6 items-center rounded bg-[var(--color-primary)] px-2 text-[10px] font-semibold text-white cursor-pointer"
+                                  >
+                                    Review
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+                  </article>
+                );
+              })}
+
+              {/* Statutory numbers on record without a scanned file yet */}
+              {missingTypedDocuments.map((item) => {
+                const typed = getTypedValueForDoc(item.code);
+                const copyValue =
+                  item.code === "aadhaar"
+                    ? user.aadhaar_number
+                    : item.code === "driving_license"
+                      ? user.license_number
+                      : user.bank_account_number;
+                const copyLabel = item.code === "aadhaar" ? "Aadhaar" : item.code === "driving_license" ? "Licence" : "Bank Account";
+                const Icon =
+                  item.code === "aadhaar" ? Fingerprint : item.code === "driving_license" ? IdCard : Banknote;
+
+                return (
+                  <article
+                    key={item.code}
+                    className="flex flex-row gap-3 rounded-lg border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas)]/70 p-3"
+                  >
+                    <div className="flex h-24 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-faint)] sm:h-28 sm:w-[88px]">
+                      <ImageIcon className="h-5 w-5" />
+                      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.08em]">No scan</span>
+                    </div>
+
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex flex-wrap items-start justify-between gap-2 sm:flex-nowrap">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-mute)]" />
+                          <p className="truncate text-[13px] font-bold text-[var(--color-ink)]">{item.label}</p>
+                        </div>
+                        <span className="rounded-full border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-mute)]">
+                          Not uploaded
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-[var(--color-mute)]">{item.hint}</p>
+
+                      {typed && (
+                        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-2.5 py-1.5">
+                          <div className="min-w-0">
+                            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-mute)]">
+                              {typed.label}
+                            </p>
+                            <p className="truncate font-mono text-xs font-bold text-[var(--color-ink)]">{typed.value}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            {typed.revealable && (
+                              <button
+                                type="button"
+                                onClick={() => toggleTypedReveal(item.code)}
+                                aria-label="Reveal full number"
+                                className="rounded p-1 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline)] hover:text-[var(--color-ink)] cursor-pointer"
+                              >
+                                {(item.code === "aadhaar" ? showFullAadhaar : showFullBankAccount) ? (
+                                  <AnimatedEyeOff size={13} />
+                                ) : (
+                                  <AnimatedEye size={13} />
+                                )}
+                              </button>
+                            )}
+                            {copyValue && (
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(copyValue, copyLabel)}
+                                aria-label={`Copy ${copyLabel}`}
+                                className="rounded p-1 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline)] hover:text-[var(--color-ink)] cursor-pointer"
+                              >
+                                {copiedKey === copyLabel ? (
+                                  <AnimatedCheck size={13} className="text-emerald-500" />
+                                ) : (
+                                  <AnimatedCopy size={13} />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="mt-auto pt-2 text-[10.5px] text-[var(--color-faint)]">
+                        Ask the employee to upload a clear scan to complete verification.
+                      </p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
       )}
 
       {/* TAB 6: Security Audit Trail */}
       {activeTab === "audit" && (
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedShieldCheck size={16} className="text-teal-500" />
-              <span>Account Activity & Audit Logs (Recent 50)</span>
-            </h3>
-            <span className="text-xs text-[var(--color-mute)]">
-              Showing {filteredAuditLogs.length} of {auditLogs.length} records
+        <Panel
+          icon={<AnimatedShieldCheck size={15} />}
+          tone="violet"
+          title="Account Activity & Audit Trail"
+          subtitle={`${filteredAuditLogs.length} of ${auditLogs.length} recorded events`}
+          actions={
+            <span className="hidden items-center gap-1.5 rounded-full border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--color-mute)] sm:inline-flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+              Immutable log
             </span>
-          </div>
-
+          }
+        >
           {filteredAuditLogs.length === 0 ? (
-            <div className="py-12 text-center">
+            <div className="py-10 text-center">
               <EmptyState
                 title="No Audit Records"
-                description={tabSearch ? "No activity records match your search." : "No recorded audit changes for this account yet."}
+                description="No recorded audit changes for this account yet."
               />
             </div>
           ) : (
-            <div className="divide-y divide-[var(--color-hairline)] text-xs">
-              {filteredAuditLogs.map((log) => (
-                <div key={log.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hover:bg-[var(--color-hairline-soft-surface)] px-2 rounded-lg transition-colors">
-                  <div className="space-y-0.5">
-                    <div className="font-semibold text-[var(--color-ink)] flex items-center gap-2">
-                      <span>{log.action}</span>
-                      {log.category && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] uppercase">
-                          {log.category}
+            <>
+              <ol className="relative space-y-1.5">
+                {filteredAuditLogs.slice(0, auditVisibleCount).map((log, index, list) => {
+                  const isLast = index === list.length - 1;
+                  const expanded = expandedAuditId === log.id;
+                  const severity = (log.severity || "info") as "info" | "warning" | "critical";
+                  const glyphTone =
+                    severity === "critical"
+                      ? "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300"
+                      : severity === "warning"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300"
+                        : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-mute)]";
+                  const hasDetails =
+                    log.details && typeof log.details === "object" && Object.keys(log.details as object).length > 0;
+
+                  return (
+                    <li key={log.id} className="relative flex gap-2.5">
+                      {/* Timeline rail */}
+                      <div className="relative flex w-6 shrink-0 flex-col items-center">
+                        <span
+                          className={`z-10 flex h-6 w-6 items-center justify-center rounded-full border shadow-2xs ${glyphTone}`}
+                        >
+                          <AuditCategoryGlyph category={log.category} />
                         </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-[var(--color-mute)]">
-                      By {log.actor_name || "System"} ({log.actor_role || "automated"})
-                    </div>
-                  </div>
-                  <div className="text-[10px] font-mono text-[var(--color-mute)] shrink-0">
-                    {formatDate(log.created_at)} ({formatTimeAgo(log.created_at)})
-                  </div>
+                        {!isLast && <span className="absolute top-6 h-full w-px bg-[var(--color-hairline)]" />}
+                      </div>
+
+                      <div className="min-w-0 flex-1 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-2.5 py-1.5 transition-colors hover:border-[var(--color-link)]/30">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <p className="truncate text-[11.5px] font-semibold text-[var(--color-ink)]">
+                              {humanizeAction(log.action)}
+                            </p>
+                            {log.category && (
+                              <span className="rounded border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-1.5 py-px font-mono text-[9px] font-bold uppercase tracking-[0.06em] text-[var(--color-mute)]">
+                                {log.category}
+                              </span>
+                            )}
+                            {severity !== "info" && (
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[9px] font-bold uppercase ${
+                                  severity === "critical"
+                                    ? "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                                    : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                }`}
+                              >
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                {severity}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className="shrink-0 font-mono text-[9.5px] text-[var(--color-mute)]"
+                            title={formatDate(log.created_at)}
+                          >
+                            {formatTimeAgo(log.created_at)}
+                          </span>
+                        </div>
+
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-[var(--color-mute)]">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--color-hairline)] text-[7px] font-bold text-[var(--color-body)]">
+                              {getInitials(log.actor_name || "System")}
+                            </span>
+                            <span className="font-medium text-[var(--color-body)]">{log.actor_name || "System"}</span>
+                          </span>
+                          <span className="text-[var(--color-faint)]">·</span>
+                          <span className="capitalize">{log.actor_role || "automated"}</span>
+                          <span className="hidden text-[var(--color-faint)] sm:inline">·</span>
+                          <span className="hidden font-mono sm:inline">{formatDate(log.created_at)}</span>
+                          {hasDetails && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedAuditId(expanded ? null : log.id)}
+                              aria-expanded={expanded}
+                              className="ml-auto inline-flex items-center gap-0.5 rounded text-[9.5px] font-semibold text-[var(--color-link)] transition-opacity hover:opacity-80 cursor-pointer"
+                            >
+                              {expanded ? "Hide" : "Details"}
+                              <ChevronRight
+                                className={`h-2.5 w-2.5 transition-transform ${expanded ? "rotate-90" : ""}`}
+                              />
+                            </button>
+                          )}
+                        </div>
+
+                        {expanded && hasDetails && (
+                          <dl className="mt-1.5 grid grid-cols-1 gap-px overflow-hidden rounded border border-[var(--color-hairline)] bg-[var(--color-hairline)] sm:grid-cols-2">
+                            {Object.entries(log.details as Record<string, unknown>)
+                              .slice(0, 12)
+                              .map(([key, value]) => (
+                                <div
+                                  key={key}
+                                  className="flex min-w-0 items-baseline justify-between gap-2 bg-[var(--color-canvas-elevated)] px-2 py-1"
+                                >
+                                  <dt className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-mute)]">
+                                    {humanizeAction(key)}
+                                  </dt>
+                                  <dd className="min-w-0 break-words text-right font-mono text-[9.5px] text-[var(--color-ink)]">
+                                    {formatAuditValue(value)}
+                                  </dd>
+                                </div>
+                              ))}
+                          </dl>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {filteredAuditLogs.length > auditVisibleCount && (
+                <div className="mt-3 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setAuditVisibleCount((prev) => prev + 15)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] px-3 text-[11px] font-semibold text-[var(--color-ink)] shadow-2xs transition-colors hover:bg-[var(--color-hairline-soft-surface)] cursor-pointer"
+                  >
+                    Show {Math.min(15, filteredAuditLogs.length - auditVisibleCount)} more
+                    <ChevronRight className="h-3 w-3 rotate-90" />
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
-        </div>
+        </Panel>
       )}
 
       {/* ─── 7. MODALS & DIALOGS ─── */}

@@ -985,8 +985,13 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         visible={isAssignModalOpen}
         onClose={handleCloseAssignModal}
         initialMachineId={assignMachineId}
-        onSuccess={() => {
-          void Promise.all([refetchSummary(), refetchInfinite()]);
+        initialAssignmentDate={selectedDate}
+        onSuccess={(_ops?: any, savedDate?: string) => {
+          if (savedDate && savedDate !== selectedDate) {
+            setSelectedDate(savedDate);
+          } else {
+            void Promise.all([refetchSummary(), refetchInfinite()]);
+          }
         }}
       />
 

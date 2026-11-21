@@ -24,15 +24,21 @@ export interface TodayShiftMonitorCardProps {
   menuRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-function formatTime(t: string | null) {
+function formatTime(t: string | null | undefined): string {
   if (!t) return "—";
+  const str = t.trim();
+  if (str === "—" || str === "-" || str === "") return "—";
+  if (str.includes("AM") || str.includes("PM")) return str;
   try {
-    const [h, m] = t.split(":").map(Number);
+    const [hStr, mStr] = str.split(":");
+    const h = parseInt(hStr, 10);
+    const m = parseInt(mStr, 10) || 0;
+    if (isNaN(h)) return str;
     const ampm = h >= 12 ? "PM" : "AM";
     const h12 = h % 12 || 12;
     return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
   } catch {
-    return t;
+    return str;
   }
 }
 

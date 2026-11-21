@@ -42,22 +42,22 @@ export function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
             <div className="h-5 w-20 rounded-full bg-[var(--color-hairline)]/70" />
           </td>
           {/* Supervisor */}
-          <td className="py-3.5 px-4">
+          <td className="py-3.5 px-4 hidden xl:table-cell">
             <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
           </td>
           {/* Machine Category */}
-          <td className="py-3.5 px-4">
+          <td className="py-3.5 px-4 hidden 2xl:table-cell">
             <div className="h-5 w-20 rounded-md bg-[var(--color-hairline)]/70" />
           </td>
           {/* Identity / KYC */}
-          <td className="py-3.5 px-4">
+          <td className="py-3.5 px-4 hidden min-[1900px]:table-cell">
             <div className="space-y-1.5">
               <div className="h-3 w-24 bg-[var(--color-hairline)]/80 rounded" />
               <div className="h-2.5 w-20 bg-[var(--color-hairline)]/60 rounded" />
             </div>
           </td>
           {/* Location */}
-          <td className="py-3.5 px-4">
+          <td className="py-3.5 px-4 hidden 2xl:table-cell">
             <div className="space-y-1.5">
               <div className="h-3 w-16 bg-[var(--color-hairline)]/80 rounded" />
               <div className="h-2.5 w-12 bg-[var(--color-hairline)]/60 rounded" />
@@ -68,7 +68,7 @@ export function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
             <div className="h-5 w-16 rounded-md bg-[var(--color-hairline)]/70" />
           </td>
           {/* Joined Date */}
-          <td className="py-3.5 px-4">
+          <td className="py-3.5 px-4 hidden min-[1900px]:table-cell">
             <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
           </td>
           {/* Actions */}
@@ -81,84 +81,56 @@ export function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
   );
 }
 
-export function MobileUserCardSkeleton({ selectable = false }: { selectable?: boolean }) {
+export function MobileUserCardSkeleton() {
   return (
-    <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs flex flex-col gap-2.5 relative overflow-hidden border-l-[3px] border-l-[var(--color-hairline)] select-none">
-      {/* Top Header section: Checkbox, Avatar, Name, Status, Chevron */}
-      <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {selectable && (
-            <div className="h-4 w-4 rounded-[4px] bg-[var(--color-hairline)]/70 shrink-0 animate-pulse" />
-          )}
-
-          {/* Initials Avatar Placeholder */}
-          <div className="h-9 w-9 rounded-lg bg-[var(--color-hairline)]/80 shrink-0 animate-pulse" />
-
-          <div className="flex flex-col min-w-0 flex-1 gap-1.5">
-            <div className="h-3.5 w-28 max-w-[70%] bg-[var(--color-hairline)] rounded animate-pulse" />
-            <div className="h-2.5 w-20 max-w-[50%] bg-[var(--color-hairline)]/60 rounded animate-pulse" />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]/70 animate-pulse" />
-          <div className="h-3.5 w-3.5 rounded bg-[var(--color-hairline)]/40 animate-pulse" />
-        </div>
+    <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs flex flex-col gap-2 relative overflow-hidden border-l-[3px] border-l-[var(--color-hairline)] select-none">
+      {/* Identity row: Avatar + Name + Chevron */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="h-9 w-9 rounded-lg bg-[var(--color-hairline)]/80 shrink-0 animate-pulse" />
+        <div className="h-3.5 w-28 max-w-[60%] bg-[var(--color-hairline)] rounded animate-pulse" />
+        <div className="h-3.5 w-3.5 rounded bg-[var(--color-hairline)]/40 animate-pulse ml-auto shrink-0" />
       </div>
 
-      {/* Metadata Row: Contact on Left, Role Badge on Bottom Right */}
-      <div className="pt-2 border-t border-[var(--color-hairline)] flex items-end justify-between gap-2 text-xs">
-        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-          {/* Email row placeholder */}
-          <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
-            <div className="h-3 w-36 max-w-[85%] bg-[var(--color-hairline)]/70 rounded animate-pulse" />
-          </div>
-          {/* Phone row placeholder */}
-          <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
-            <div className="h-3 w-28 max-w-[65%] bg-[var(--color-hairline)]/70 rounded animate-pulse" />
-          </div>
-          {/* Location / Base row placeholder */}
-          <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
-            <div className="h-3 w-20 max-w-[50%] bg-[var(--color-hairline)]/50 rounded animate-pulse" />
-          </div>
-        </div>
+      {/* Identity chips row: employee ID · status · role */}
+      <div className="flex items-center gap-1.5">
+        <div className="h-2.5 w-14 rounded bg-[var(--color-hairline)]/60 animate-pulse" />
+        <div className="h-4 w-14 rounded-full bg-[var(--color-hairline)]/70 animate-pulse" />
+        <div className="h-4 w-16 rounded-full bg-[var(--color-hairline)]/70 animate-pulse" />
+      </div>
 
-        {/* Role Badge placeholder on Bottom Right */}
-        <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]/80 shrink-0 self-end animate-pulse" />
+      {/* Detail rows */}
+      <div className="pt-2 border-t border-[var(--color-hairline)] flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
+          <div className="h-3 w-36 max-w-[85%] bg-[var(--color-hairline)]/70 rounded animate-pulse" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
+          <div className="h-3 w-28 max-w-[65%] bg-[var(--color-hairline)]/70 rounded animate-pulse" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
+          <div className="h-3 w-24 max-w-[55%] bg-[var(--color-hairline)]/50 rounded animate-pulse" />
+        </div>
       </div>
     </div>
   );
 }
 
-export function MobileCardSkeletonItems({
-  count = 3,
-  selectable = false,
-}: {
-  count?: number;
-  selectable?: boolean;
-}) {
+export function MobileCardSkeletonItems({ count = 3 }: { count?: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <MobileUserCardSkeleton key={`mobile-user-card-skeleton-${i}`} selectable={selectable} />
+        <MobileUserCardSkeleton key={`mobile-user-card-skeleton-${i}`} />
       ))}
     </>
   );
 }
 
-export function MobileCardSkeletonList({
-  count = 6,
-  selectable = false,
-}: {
-  count?: number;
-  selectable?: boolean;
-}) {
+export function MobileCardSkeletonList({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <MobileCardSkeletonItems count={count} selectable={selectable} />
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      <MobileCardSkeletonItems count={count} />
     </div>
   );
 }
@@ -175,8 +147,10 @@ export interface UsersTableProps {
   selectedUserIds: string[];
   allFilteredSelected: boolean;
   someFilteredSelected: boolean;
+  selectionMode: boolean;
   onSelectAllFiltered: () => void;
   onToggleSelect: (userId: string) => void;
+  onLongPressSelect: (userId: string) => void;
   onEditUser: (user: User) => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
@@ -211,8 +185,10 @@ export function UsersTable({
   selectedUserIds,
   allFilteredSelected,
   someFilteredSelected,
+  selectionMode,
   onSelectAllFiltered,
   onToggleSelect,
+  onLongPressSelect,
   onEditUser,
   onResetPassword,
   onToggleStatus,
@@ -243,11 +219,11 @@ export function UsersTable({
             ? "block"
             : viewMode === "table"
             ? "hidden"
-            : "block md:hidden"
+            : "block lg:hidden"
         }
       >
         {isQueryLoading ? (
-          <MobileCardSkeletonList count={6} selectable={!readOnly} />
+          <MobileCardSkeletonList count={6} />
         ) : usersList.length === 0 ? (
           <div className="py-14 px-4 text-center rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex flex-col items-center justify-center">
             <div className="w-12 h-12 rounded-full bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] mb-3 shadow-xs">
@@ -275,28 +251,25 @@ export function UsersTable({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               <AnimatePresence mode="popLayout">
                 {mobileUsersList.map((u) => (
                   <MobileUserCard
                     key={u.id}
                     user={u}
                     currentUser={currentUser}
-                    loadingId={loading}
                     selectable={!readOnly}
                     isSelected={selectedUserIds.includes(u.id)}
+                    selectionMode={selectionMode}
                     onToggleSelect={onToggleSelect}
-                    onResetPassword={onResetPassword}
-                    onToggleStatus={onToggleStatus}
+                    onLongPressSelect={onLongPressSelect}
                     searchTerm={searchTerm}
                   />
                 ))}
               </AnimatePresence>
 
               {/* Skeletons while loading more staff chunk-by-chunk on mobile infinite scroll */}
-              {isLoadingMoreMobile && (
-                <MobileCardSkeletonItems count={3} selectable={!readOnly} />
-              )}
+              {isLoadingMoreMobile && <MobileCardSkeletonItems count={3} />}
             </div>
 
             {/* Infinite Scroll Sentinel for Mobile View */}
@@ -351,7 +324,7 @@ export function UsersTable({
             ? "hidden"
             : viewMode === "table"
             ? "block"
-            : "hidden md:block"
+            : "hidden lg:block"
         }
       >
         <Card padding="none" className="overflow-hidden border border-[var(--color-hairline)] shadow-xs rounded-[var(--radius-md)]">
@@ -375,31 +348,31 @@ export function UsersTable({
                       />
                     </th>
                   )}
-                  <th className="py-3 px-4 w-[14%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap">
                     Name
                   </th>
-                  <th className="py-3 px-4 w-[14%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap">
                     Contact Info
                   </th>
-                  <th className="py-3 px-4 w-[10%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap">
                     Role
                   </th>
-                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap hidden xl:table-cell">
                     Supervisor
                   </th>
-                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap hidden 2xl:table-cell">
                     Machine
                   </th>
-                  <th className="py-3 px-4 w-[13%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap hidden min-[1900px]:table-cell">
                     Identity / KYC
                   </th>
-                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap hidden 2xl:table-cell">
                     Location
                   </th>
-                  <th className="py-3 px-4 w-[8%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap">
                     Status
                   </th>
-                  <th className="py-3 px-4 w-[9%] whitespace-nowrap">
+                  <th className="py-3 px-4 whitespace-nowrap hidden min-[1900px]:table-cell">
                     Joined Date
                   </th>
                   <th className="py-3 px-3 w-10 whitespace-nowrap text-right">

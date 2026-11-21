@@ -202,6 +202,8 @@ export function UsersPageClient({
 
   // Multi-Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  // Card multi-select mode: entered via long-press so mobile cards stay clean by default
+  const [selectionMode, setSelectionMode] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
@@ -750,6 +752,16 @@ export function UsersPageClient({
     );
   }, []);
 
+  // Long press on a touch card enters multi-select mode and selects that card
+  const handleLongPressSelect = useCallback((userId: string) => {
+    setSelectionMode(true);
+    setSelectedUserIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
+  }, []);
+
+  // Card selection UI is only active while something is actually selected, so clearing
+  // the selection instantly restores the clean card layout (no lingering checkboxes).
+  const cardSelectionMode = selectionMode && selectedUserIds.length > 0;
+
   const currentRenderedUsers = isSearchActive ? filteredUsers : usersList;
 
   const handleSelectAllFiltered = useCallback(() => {
@@ -763,6 +775,7 @@ export function UsersPageClient({
 
   const handleClearSelection = useCallback(() => {
     setSelectedUserIds([]);
+    setSelectionMode(false);
   }, []);
 
   const allFilteredSelected = currentRenderedUsers.length > 0 && selectedUserIds.length === currentRenderedUsers.length;
@@ -1129,8 +1142,10 @@ export function UsersPageClient({
         selectedUserIds={selectedUserIds}
         allFilteredSelected={allFilteredSelected}
         someFilteredSelected={someFilteredSelected}
+        selectionMode={cardSelectionMode}
         onSelectAllFiltered={handleSelectAllFiltered}
         onToggleSelect={handleToggleSelect}
+        onLongPressSelect={handleLongPressSelect}
         onEditUser={(u) => setShowEditModal(u)}
         onResetPassword={(userId) => {
           const source = searchResults ?? usersList;
@@ -1234,63 +1249,72 @@ export function UsersPageClient({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 450, damping: 30 }}
-            className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] sm:w-auto min-w-0 sm:min-w-[320px] max-w-xl bg-[var(--color-ink)] text-white dark:bg-[#1a1a1a] dark:text-neutral-100 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-neutral-700/60 p-2.5 px-4 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md"
+            className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[96%] sm:w-auto sm:min-w-[430px] max-w-xl bg-[var(--color-ink)] text-white dark:bg-[#1a1a1a] dark:text-neutral-100 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-neutral-700/60 p-1.5 px-2 flex items-center gap-1.5 backdrop-blur-md"
           >
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center h-6 min-w-6 px-2 rounded-full bg-white/20 text-xs font-bold text-white">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="flex items-center justify-center h-6 min-w-6 px-1.5 rounded-full bg-white/20 text-[11px] font-bold text-white tabular-nums">
                 {selectedUserIds.length}
-              </span>
-              <span className="text-xs font-medium text-neutral-100 whitespace-nowrap">
-                {selectedUserIds.length === 1 ? "1 selected" : `${selectedUserIds.length} selected`}
               </span>
               <button
                 type="button"
+                onClick={handleSelectAllFiltered}
+                className="text-[11px] font-semibold text-neutral-200 hover:text-white whitespace-nowrap cursor-pointer transition-colors"
+                title={allFilteredSelected ? "Clear current selection" : "Select every user in this view"}
+              >
+                {allFilteredSelected ? "Deselect" : "Select All"}
+              </button>
+              <button
+                type="button"
                 onClick={handleClearSelection}
-                className="text-xs text-neutral-400 hover:text-white underline cursor-pointer ml-1"
+                className="text-[11px] text-neutral-400 hover:text-white underline cursor-pointer whitespace-nowrap"
               >
                 Clear
               </button>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap ml-auto">
+            <div className="flex items-center gap-1 ml-auto">
               <button
                 type="button"
                 onClick={() => handleExportSelected("xlsx")}
-                className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                className="h-8 px-1.5 sm:px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to Excel (.xlsx)"
+                aria-label="Export selected users to Excel"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Excel</span>
+                <span className="hidden sm:inline">Excel</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleExportSelected("csv")}
-                className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                className="h-8 px-2 sm:px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to CSV (.csv)"
+                aria-label="Export selected users to CSV"
               >
                 <Download className="h-3.5 w-3.5 text-sky-400" />
-                <span>CSV</span>
+                <span className="hidden sm:inline">CSV</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleExportSelected("pdf")}
-                className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                className="h-8 px-2 sm:px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to PDF (.pdf)"
+                aria-label="Export selected users to PDF"
               >
                 <FileText className="h-3.5 w-3.5 text-rose-400" />
-                <span>PDF</span>
+                <span className="hidden sm:inline">PDF</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={isBulkDeleting}
-                className="h-9 sm:h-8 px-3.5 rounded-sm text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                className="h-8 px-2 rounded-sm text-[11px] sm:text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                aria-label={`Delete ${selectedUserIds.length} selected users`}
               >
                 <AnimatedTrash2 size={14} />
-                <span>Delete ({selectedUserIds.length})</span>
+                <span>Delete</span>
               </button>
             </div>
           </motion.div>

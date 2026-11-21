@@ -833,10 +833,13 @@ export async function signup(
         return `${label} must be a JPEG image.`;
       }
 
-      // Check size limit (max 1 MB)
+      // Check size limit (max 1 MB, min 8 KB to reject blank/degenerate files)
       const mainSize = mainFile.metadata?.size;
       if (typeof mainSize === "number" && mainSize > DOC_UPLOAD.maxBytes) {
         return `${label} exceeds maximum allowed size of 1 MB.`;
+      }
+      if (typeof mainSize === "number" && mainSize < 8_000) {
+        return `${label} photo appears blank or incomplete. Please take a clearer photo.`;
       }
 
       if (!thumbFile && required) {

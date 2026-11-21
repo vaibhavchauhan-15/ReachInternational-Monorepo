@@ -35,6 +35,7 @@ import {
   Phone,
   Mail,
   Clock,
+  Users,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -56,6 +57,8 @@ import { deleteMachine, getMachinePersonnelFreshAction } from "@/app/actions/mac
 import { formatDate } from "@reachinternational/utils";
 import {
   MachineInfoModal,
+  MachineSupervisorModal,
+  MachineOperatorModal,
   MachinePersonnelModal,
   MachineClientModal,
 } from "@/components/machines/MachineEditModals";
@@ -125,12 +128,20 @@ function AuditSkeleton() {
  */
 function MachineHeroEditMenu({
   onEditInfo,
+  onAssignSupervisor,
+  onAssignOperator,
   onEditPersonnel,
   onEditClient,
+  canEditSupervisor = true,
+  canEditOperator = true,
 }: {
   onEditInfo: () => void;
-  onEditPersonnel: () => void;
+  onAssignSupervisor?: () => void;
+  onAssignOperator?: () => void;
+  onEditPersonnel?: () => void;
   onEditClient: () => void;
+  canEditSupervisor?: boolean;
+  canEditOperator?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -175,6 +186,7 @@ function MachineHeroEditMenu({
             transition={{ duration: 0.15, ease: "easeOut" }}
             className="absolute right-0 top-full mt-1.5 z-50 w-56 sm:w-64 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-xl text-xs space-y-1"
           >
+            {/* 1. Edit Machine Info */}
             <button
               type="button"
               onClick={() => {
@@ -190,21 +202,45 @@ function MachineHeroEditMenu({
               </div>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onEditPersonnel();
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
-            >
-              <Shield size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-xs text-[var(--color-ink)]">Edit Personnel</span>
-                <span className="text-[10px] text-[var(--color-mute)]">Supervisors & Operators</span>
-              </div>
-            </button>
+            {/* 2. Assign Supervisor */}
+            {canEditSupervisor && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  if (onAssignSupervisor) onAssignSupervisor();
+                  else if (onEditPersonnel) onEditPersonnel();
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+              >
+                <Shield size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-xs text-[var(--color-ink)]">Assign Supervisor</span>
+                  <span className="text-[10px] text-[var(--color-mute)]">Site & Machinery Oversight</span>
+                </div>
+              </button>
+            )}
 
+            {/* 3. Assign Operator */}
+            {canEditOperator && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  if (onAssignOperator) onAssignOperator();
+                  else if (onEditPersonnel) onEditPersonnel();
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+              >
+                <Users size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-xs text-[var(--color-ink)]">Assign Operator</span>
+                  <span className="text-[10px] text-[var(--color-mute)]">24h Shift Coverage (S1, S2, S3)</span>
+                </div>
+              </button>
+            )}
+
+            {/* 4. Edit Client Assignment */}
             <button
               type="button"
               onClick={() => {
@@ -270,7 +306,6 @@ export function MachineClientView({
   // Local state representing live machine record (instantly updated on modal save)
   const [machineData, setMachineData] = useState<MachineWithEngineer>(machine);
   const lastMutationTimeRef = useRef<number>(0);
-  const [isRefreshingPersonnel, setIsRefreshingPersonnel] = useState(false);
 
   const handleMachineUpdated = (updatedFields: Partial<MachineWithEngineer>) => {
     lastMutationTimeRef.current = Date.now();
@@ -280,24 +315,6 @@ export function MachineClientView({
     }));
   };
 
-  const handleManualRefreshPersonnel = async () => {
-    setIsRefreshingPersonnel(true);
-    try {
-      const fresh = await getMachinePersonnelFreshAction(machineData.id);
-      if (fresh.success && fresh.data) {
-        handleMachineUpdated(fresh.data as any);
-        toast("success", "Assignments synced", "Fetched latest shift assignments directly from database.");
-      } else {
-        toast("error", "Sync failed", fresh.error || "Could not fetch updated assignments.");
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Sync error";
-      toast("error", "Sync failed", msg);
-    } finally {
-      setIsRefreshingPersonnel(false);
-    }
-  };
-
   useEffect(() => {
     // If a local mutation occurred within the last 4 seconds, don't allow a potentially stale RSC prop
     // to revert our live personnel state
@@ -305,14 +322,14 @@ export function MachineClientView({
     if (isRecentlyMutated) {
       setMachineData((prev) => ({
         ...machine,
-        supervisors: prev.supervisors || machine.supervisors,
-        supervisor_ids: prev.supervisor_ids || machine.supervisor_ids,
-        current_supervisor_id: prev.current_supervisor_id || machine.current_supervisor_id,
-        current_supervisor: prev.current_supervisor || machine.current_supervisor,
-        operators: prev.operators || machine.operators,
-        operator_ids: prev.operator_ids || machine.operator_ids,
-        current_operator_id: prev.current_operator_id || machine.current_operator_id,
-        current_operator: prev.current_operator || machine.current_operator,
+        supervisors: prev.supervisors !== undefined ? prev.supervisors : machine.supervisors,
+        supervisor_ids: prev.supervisor_ids !== undefined ? prev.supervisor_ids : machine.supervisor_ids,
+        current_supervisor_id: prev.current_supervisor_id !== undefined ? prev.current_supervisor_id : machine.current_supervisor_id,
+        current_supervisor: prev.current_supervisor !== undefined ? prev.current_supervisor : machine.current_supervisor,
+        operators: prev.operators !== undefined ? prev.operators : machine.operators,
+        operator_ids: prev.operator_ids !== undefined ? prev.operator_ids : machine.operator_ids,
+        current_operator_id: prev.current_operator_id !== undefined ? prev.current_operator_id : machine.current_operator_id,
+        current_operator: prev.current_operator !== undefined ? prev.current_operator : machine.current_operator,
       }));
     } else {
       setMachineData(machine);
@@ -340,21 +357,29 @@ export function MachineClientView({
 
   // Separate Modal States
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
+  const [operatorModalOpen, setOperatorModalOpen] = useState(false);
   const [personnelModalOpen, setPersonnelModalOpen] = useState(false);
   const [clientModalOpen, setClientModalOpen] = useState(false);
 
   // Global mobile header action listener
   useEffect(() => {
     const handleEditInfo = () => setInfoModalOpen(true);
-    const handleEditPersonnel = () => setPersonnelModalOpen(true);
+    const handleEditSupervisor = () => setSupervisorModalOpen(true);
+    const handleEditOperator = () => setOperatorModalOpen(true);
+    const handleEditPersonnel = () => setOperatorModalOpen(true);
     const handleEditClient = () => setClientModalOpen(true);
 
     window.addEventListener("reach:edit-machine-info", handleEditInfo);
+    window.addEventListener("reach:edit-machine-supervisor", handleEditSupervisor);
+    window.addEventListener("reach:edit-machine-operator", handleEditOperator);
     window.addEventListener("reach:edit-machine-personnel", handleEditPersonnel);
     window.addEventListener("reach:edit-machine-client", handleEditClient);
 
     return () => {
       window.removeEventListener("reach:edit-machine-info", handleEditInfo);
+      window.removeEventListener("reach:edit-machine-supervisor", handleEditSupervisor);
+      window.removeEventListener("reach:edit-machine-operator", handleEditOperator);
       window.removeEventListener("reach:edit-machine-personnel", handleEditPersonnel);
       window.removeEventListener("reach:edit-machine-client", handleEditClient);
     };
@@ -378,27 +403,44 @@ export function MachineClientView({
     "Machine Details";
 
   const assignedSupervisors = useMemo((): PersonnelPick[] => {
-    if (Array.isArray(machineData.supervisors)) return machineData.supervisors;
-    if (Array.isArray(machineData.supervisor_ids)) {
-      if (machineData.supervisor_ids.length === 0) return [];
-      const fromProp = supervisors.filter((s) => machineData.supervisor_ids?.includes(s.id));
-      if (fromProp.length > 0) return fromProp;
-      return [];
+    let list: PersonnelPick[] = [];
+    if (Array.isArray(machineData.supervisors)) {
+      list = machineData.supervisors;
+    } else if (Array.isArray(machineData.supervisor_ids)) {
+      if (machineData.supervisor_ids.length > 0) {
+        list = supervisors.filter((s) => machineData.supervisor_ids?.includes(s.id));
+      }
+    } else if (machineData.current_supervisor) {
+      list = [machineData.current_supervisor];
     }
-    if (machineData.current_supervisor) return [machineData.current_supervisor];
-    return [];
+    const seen = new Set<string>();
+    return list.filter((s) => {
+      if (!s?.id) return false;
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
   }, [machineData.supervisors, machineData.supervisor_ids, machineData.current_supervisor, supervisors]);
 
   const assignedOperators = useMemo((): PersonnelPick[] => {
-    if (Array.isArray(machineData.operators)) return machineData.operators;
-    if (Array.isArray(machineData.operator_ids)) {
-      if (machineData.operator_ids.length === 0) return [];
-      const fromProp = operators.filter((o) => machineData.operator_ids?.includes(o.id));
-      if (fromProp.length > 0) return fromProp;
-      return [];
+    let list: PersonnelPick[] = [];
+    if (Array.isArray(machineData.operators)) {
+      list = machineData.operators;
+    } else if (Array.isArray(machineData.operator_ids)) {
+      if (machineData.operator_ids.length > 0) {
+        list = operators.filter((o) => machineData.operator_ids?.includes(o.id));
+      }
+    } else if (machineData.current_operator) {
+      list = [machineData.current_operator];
     }
-    if (machineData.current_operator) return [machineData.current_operator];
-    return [];
+    const seen = new Set<string>();
+    return list.filter((o, idx) => {
+      if (!o) return false;
+      const key = `${o.id || idx}:${String(o.shift_code || "").trim().toUpperCase()}:${o.shift_start_time || ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [machineData.operators, machineData.operator_ids, machineData.current_operator, operators]);
 
   // Client data
@@ -529,8 +571,12 @@ export function MachineClientView({
                 {allowEdit ? (
                   <MachineHeroEditMenu
                     onEditInfo={() => setInfoModalOpen(true)}
-                    onEditPersonnel={() => setPersonnelModalOpen(true)}
+                    onAssignSupervisor={() => setSupervisorModalOpen(true)}
+                    onAssignOperator={() => setOperatorModalOpen(true)}
+                    onEditPersonnel={() => setOperatorModalOpen(true)}
                     onEditClient={() => setClientModalOpen(true)}
+                    canEditSupervisor={allowEdit}
+                    canEditOperator={allowPersonnelEdit}
                   />
                 ) : isSupervisor ? (
                   <Button
@@ -539,7 +585,7 @@ export function MachineClientView({
                     responsive
                     mobileIconOnly
                     icon={<AnimatedUserCheck size={14} className="text-teal-600 dark:text-teal-400" />}
-                    onClick={() => setPersonnelModalOpen(true)}
+                    onClick={() => setOperatorModalOpen(true)}
                     title="Assign Operator"
                     aria-label="Assign Operator"
                     className="h-8.5 w-8.5 min-h-[34px] min-w-[34px] p-0 flex items-center justify-center rounded-lg"
@@ -874,29 +920,31 @@ export function MachineClientView({
                 Assigned Shift Personnel
               </h3>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={handleManualRefreshPersonnel}
-                title="Fetch latest assignments from database"
-                aria-label="Refresh Personnel"
-                disabled={isRefreshingPersonnel}
-                className="h-8 px-2 sm:px-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer disabled:opacity-50"
-              >
-                <AnimatedLoader isSpinning={isRefreshingPersonnel} size={12} className={isRefreshingPersonnel ? "text-sky-500" : ""} />
-                <span className="hidden sm:inline">Sync</span>
-              </button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {allowEdit && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<AnimatedShield size={12} className="text-teal-600 dark:text-teal-400" />}
+                  onClick={() => setSupervisorModalOpen(true)}
+                  title="Assign Supervisor"
+                  aria-label="Assign Supervisor"
+                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
+                >
+                  <span>Assign Supervisor</span>
+                </Button>
+              )}
               {allowPersonnelEdit && (
                 <Button
                   variant="secondary"
                   size="sm"
-                  icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
-                  onClick={() => setPersonnelModalOpen(true)}
-                  title={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
-                  aria-label={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
-                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+                  icon={<AnimatedWrench size={12} className="text-amber-600 dark:text-amber-400" />}
+                  onClick={() => setOperatorModalOpen(true)}
+                  title="Assign Operator"
+                  aria-label="Assign Operator"
+                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
                 >
-                  <span>{isSupervisor ? "Assign Operator" : "Edit"}</span>
+                  <span>Assign Operator</span>
                 </Button>
               )}
             </div>
@@ -913,13 +961,26 @@ export function MachineClientView({
                   <AnimatedShield size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
                   <span className="text-xs font-bold text-[var(--color-ink)]">Supervisors ({assignedSupervisors.length})</span>
                 </div>
+                {allowEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<AnimatedEdit size={11} className="text-teal-600 dark:text-teal-400" />}
+                    onClick={() => setSupervisorModalOpen(true)}
+                    title="Assign or edit supervisors for this machine"
+                    aria-label="Assign Supervisor"
+                    className="h-6 px-2 text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 gap-1"
+                  >
+                    <span>Assign</span>
+                  </Button>
+                )}
               </div>
               {assignedSupervisors.length === 0 ? (
                 <p className="text-xs text-[var(--color-mute)] italic py-4 text-center">No supervisors assigned</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {assignedSupervisors.map((sup, idx) => (
-                    <PersonnelCard key={sup.id || idx} person={sup} shiftIndex={idx + 1} color="teal" />
+                    <PersonnelCard key={`${sup.id || 'sup'}-${idx}`} person={sup} shiftIndex={idx + 1} color="teal" />
                   ))}
                 </div>
               )}
@@ -935,13 +996,26 @@ export function MachineClientView({
                   <AnimatedWrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span className="text-xs font-bold text-[var(--color-ink)]">Operators ({assignedOperators.length})</span>
                 </div>
+                {allowPersonnelEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<AnimatedEdit size={11} className="text-amber-600 dark:text-amber-400" />}
+                    onClick={() => setOperatorModalOpen(true)}
+                    title="Assign or edit operators for this machine"
+                    aria-label="Assign Operator"
+                    className="h-6 px-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 gap-1"
+                  >
+                    <span>Assign</span>
+                  </Button>
+                )}
               </div>
               {assignedOperators.length === 0 ? (
                 <p className="text-xs text-[var(--color-mute)] italic py-4 text-center">No operators assigned</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {assignedOperators.map((op, idx) => (
-                    <PersonnelCard key={op.id || idx} person={op} shiftIndex={idx + 1} color="amber" />
+                    <PersonnelCard key={`${op.id || 'op'}-${op.shift_code || idx}-${idx}`} person={op} shiftIndex={idx + 1} color="amber" />
                   ))}
                 </div>
               )}
@@ -1129,12 +1203,32 @@ export function MachineClientView({
           onMachineUpdated={handleMachineUpdated}
         />
       )}
+      {allowEdit && (
+        <MachineSupervisorModal
+          isOpen={supervisorModalOpen}
+          onClose={() => setSupervisorModalOpen(false)}
+          machine={machineData}
+          supervisors={supervisors && supervisors.length > 0 ? supervisors : undefined}
+          userRole={userRole}
+          onMachineUpdated={handleMachineUpdated}
+        />
+      )}
       {allowPersonnelEdit && (
+        <MachineOperatorModal
+          isOpen={operatorModalOpen}
+          onClose={() => setOperatorModalOpen(false)}
+          machine={machineData}
+          operators={operators && operators.length > 0 ? operators : ((machineData.operators || []) as any)}
+          userRole={userRole}
+          onMachineUpdated={handleMachineUpdated}
+        />
+      )}
+      {allowPersonnelEdit && personnelModalOpen && (
         <MachinePersonnelModal
           isOpen={personnelModalOpen}
           onClose={() => setPersonnelModalOpen(false)}
           machine={machineData}
-          supervisors={supervisors && supervisors.length > 0 ? supervisors : ((machineData.supervisors || []) as any)}
+          supervisors={supervisors && supervisors.length > 0 ? supervisors : undefined}
           operators={operators && operators.length > 0 ? operators : ((machineData.operators || []) as any)}
           userRole={userRole}
           onMachineUpdated={handleMachineUpdated}

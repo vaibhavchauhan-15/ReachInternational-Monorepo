@@ -7,7 +7,7 @@ import {
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Clock } from "lucide-react";
 import { formatEmployeeId } from "@reachinternational/utils";
 import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
@@ -24,6 +24,8 @@ export interface UserSelectItem {
   status?: string | null;
   disabled?: boolean;
   disabledReason?: string | null;
+  subtitle?: string | null;
+  assigned_shift?: string | null;
   badge?: string | null;
   badgeVariant?: "default" | "info" | "warning" | "success" | "neutral";
   badgeTitle?: string | null;
@@ -136,7 +138,8 @@ export function UserSelect({
       const empIdMatch = u.employee_id?.toLowerCase().includes(q);
       const phoneMatch = u.phone?.toLowerCase().includes(q);
       const cityMatch = u.city?.toLowerCase().includes(q);
-      return nameMatch || roleMatch || empIdMatch || emailMatch || phoneMatch || cityMatch;
+      const subtitleMatch = u.subtitle?.toLowerCase().includes(q);
+      return nameMatch || roleMatch || empIdMatch || emailMatch || phoneMatch || cityMatch || subtitleMatch;
     });
   }, [eligibleUsers, searchQuery]);
 
@@ -417,7 +420,19 @@ export function UserSelect({
                               </span>
                             )}
                           </div>
-                          {u.disabledReason && (
+                          {u.subtitle && (
+                            <div
+                              className={`text-[10px] truncate mt-0.5 flex items-center gap-1 ${
+                                u.disabled
+                                  ? "text-amber-600 dark:text-amber-400 font-medium"
+                                  : "text-[var(--color-mute)]"
+                              }`}
+                            >
+                              <Clock className="h-2.5 w-2.5 shrink-0 text-sky-500" />
+                              <span className="truncate">{u.subtitle}</span>
+                            </div>
+                          )}
+                          {u.disabledReason && !u.subtitle?.includes(u.disabledReason) && (
                             <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate mt-0.5">
                               {u.disabledReason}
                             </div>

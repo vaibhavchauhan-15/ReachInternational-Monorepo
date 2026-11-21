@@ -108,9 +108,15 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
     supIdSet.add(machine.current_supervisor_id);
   }
 
+  const seenSupIds = new Set<string>();
   const supervisorsList = Array.from(supIdSet)
     .map((id: string) => usersMap.get(id) || (machine.current_supervisor?.id === id ? machine.current_supervisor : null))
-    .filter(Boolean);
+    .filter((s: any) => {
+      if (!s?.id) return false;
+      if (seenSupIds.has(s.id)) return false;
+      seenSupIds.add(s.id);
+      return true;
+    });
 
   // Build complete operator IDs set and list:
   // If machine.operator_ids is an array, it is authoritative.
@@ -147,35 +153,43 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
   // 4. Construct Operators List
   let operatorsList: any[] = [];
   if (activeAssignmentsRaw.length > 0) {
-    operatorsList = activeAssignmentsRaw
-      .filter((a: any) => opIdSet.has(a.operator_id))
-      .map((assign: any) => {
-        const user = usersMap.get(assign.operator_id) || (machine.current_operator?.id === assign.operator_id ? machine.current_operator : null);
-        const sc = assign.shift_code ? clientShiftMap.get(String(assign.shift_code).trim().toUpperCase()) : null;
-        const shift_name = sc?.name || (assign.shift_code ? `Shift ${assign.shift_code}` : null);
-        const start = assign.shift_start_time || sc?.start_time || user?.shift_start_time;
-        const end = assign.shift_end_time || sc?.end_time || user?.shift_end_time;
-        const shift_time =
-          start && end
-            ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`
-            : user?.shift_time || "08:00 AM - 04:00 PM";
-        return {
-          ...(user || {}),
-          id: assign.operator_id,
-          full_name: user?.full_name || "Operator",
-          phone: user?.phone || null,
-          email: user?.email || null,
-          shift_time,
-          shift_code: assign.shift_code || null,
-          shift_name,
-          shift_start_time: start || null,
-          shift_end_time: end || null,
-          role: "operator",
-        };
-      });
+    const seenAssignmentKeys = new Set<string>();
+    const dedupedAssignments = activeAssignmentsRaw.filter((a: any) => {
+      if (!a.operator_id || !opIdSet.has(a.operator_id)) return false;
+      const key = `${a.operator_id}:${String(a.shift_code || "").trim().toUpperCase()}`;
+      if (seenAssignmentKeys.has(key)) return false;
+      seenAssignmentKeys.add(key);
+      return true;
+    });
+
+    operatorsList = dedupedAssignments.map((assign: any) => {
+      const user = usersMap.get(assign.operator_id) || (machine.current_operator?.id === assign.operator_id ? machine.current_operator : null);
+      const sc = assign.shift_code ? clientShiftMap.get(String(assign.shift_code).trim().toUpperCase()) : null;
+      const shift_name = sc?.name || (assign.shift_code ? `Shift ${assign.shift_code}` : null);
+      const start = assign.shift_start_time || sc?.start_time || user?.shift_start_time;
+      const end = assign.shift_end_time || sc?.end_time || user?.shift_end_time;
+      const shift_time =
+        start && end
+          ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`
+          : user?.shift_time || "08:00 AM - 04:00 PM";
+      return {
+        ...(user || {}),
+        id: assign.operator_id,
+        assignment_id: assign.id,
+        full_name: user?.full_name || "Operator",
+        phone: user?.phone || null,
+        email: user?.email || null,
+        shift_time,
+        shift_code: assign.shift_code || null,
+        shift_name,
+        shift_start_time: start || null,
+        shift_end_time: end || null,
+        role: "operator",
+      };
+    });
 
     // Also include any operators from opIdSet who don't have an active assignment row
-    const assignedOpIds = new Set(activeAssignmentsRaw.map((a: any) => a.operator_id));
+    const assignedOpIds = new Set(dedupedAssignments.map((a: any) => a.operator_id));
     opIdSet.forEach((id: string) => {
       if (assignedOpIds.has(id)) return;
       const user = usersMap.get(id) || (machine.current_operator?.id === id ? machine.current_operator : null);

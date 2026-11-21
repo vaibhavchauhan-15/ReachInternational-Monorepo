@@ -28,7 +28,10 @@
    - In the absence of an explicit prompt/command from the user to modify the production database, write operations to Production are STRICTLY FORBIDDEN.
 3. **Development is Default for Writes & Testing**:
    - ALL feature development migrations, schema prototyping, seed scripts, RPC mutation tests, and automated integration suites MUST default to the Development project (`vlmxciuogczumumrwyot`).
-4. **Pause and Verify `project_id`**:
+4. **Automatic Dev DB Migration Push (WITHOUT ASKING)**:
+   - Whenever ANY migration file is created or modified in `supabase/migrations/`, every AI agent MUST automatically push and apply it to the Development database (`vlmxciuogczumumrwyot`) immediately **WITHOUT ASKING THE USER**.
+   - The Development database schema, tables, triggers, and RPCs must always reflect the repository's latest migrations.
+5. **Pause and Verify `project_id`**:
    - Before executing any Supabase MCP tool call (`execute_sql`, `apply_migration`, `deploy_edge_function`) or CLI command, verify the target `project_id`.
    - Default to `"vlmxciuogczumumrwyot"` for development writes and tests.
    - Target `"dhbbgfzbyatzvqafnsqp"` for read-only inspection anytime, or for write operations ONLY when explicitly instructed by the user.
