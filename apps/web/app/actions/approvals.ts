@@ -22,6 +22,7 @@ import { getApprovalsListDAL } from "@/lib/dal/approvals";
 import { canSubmitApproval } from "@reachinternational/permissions";
 import { sanitizeUserErrorMessage } from "@reachinternational/utils";
 import { processPendingApprovalOutboxItems } from "@/lib/server/approvals-outbox";
+import { transferAndApplyDocumentReplacement } from "@/lib/server/document-replacement";
 
 export interface ApprovalActionResult<T = any> {
   success: boolean;
@@ -221,10 +222,32 @@ export async function decideApprovalAction(
         return { success: false, error: "Approval request not found." };
       }
       if (rpcErr.code === "P0004" || msg.includes("terminal state") || msg.includes("already")) {
+        // ⚡ Industry-Standard Idempotent Normalization:
+        // Query current state of the request. If it is ALREADY in the desired state
+        // (e.g. already approved and decision is approve), treat as idempotent success.
+        const { data: currentReq } = await adminSupabase
+          .from("approval_requests")
+          .select("id, status, version, decided_by, decided_at")
+          .eq("id", input.request_id)
+          .maybeSingle();
+
+        const desiredStatus = input.decision === "approve" ? "approved" : "rejected";
+        if (currentReq && currentReq.status === desiredStatus) {
+          revalidateApprovalAndEntityTags(input.request_id);
+          return {
+            success: true,
+            data: {
+              status: currentReq.status,
+              version: currentReq.version,
+            },
+          };
+        }
+
+        const conflictStatus = currentReq?.status || "decided";
         return {
           success: false,
           isAlreadyDecided: true,
-          error: "This request was already decided by another administrator.",
+          error: `This request was already ${conflictStatus} by an administrator.`,
         };
       }
       if (rpcErr.code === "40001" || rpcErr.code === "P0003" || msg.includes("Concurrency conflict") || msg.includes("modified")) {
@@ -243,6 +266,60 @@ export async function decideApprovalAction(
     // database, not the client, decides which rows move together.
     revalidateApprovalAndEntityTags(input.request_id);
 
+    // ⚡ Synchronously transfer document replacements so user profile immediately reflects new files
+    if (input.decision === "approve") {
+      try {
+        const { data: decidedReq } = await adminSupabase
+          .from("approval_requests")
+          .select("id, type_key, payload, requested_by")
+          .eq("id", input.request_id)
+          .maybeSingle();
+
+        if (decidedReq?.type_key === "document_replace") {
+          const p = (decidedReq.payload || {}) as Record<string, any>;
+          if (p.staging_path) {
+            await transferAndApplyDocumentReplacement({
+              userId: p.user_id || decidedReq.requested_by,
+              documentTypeCode: p.document_type_code,
+              stagingPath: p.staging_path,
+              stagingThumbPath: p.staging_thumb_path,
+              decidedBy: userId,
+              requestId: decidedReq.id,
+              fileSizeBytes: p.file_size_bytes,
+              mimeType: p.mime_type,
+              fileName: p.file_name,
+            });
+          }
+        }
+
+        // Also check if any bound or child requests of type document_replace need transfer
+        const { data: childReplacements } = await adminSupabase
+          .from("approval_requests")
+          .select("id, type_key, payload, requested_by")
+          .eq("parent_id", input.request_id)
+          .eq("type_key", "document_replace");
+
+        for (const child of childReplacements || []) {
+          const cp = (child.payload || {}) as Record<string, any>;
+          if (cp.staging_path) {
+            await transferAndApplyDocumentReplacement({
+              userId: cp.user_id || child.requested_by,
+              documentTypeCode: cp.document_type_code,
+              stagingPath: cp.staging_path,
+              stagingThumbPath: cp.staging_thumb_path,
+              decidedBy: userId,
+              requestId: child.id,
+              fileSizeBytes: cp.file_size_bytes,
+              mimeType: cp.mime_type,
+              fileName: cp.file_name,
+            });
+          }
+        }
+      } catch (replaceErr) {
+        console.error("[decideApprovalAction] Synchronous replacement transfer error:", replaceErr);
+      }
+    }
+
     // 🔥 Fire-and-forget audit — does not block response
     logAudit({
       user_id: userId,
@@ -256,7 +333,7 @@ export async function decideApprovalAction(
       },
     }).catch(() => {});
 
-    // 🔥 Fire-and-forget outbox drain — does not block response (saves ~500ms-5s)
+    // 🔥 Drain outbox for remaining notifications / side effects
     processPendingApprovalOutboxItems(10).catch((err) => {
       console.warn("[decideApprovalAction] Background outbox processing non-blocking error:", err);
     });

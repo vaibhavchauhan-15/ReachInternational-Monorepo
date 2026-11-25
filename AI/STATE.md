@@ -1,5 +1,171 @@
 # AI State
 
+## Supabase Database Migrations & Rollbacks Synchronization (Production & Development)
+- **Scope**:
+  - `supabase/migrations/241_approval_decide_document_replace_rejection_fix.sql`
+  - `supabase/rollbacks/241_rollback_approval_decide_document_replace_rejection_fix.sql`
+  - `supabase/rollbacks/240_rollback_approval_decide_child_independence.sql`
+  - `supabase_migrations.schema_migrations` in Production (`dhbbgfzbyatzvqafnsqp`) and Development (`vlmxciuogczumumrwyot`)
+- **Actions Executed**:
+  1. Applied Migration 241 to Production DB (`dhbbgfzbyatzvqafnsqp`):
+     - Added column `acknowledged_at timestamptz DEFAULT NULL;` to `public.document_change_requests`.
+     - Updated `document_change_requests_status_check` constraint to permit `'acknowledged'` and `'dismissed'`.
+     - Updated `public.approval_decide` to eliminate `42703` error (`updated_at` replaced with `reviewed_at = now()`, `reviewed_by = v_caller_id`).
+  2. Populated Migration & Rollback records into `supabase_migrations.schema_migrations` across both Production and Development databases:
+     - Version `20261125241000` (`241_approval_decide_document_replace_rejection_fix.sql`) with rollback `241_rollback_approval_decide_document_replace_rejection_fix.sql`.
+     - Linked corresponding rollback files for all migrations 231 through 240 in `schema_migrations.rollback`.
+  3. Reloaded PostgREST schema cache (`NOTIFY pgrst, 'reload schema'`) on both databases.
+- **Verification**:
+  - Production and Development databases both have 100% synchronized `schema_migrations` tables with explicit `statements` and `rollback` arrays for all recent migrations (231-241).
+  - Verified constraints and function signatures in Production.
+
+## /profile Document Review & Comparison UI Overhaul — Industry Standard Dual-Tile Comparison, Geist Warning Callout & Uncluttered Action Flow (Web + Native)
+- **Scope**: `apps/web/components/documents/MyDocumentsSection.tsx`, `apps/mobile/app/(app)/profile/documents.tsx`.
+- **Feedback Addressed**:
+  1. *Vertical Stack Explosion Eliminated*: Solved the >500px card height issue by replacing stacked full-height active & rejected previews with an industry-standard side-by-side 2-column comparison gallery (`grid grid-cols-2 gap-2.5` on Web, `dualComparisonRow` on Mobile). Card height reduced by over 50% (~260px total), fitting comfortably in 360×800 viewports.
+  2. *Clear Dual-Tile Document Comparison*:
+     - Left tile: Current Active Document (emerald border, `Active on File` checkmark badge, zoom/hover "View Active" pill, `Current Verified` caption). Tapping opens full lightbox.
+     - Right tile: Rejected Attempt (rose border, `Rejected Upload` X badge, zoom/hover "View Rejected" pill, `Declined Upload` caption). Tapping opens full lightbox.
+  3. *Refined Geist Callout*: Replaced harsh neon red box with a subtle, elegant Geist notice (`bg-rose-500/[0.06] border border-rose-500/20 rounded-xl p-3`), with title `Replacement Declined`, rejection reason quote, explanatory active-status note, and an inline `Dismiss` (`X`) affordance.
+  4. *Uncluttered Action Flow*: Replaced competing buttons with a unified primary CTA: `Upload New Replacement` (solid Sky Blue `#0284c7`, min 44px height, upload icon) to re-upload in 1 tap, and a secondary `Dismiss Notice & Keep Current` text affordance.
+  5. *Robust Error Handling*: Handled image load failures gracefully via `imgErrorMap` on Web and icon placeholders on Mobile, completely eliminating broken image alt-text and blank black boxes.
+- **Verification**:
+  - `pnpm typecheck`: 7/7 packages clean (0 errors).
+  - `node scripts/check-typography.mjs`: 0 raw typography properties across mobile.
+  - `node apps/mobile/test/run-tests.mjs`: 357/357 passed.
+  - `node scripts/run-all-tests.mjs`: 34/34 suites passed (100%).
+
+## Document Replacement Rejection Lifecycle — Older Document Preservation, Error 42703 Elimination, and Acknowledge & Remove Flow (Web + Native)
+- **Scope**:
+  - `supabase/migrations/241_approval_decide_document_replace_rejection_fix.sql` (+ rollback)
+  - `apps/web/lib/server/document-replacement.ts`
+  - `apps/web/lib/server/document-review.ts`
+  - `apps/web/app/actions/documents.ts`
+  - `apps/web/app/api/documents/my-documents/route.ts`
+  - `apps/web/app/api/documents/replace/acknowledge/route.ts`
+  - `apps/web/lib/hooks/useMyDocuments.ts`
+  - `apps/web/components/documents/MyDocumentsSection.tsx`
+  - `apps/mobile/lib/hooks/useMobileMyDocuments.ts`
+  - `apps/mobile/app/(app)/profile/documents.tsx`
+  - `packages/utils/src/documents.ts`
+- **Root Causes Diagnosed**:
+  1. *PostgreSQL Error 42703*: In Migration 237/240, `approval_decide` executed `UPDATE public.document_change_requests SET status = 'rejected', rejection_reason = p_note, updated_at = now() WHERE ...;`. Because `document_change_requests` does not possess an `updated_at` column (it uses `reviewed_at`), Postgres threw `42703: column "updated_at" of relation "document_change_requests" does not exist`. The Next.js Server Action crashed, emitting toast `"An unexpected error occurred. Please try again."`
+  2. *Older Document Preservation*: The original verified document in `public.user_documents` must remain 100% verified and active whenever a replacement is rejected.
+  3. *Premature Staging Deletion*: Previously, rejecting a replacement immediately deleted the staged files, preventing the applicant from seeing what was rejected and why.
+- **Fixes Applied**:
+  1. *Migration 241*:
+     - Replaced `updated_at = now()` with `reviewed_at = now(), reviewed_by = v_caller_id, status = 'rejected', rejection_reason = p_note`.
+     - Added column `acknowledged_at timestamptz DEFAULT NULL;` to `document_change_requests`.
+     - Permitted `'acknowledged'` and `'dismissed'` in `document_change_requests_status_check`.
+     - Added child requests loop domain handling for `document_replace` and `document_verify`.
+     - Applied to Dev DB (`vlmxciuogczumumrwyot`) and reloaded PostgREST schema cache.
+  2. *Server Action & API Handlers*:
+     - `acknowledgeRejectedDocumentReplacement` in `apps/web/lib/server/document-replacement.ts`: verifies user ownership, deletes staged files from `doc_staging`, updates `document_change_requests` to `'acknowledged'`, writes audit log, and revalidates Next.js cache tags.
+     - `acknowledgeRejectedReplacementAction` in `apps/web/app/actions/documents.ts`.
+     - `POST /api/documents/replace/acknowledge` dual-auth API route (Bearer JWT for mobile, cookie session for web).
+     - Preserved staged files upon admin rejection so the applicant can view their rejected upload.
+  3. *Cross-Platform UI Parity (Web & Mobile)*:
+     - Verified older document displayed in profile as ACTIVE & VERIFIED.
+     - "Replacement Rejected" alert banner displayed below verified document with rejection reason and thumbnail preview of rejected file.
+     - Tapping the rejected thumbnail opens the modal lightbox viewer.
+     - "Acknowledge & Remove" button (44px min touch target, tactile haptics on mobile) allows the user to confirm reading the rejection reason. Once acknowledged, the rejected files are purged from `doc_staging` and the alert banner disappears cleanly.
+- **Verification**:
+  - Live Dev DB rejection test: Request `14aa5ff2-baf2-47ee-b4f4-1a4171d2b37d` (Aadhaar replacement for VAIBHAV Chauhan) rejected with reason `"Aadhaar card details are blurry. Please re-upload clear front and back copy."`. Returned `{"status":"rejected","decided":true,"success":true}`. Older verified document in `public.user_documents` remained 100% untouched (`verification_status = 'verified'`).
+  - `pnpm typecheck`: Clean across all 7 workspace packages (0 errors).
+  - `node scripts/run-all-tests.mjs`: **34/34 SUITES PASSED (100%)**.
+
+## Reusable Approval Card Unification, Per-Type User-Data Fact Filtering & Premium UI (Web + Native)
+- **Scope**: `apps/web/app/(app)/approvals/components/ApprovalRow.tsx`, `apps/mobile/components/approvals/MobileApprovalCard.tsx`, `tests/approvals/test-approval-normalization-and-deduplication.mjs`.
+- **Goal**: ONE reusable card component for ALL approval types on both platforms, showing only the user data relevant to each approval need, with a clean premium UI — zero behavioral regression.
+- **Architecture (identical on Web + Mobile)**: single card shell (badges → identity → type body → action footer) + shared primitives (`SectionPanel` uniform content panel, `DocumentChip`/`DocumentStrip`, `Fact`, `PanelEmptyNote`) + two registries: `TYPE_BODY` (type_key → content component: `RegistrationBody`, `DocumentVerifyBody`, `DocumentReplaceBody`, `ProfileChangeBody`, `AccountDeletionBody`, `ShiftConflictBody`, `FallbackBody`) and `TYPE_FACTS` (type_key → relevant user-data facts). New approval types = one registry entry.
+- **Per-type user data** ("show the data the approval needs"): registration → email/phone/fleet/supervisor; document_verify & document_replace → email/phone; profile_change & account_deletion → email; shift_conflict → fleet/supervisor. Name + EMP mono chip + type/status/role chips always shown.
+- **Dedup**: mobile card collapsed 3 copy-pasted doc-chip blocks into one memoized `DocChip` (footer modes: `actions`/`status`/`active`/`none`); web card collapsed 7 duplicated section blocks into registry bodies sharing `DocumentsBody`. Removed dead styles + unused imports on both.
+- **Preserved contracts**: `ApprovalRowProps`/`MobileApprovalCardProps` unchanged, DOM id `approval-row-*`, per-doc inline controls semantics (single-doc cards keep footer-only controls; replacement chips inline only when multi-replacement), `View Current Active` lightbox call, `payload.user_id || requested_by || subject_id` resolution (mobile now matches web's subject_id fallback), single-spinner loading, haptics, exit-state pills.
+- **UI polish**: rounded-2xl cards, neutral fact icons (semantic color only for status), consistent 11px section headers with icon, refined chip hierarchy, `+N more changes` hint on profile-change cards, `onSelect` wired to name click (web).
+- **Tests**: `tests/approvals/test-approval-normalization-and-deduplication.mjs` — 2 static source-grep checks for the old inline-branch source shape were updated to assert the new invariants (registry mapping + multi-doc branch + header parity) + 1 new cross-platform architecture-parity check. Pre-existing failures unchanged (verified via git stash baseline): 4 DAL/action source-grep checks + 1 live-DB state check fail on the pre-change code too; `test-document-replacement-lifecycle.mjs` crashes on missing `supabase/migrations/207_*.sql` (pre-existing ENOENT).
+- **Verified**: `pnpm typecheck` 7/7 (0 errors) · mobile suite 357/357 · `test-approval-engine-exhaustive.mjs` 44/44 · `test-unified-approval-engine.mjs` 77/77 · normalization suite 12 passed (5 pre-existing failures, identical to baseline) · ESLint on changed web files 0 errors (2 `no-explicit-any` warnings consistent with `Record<string, any>` payload type) · `check-typography.mjs` 0 violations · live dev server compiled the approvals route (HTTP 307→login, 0 error markers). NOT RUN — reason: `pnpm build` (live dev server holds :3000); visual browser pass not performed.
+
+## /profile Page Review-Feedback Pass — Deduplication, Premium Key-Value Rows & Document Card Cleanup (Web + Native)
+- **Scope**: `packages/utils/src/profile-view.ts`, `apps/web/app/(app)/profile/page.tsx`, `apps/web/components/documents/MyDocumentsSection.tsx`, `apps/web/lib/profile-view.test.ts`, `apps/mobile/app/(app)/profile/index.tsx`, `apps/mobile/app/(app)/profile/documents.tsx`.
+- **Feedback addressed (13 items, /profile @ 360×800)**:
+  1–2. Header card mobile-optimized: email moved out of the hero into Contact Information, employee ID reorganized into a premium mono pill chip (`ID | EMP-0471`) with a copy affordance (Web + Native), 48px avatar on mobile, role/status pills on their own line.
+  3–8. All six info sections rebuilt as compact single-line label/value rows (Web switched from stacked `flex-col` mobile rows to `label left / value right`, matching Native): consistent type hierarchy — category 11px bold uppercase, label 11px medium mute (Web `text-[11px]` / Native `micro`), value 12px semibold ink (Native `caption`), 13px GeistMono for monospace rows (fixed Native mono rows that silently rendered in Geist-SemiBold because `weight` overrides the mono family).
+  9–12. Document cards (Web `MyDocumentsSection`, Native `profile/documents.tsx` + `profile/index.tsx` slots): removed the duplicate "Replacement under review" callout (kept the "Change Image" button label as the single pending signal), removed "KB • JPEG" size/format meta (title = doc label, "Not uploaded" only when empty), removed the View button (thumbnail tap opens the viewer), replaced the footer with one clean full-width 44px action button (Upload / Replace / Change Image).
+  13. Duplicate values removed via shared `toProfileView` (single source of truth for both platforms): "Account Status" and "System Role" rows deleted from Account & System (they duplicated the header status/role pills); email now appears exactly once (Contact Information).
+- **Tests**: `apps/web/lib/profile-view.test.ts` was stale and failing (expected "Work"/"Supervisor" labels and `XXXX-XXXX-` masking) — rewritten to the current contract + a new "header-owned values are not duplicated inside sections" assertion. **59/59** utils tests, **357/357** mobile tests, `node --test apps/web/lib/profile-view.test.ts` 4/4, `pnpm typecheck` 7/7 packages, ESLint 0 errors, `scripts/check-typography.mjs` 0 raw typography props.
+- **NOT RUN — reason**: `pnpm build` (guard-build.js blocks while the dev server holds :3000; the live dev server compiled the full route module graph and served 307→login as expected). DeepAI preview browser timed out on snapshot/evaluate (3 attempts), so no visual pass.
+
+## Document Replacement Approval Lifecycle — Synchronous File Transfer, Pointer Repointing & Old Storage Purging
+- **Scope**:
+  - `apps/web/lib/server/document-replacement.ts`
+  - `apps/web/lib/server/document-review.ts`
+  - `apps/web/lib/server/approvals-outbox.ts`
+  - `apps/web/app/actions/approvals.ts`
+- **Root Causes Diagnosed**:
+  1. *Unawaited Fire-and-Forget*: `approval_decide` enqueued `file.transfer_staged_document` into `approval_outbox` and launched `processPendingApprovalOutboxItems(10).catch(...)` as an unawaited background promise. In Next.js Server Actions, unawaited promises are suspended or aborted upon HTTP response return, leaving the staged file stranded in `doc_staging` and `user_documents` never updated.
+  2. *Stale File Fallback Bug*: In `approvals-outbox.ts`, if `move` reported any issue, a fallback searched `user_files` and grabbed the first `.jpg` file in `documents/{userId}/{docType}`, which was an OLD historical file from a prior upload. It pointed `user_documents` to the old file and deleted other files.
+  3. *PostgreSQL Outbox Column Mismatch*: The outbox error handler tried to update nonexistent columns `retry_count` and `last_error` on `public.approval_outbox`, throwing `42703` and aborting outbox queue execution.
+  4. *Profile Disappearance*: In `getUserDocumentsAction`, `pending_replacement` only shows pending change requests. Once approved, `document_change_requests.status` becomes `approved`. Because `user_documents` still pointed to the old file, the new file was not visible anywhere.
+- **Fixes Applied**:
+  1. *Unified Transfer Engine*: Implemented `transferAndApplyDocumentReplacement` in `document-replacement.ts`. Atomically moves files from `doc_staging` to canonical `user_files`, updates `public.user_documents` via `apply_document_replacement_pointer`, purges previous documents and stale orphans from `user_files`, cleans up `doc_staging`, marks `approval_outbox` as processed, and revalidates all cache tags.
+  2. *Synchronous Execution*: In `decideApprovalAction`, `approveDocumentReplacementCore`, and `verifyUserDocumentCore`, document replacement transfers are now **awaited synchronously** before returning success.
+  3. *Resilient Outbox Handler*: `approvals-outbox.ts` delegates to `transferAndApplyDocumentReplacement` and stores error metadata safely in `payload` without referencing nonexistent columns.
+  4. *Dev DB Reconciliation*: Reconciled user `9dea5fc3-7846-48fa-a799-55b6bc10d00d` (VAIBHAV Chauhan): canonical replacement file activated in `user_documents`, 6 old files purged from `user_files`, outbox rows marked processed.
+- **Verification**:
+  - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+  - `node tests/approvals/test-approval-engine-exhaustive.mjs`: 44/44 passed (100%).
+  - `node scripts/run-all-tests.mjs`: 34/34 suites passed (100%).
+
+## Single/Multi Document Approvals Deduplication, Request Consolidation & RPC Error Normalization
+- **Scope**:
+  - `apps/web/app/(app)/approvals/components/ApprovalRow.tsx`
+  - `apps/mobile/components/approvals/MobileApprovalCard.tsx`
+  - `apps/web/lib/server/document-replacement.ts`
+  - `apps/web/lib/dal/approvals.ts`
+  - `apps/mobile/lib/hooks/useApprovalsData.ts`
+  - `apps/web/lib/server/document-review.ts`
+  - `packages/utils/src/errors.ts`
+  - `packages/utils/src/errors.test.ts`
+- **Root Causes Diagnosed**:
+  1. *Duplicate Approval Controls*: Single document replacement/verify cards rendered both inline thumbnail action buttons (`[X]` / `[✓]`) and card footer buttons (`[Reject]` / `[Approve]`).
+  2. *Fragmented Approvals*: Separate submissions by the same applicant created detached cards rather than a single aggregated approval item.
+  3. *PostgreSQL P0001 "User document not found"*: `verifyUserDocumentCore` assumed `documentId` was always a `user_documents` row or a `document_verify` `subject_id`. For document replacements, `09d89890-3769-4979-b6d6-9c4a4f125374` was the `approval_requests.id`. Falling back to `verify_user_document_atomic` crashed because staged replacements do not yet exist in `public.user_documents`.
+  4. *Unsanitized Error Leak*: Technical PostgreSQL exception strings leaked straight into user-visible toasts.
+- **Fixes Applied**:
+  1. *Suppressed Duplicate Buttons*: Single-document requests hide thumbnail buttons (`canDecide: false`), leaving the card footer buttons as the single set of controls.
+  2. *Applicant Request Consolidation*: `submitDocumentReplacement` links subsequent replacements under existing parent requests; Web DAL and Mobile hooks aggregate multiple pending requests for the same applicant into a single card with individual per-document controls.
+  3. *Multi-Tier Resolution Engine*: `verifyUserDocumentCore` / `rejectUserDocumentCore` first checks `approval_requests` (`document_replace` and `document_verify`), routing through `approval_decide`, then checks `document_change_requests`, and finally `user_documents`.
+  4. *Error Normalization*: Mapped P0001 "User document not found" to `"Document record not found or has already been reviewed."` and stripped UUID/internal technical strings in `sanitizeUserErrorMessage`.
+- **Verification**:
+  - `pnpm --filter @reachinternational/utils test`: 59/59 passed.
+  - `pnpm --filter @reachinternational/permissions test`: 37/37 passed.
+  - `node scripts/run-all-tests.mjs`: 34/34 test suites passed.
+  - `pnpm typecheck`: Clean across all 7 packages (0 errors).
+
+## Approvals Engine — Normalization of "Already Decided by Another Administrator" & Child Document Independence
+- **Scope**: `supabase/migrations/240_approval_decide_child_independence.sql`, `supabase/rollbacks/240_rollback_approval_decide_child_independence.sql`, `apps/web/app/actions/approvals.ts`, `apps/web/app/(app)/approvals/ApprovalsClientShell.tsx`.
+- **Production Status**: 🟢 PUSHED & VERIFIED in Production DB (`dhbbgfzbyatzvqafnsqp`, version `20261125240000`). Schema cache reloaded via `NOTIFY pgrst, 'reload schema'`. PostgREST sanity check (`public.approval_counts()`) verified healthy.
+- **Root Causes Diagnosed**:
+  1. *Child Document Redirection Cascade*: Migration 235 unconditionally redirected child requests (`parent_id IS NOT NULL`) to the parent registration. Clicking verify on *any* single document (Bank Details, Aadhaar, DL) decided and approved the entire parent registration and activated the user account in the DB, while leaving the registration card on screen with an active "Approve" button. When the admin later clicked "Approve", the parent was already approved, triggering `P0004` ("Request is already in terminal state approved").
+  2. *Application-Layer Concurrency & Idempotency Missing*: If an admin clicked "Approve" on an already-approved request, `decideApprovalAction` mapped `P0004` to `"This request was already decided by another administrator."` instead of treating an identical target state as an idempotent success.
+  3. *Client-side Batched State Delay*: React's `processingRequestIds` state was batched asynchronously, allowing rapid double-clicks to fire duplicate parallel network requests.
+  4. *Queue Rollback Bug*: On 409 or `isAlreadyDecided`, optimistic exit was rolled back in the fallback catch block, leaving a zombie card stuck on screen.
+- **Fixes Applied**:
+  1. *Migration 240*: Removed blanket child-to-parent redirection in `public.approval_decide` so reviewing a single document verifies that document via `approval_apply_document_verify` without prematurely finalizing the parent registration. Cascading parent-to-child resolution on master approval is preserved. Applied to Dev DB (`vlmxciuogczumumrwyot`).
+  2. *Idempotent Server Action*: In `decideApprovalAction`, when `P0004` occurs, the action checks `currentReq.status`. If `currentReq.status === desiredStatus`, it revalidates tags and returns `{ success: true, data: { status: currentReq.status, version: currentReq.version } }`. If an actual contradiction exists, it returns a precise conflict message (`This request was already ${conflictStatus} by an administrator.`).
+  3. *Synchronous In-Flight Guard*: Added `inFlightDecisionsRef` (`useRef<Set<string>>`) in `ApprovalsClientShell.tsx` to instantly block duplicate clicks.
+  4. *Graceful Queue Dismissal*: When `isAlreadyDecided` or 409 Conflict occurs, the card is cleanly removed from the pending list (`setItems((prev) => prev.filter(i => i.id !== requestId))`) and debounced counts refresh immediately.
+- **Verification Evidence**:
+  - Live Dev DB negative test suite (`supabase/tests/test_approvals_rbac_negatives.mjs`): **22/22 PASSED (100%)**.
+  - TypeScript compilation: `pnpm typecheck` passed cleanly across all 7 packages (0 errors).
+  - Child document verification verified via transaction probe: verifying a child document sets the child to `approved` while the parent registration strictly remains `pending`.
+
+
+## /approvals DocumentLightboxModal — Review-Feedback UX/Accessibility & Performance Pass (apps/web)
+- **Scope**: single file `apps/web/app/(app)/approvals/components/DocumentLightboxModal.tsx`; props contract with `ApprovalsClientShell.tsx` unchanged. Mobile untouched after parity audit (`MobileDocumentViewerModal` already original-only with native pinch/pan/rotate — web now matches).
+- **Feedback addressed**: (1) removed "Open in new tab" external-link button; (2) removed Original/Thumbnail toggle + corrupted-upload banner — always shows the original document, with the verified thumbnail as a silent load-error fallback only (behavior change: ≤9KB blank Android uploads now show the original, not the auto-switched thumbnail); (3–7) canvas/modal rebuilt: drag-pan when zoomed (Pointer Events + capture), two-finger pinch zoom, wheel zoom (non-passive), double-tap/click toggle, keyboard pan/zoom/reset, Escape-to-close + initial focus + aria-labels/describedby, 44px mobile touch targets, rAF-synced imperative transforms (zero re-renders during gestures), responsive header/footer with stacked full-width mobile actions, `dvh` sizing, derived loading/error state (no setState-in-effect).
+- **Verified**: `tsc --noEmit` 0 errors · ESLint on the modal 0/0 (14 pre-existing warnings in `ApprovalsClientShell.tsx` untouched). NOT RUN — reason: `pnpm build` (guard-build.js blocks while the 2026-11-23 dev server holds :3000) and visual browser pass (DeepAI preview MCP `invalid_mcp_credential`).
+
 ## Approvals Engine — DB-Enforced RBAC Hardening, Group-Atomic Lifecycle & Cursor Contract (apps/web + supabase)
 - **Scope**: `supabase/migrations/236|237|239_*.sql` (+ rollbacks), `supabase/tests/test_approvals_rbac_negatives.mjs`, `apps/web/app/api/approvals/route.ts`, `apps/web/app/actions/approvals.ts`, `apps/web/app/actions/{users,profile,account-deletion}.ts`, `apps/web/lib/server/document-review.ts`, `packages/validation/src/approvals.ts`. Mobile untouched — the RPC contract signatures are unchanged, so native keeps working as-is.
 - **Verified the live Dev schema first** (`vlmxciuogczumumrwyot`, read-only) rather than trusting memory: migration 235 was already applied (`parent_id`, 3 partial keyset indexes, `approval_list`/`approval_counts`/`approval_decide`).

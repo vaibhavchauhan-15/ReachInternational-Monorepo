@@ -15,6 +15,9 @@ import {
   FileCheck,
   AlertCircle,
   Loader2,
+  Check,
+  X,
+  ArrowUpRight,
 } from "lucide-react";
 import { useMyDocuments, type MyDocumentItem } from "@/lib/hooks/useMyDocuments";
 import { DOC_UPLOAD, type DocType } from "@reachinternational/utils";
@@ -51,16 +54,43 @@ const DOC_METADATA: Record<
 };
 
 export function MyDocumentsSection() {
-  const { data: documents, isLoading, isError, error, refetch, getFullImageUrl, replaceMutation } =
-    useMyDocuments();
+  const {
+    data: documents,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    getFullImageUrl,
+    replaceMutation,
+    acknowledgeRejectedReplacement,
+  } = useMyDocuments();
   const { toast } = useToast();
 
   const [activeViewerDoc, setActiveViewerDoc] = useState<ViewerDocument | null>(null);
   const [openingDocCode, setOpeningDocCode] = useState<string | null>(null);
   const [processingDocCode, setProcessingDocCode] = useState<string | null>(null);
+  const [acknowledgingDocCode, setAcknowledgingDocCode] = useState<string | null>(null);
   const [localPreviews, setLocalPreviews] = useState<Record<string, string>>({});
+  const [imgErrorMap, setImgErrorMap] = useState<Record<string, boolean>>({});
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const handleAcknowledge = async (changeRequestId: string, docType: DocType) => {
+    try {
+      setAcknowledgingDocCode(docType);
+      await acknowledgeRejectedReplacement({ changeRequestId, docType });
+      toast(
+        "success",
+        "Rejection Acknowledged",
+        "The rejected replacement document has been removed. Your verified document remains active."
+      );
+    } catch (err: any) {
+      console.error("[MyDocumentsSection] Acknowledge error:", err);
+      toast("error", "Acknowledgment Failed", err?.message || "Failed to acknowledge rejected document.");
+    } finally {
+      setAcknowledgingDocCode(null);
+    }
+  };
 
   const handleOpenFullImage = async (doc: MyDocumentItem, title: string) => {
     try {
@@ -215,35 +245,45 @@ export function MyDocumentsSection() {
                       <h3 className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight">
                         {meta.label}
                       </h3>
-                      <p className="text-[10px] text-[var(--color-mute)] truncate">
-                        {doc ? `${(doc.file_size_bytes / 1024).toFixed(0)} KB • JPEG` : "Not uploaded"}
-                      </p>
+                      {!doc && (
+                        <p className="text-[10px] text-[var(--color-mute)] truncate">
+                          Not uploaded
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Verification Status Badge */}
-                  {status === "verified" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase shrink-0">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Verified
-                    </span>
-                  )}
-                  {status === "pending" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase shrink-0">
-                      <Clock className="h-3 w-3" />
-                      Under Review
-                    </span>
-                  )}
-                  {status === "rejected" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 uppercase shrink-0">
-                      <AlertTriangle className="h-3 w-3" />
-                      Rejected
-                    </span>
-                  )}
+                  {/* Verification Status Badges */}
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    {status === "verified" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase shrink-0">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Verified
+                      </span>
+                    )}
+                    {status === "pending" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase shrink-0">
+                        <Clock className="h-3 w-3" />
+                        Under Review
+                      </span>
+                    )}
+                    {status === "rejected" && !doc?.hasRejectedReplacement && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 uppercase shrink-0">
+                        <AlertTriangle className="h-3 w-3" />
+                        Rejected
+                      </span>
+                    )}
+                    {doc?.hasRejectedReplacement && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 uppercase shrink-0">
+                        <AlertCircle className="h-3 w-3" />
+                        Action Needed
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Rejection Reason Alert */}
-                {status === "rejected" && doc?.rejection_reason && (
+                {/* Initial Upload Rejection Reason Alert (if active doc itself was rejected) */}
+                {status === "rejected" && !doc?.hasRejectedReplacement && doc?.rejection_reason && (
                   <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] space-y-1">
                     <div className="flex items-center gap-1.5 font-bold">
                       <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -253,26 +293,141 @@ export function MyDocumentsSection() {
                   </div>
                 )}
 
-                {/* Pending Replacement Callout */}
-                {hasPendingReplacement && (
-                  <div
-                    onClick={() => {
-                      if (doc) handleOpenFullImage(doc, `${meta.label} (Replacement)`);
-                    }}
-                    className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-300 text-[11px] flex items-center justify-between gap-2 cursor-pointer hover:bg-amber-500/15 transition-colors"
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Clock className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span className="truncate">Replacement image under review. Tap to preview.</span>
+                {/* Refined Rejection Callout for Document Replacement */}
+                {doc?.hasRejectedReplacement && doc.rejectedReplacement && (
+                  <div className="p-3 rounded-xl bg-rose-500/[0.06] dark:bg-rose-500/[0.12] border border-rose-500/20 text-rose-800 dark:text-rose-200 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-rose-600 dark:text-rose-400">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span>Replacement Declined</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAcknowledge(doc.rejectedReplacement!.id, code)}
+                        disabled={acknowledgingDocCode === code}
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-rose-200 px-1.5 py-0.5 rounded border border-rose-500/20 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Dismiss this notice and keep current active document"
+                      >
+                        {acknowledgingDocCode === code ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
+                        <span>Dismiss</span>
+                      </button>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/20 text-amber-800 dark:text-amber-200 shrink-0">
-                      Pending
-                    </span>
+
+                    <div className="text-[11px] leading-snug">
+                      <span className="font-semibold text-[var(--color-ink)]">Reason: </span>
+                      <span>{doc.rejectedReplacement.rejectionReason}</span>
+                    </div>
+                    <p className="text-[10px] text-[var(--color-mute)] leading-tight">
+                      Your current verified document remains active on file while you prepare a replacement.
+                    </p>
                   </div>
                 )}
 
-                {/* Thumbnail / Preview Area */}
-                {(doc || localPreviews[code]) ? (
+                {/* ─── Document Preview Gallery ─── */}
+                {doc?.hasRejectedReplacement && doc.rejectedReplacement ? (
+                  /* Dual Document Comparison Gallery (Active vs Rejected) */
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Tile 1: Current Active Document */}
+                    <div
+                      onClick={() => {
+                        if (doc) handleOpenFullImage(doc, `${meta.label} (Current Active)`);
+                      }}
+                      className="border border-emerald-500/30 hover:border-emerald-500/60 bg-[var(--color-canvas)] rounded-xl p-2 cursor-pointer group/active flex flex-col gap-1.5 transition-all shadow-2xs"
+                      title="Click to view verified active document"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          Active
+                        </span>
+                        <span className="text-[9px] text-[var(--color-mute)] font-medium">On file</span>
+                      </div>
+
+                      <div className="relative rounded-lg overflow-hidden bg-black/5 dark:bg-black/30 aspect-4/3 flex items-center justify-center">
+                        {(!imgErrorMap[`${code}_active`] && (localPreviews[code] || doc?.thumbSignedUrl)) ? (
+                          <img
+                            src={(localPreviews[code] || doc?.thumbSignedUrl)!}
+                            alt={`${meta.label} active`}
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover/active:scale-105"
+                            loading="lazy"
+                            onError={() => setImgErrorMap((prev) => ({ ...prev, [`${code}_active`]: true }))}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-[var(--color-mute)] gap-0.5 p-1 text-center">
+                            <FileCheck className="h-5 w-5 text-emerald-500/70" />
+                            <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">Verified Doc</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/active:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[9px] font-semibold text-white px-1.5 py-0.5 rounded bg-black/60 inline-flex items-center gap-1">
+                            <Eye className="h-2.5 w-2.5" />
+                            View Active
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] text-center font-medium text-[var(--color-ink)] truncate">
+                        Current Verified
+                      </span>
+                    </div>
+
+                    {/* Tile 2: Rejected Attempt */}
+                    <div
+                      onClick={() => {
+                        setActiveViewerDoc({
+                          id: doc.rejectedReplacement!.id,
+                          title: `${meta.label} (Declined Replacement)`,
+                          url: doc.rejectedReplacement!.signedUrl || doc.rejectedReplacement!.thumbSignedUrl!,
+                          mimeType: "image/jpeg",
+                          fileSizeBytes: 0,
+                          fileName: `${code}_declined.jpg`,
+                        });
+                      }}
+                      className="border border-rose-500/30 hover:border-rose-500/60 bg-[var(--color-canvas)] rounded-xl p-2 cursor-pointer group/rej flex flex-col gap-1.5 transition-all shadow-2xs"
+                      title="Click to view declined replacement upload"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                          <X className="h-2.5 w-2.5" />
+                          Rejected
+                        </span>
+                        <span className="text-[9px] text-rose-500 font-medium">Declined</span>
+                      </div>
+
+                      <div className="relative rounded-lg overflow-hidden bg-black/5 dark:bg-black/30 aspect-4/3 flex items-center justify-center">
+                        {(!imgErrorMap[`${code}_rej`] && (doc.rejectedReplacement.thumbSignedUrl || doc.rejectedReplacement.signedUrl)) ? (
+                          <img
+                            src={(doc.rejectedReplacement.thumbSignedUrl || doc.rejectedReplacement.signedUrl)!}
+                            alt={`${meta.label} declined replacement`}
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover/rej:scale-105"
+                            loading="lazy"
+                            onError={() => setImgErrorMap((prev) => ({ ...prev, [`${code}_rej`]: true }))}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-[var(--color-mute)] gap-0.5 p-1 text-center">
+                            <AlertTriangle className="h-5 w-5 text-rose-500/70" />
+                            <span className="text-[9px] font-semibold text-rose-600 dark:text-rose-400">Declined File</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/rej:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-[9px] font-semibold text-white px-1.5 py-0.5 rounded bg-black/60 inline-flex items-center gap-1">
+                            <Eye className="h-2.5 w-2.5" />
+                            View Rejected
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="text-[10px] text-center font-medium text-rose-600 dark:text-rose-400 truncate">
+                        Declined Upload
+                      </span>
+                    </div>
+                  </div>
+                ) : (doc || localPreviews[code]) ? (
+                  /* Standard Single Document Preview Container */
                   <div
                     onClick={() => {
                       if (doc) handleOpenFullImage(doc, meta.label);
@@ -280,12 +435,13 @@ export function MyDocumentsSection() {
                     className="relative group/thumb rounded-xl overflow-hidden border border-[var(--color-hairline)] bg-[var(--color-canvas)] aspect-video flex items-center justify-center cursor-pointer"
                     title="Click to view full document"
                   >
-                    {(localPreviews[code] || doc?.thumbSignedUrl) ? (
+                    {(!imgErrorMap[code] && (localPreviews[code] || doc?.thumbSignedUrl)) ? (
                       <img
                         src={(localPreviews[code] || doc?.thumbSignedUrl)!}
                         alt={meta.label}
                         className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-105"
                         loading="lazy"
+                        onError={() => setImgErrorMap((prev) => ({ ...prev, [code]: true }))}
                       />
                     ) : (
                       <div className="flex flex-col items-center justify-center text-[var(--color-mute)] gap-1">
@@ -330,7 +486,7 @@ export function MyDocumentsSection() {
               </div>
 
               {/* Card Footer Actions */}
-              <div className="pt-3 mt-3 border-t border-[var(--color-hairline)] flex items-center justify-between gap-2">
+              <div className="pt-3 mt-3 border-t border-[var(--color-hairline)] flex flex-col gap-1.5">
                 {/* Hidden File Input */}
                 <input
                   ref={(el) => {
@@ -343,60 +499,66 @@ export function MyDocumentsSection() {
                   disabled={isProcessing}
                 />
 
-                {(doc || localPreviews[code]) ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (doc) handleOpenFullImage(doc, meta.label);
-                      }}
-                      disabled={isOpening || !doc}
-                      className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-[var(--color-ink)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline)] transition-colors py-2 px-3 rounded-lg border border-[var(--color-hairline)] focus:outline-none focus:ring-1 focus:ring-sky-500/30 cursor-pointer min-h-[44px] flex-1 sm:flex-initial"
-                    >
-                      {isOpening ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-[var(--color-mute)]" />
-                      )}
-                      <span>View</span>
-                    </button>
+                {/* Primary CTA */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRefs.current[code]?.click()}
+                  disabled={isProcessing}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-3 min-h-[44px] rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    doc?.hasRejectedReplacement
+                      ? "bg-sky-600 hover:bg-sky-500 text-white shadow-xs focus:ring-2 focus:ring-sky-500/40"
+                      : "border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline)] focus:outline-none focus:ring-1 focus:ring-sky-500/30"
+                  }`}
+                  title={
+                    !doc
+                      ? "Upload document for verification"
+                      : doc?.hasRejectedReplacement
+                        ? "Upload a new replacement document to replace the declined upload"
+                        : hasPendingReplacement
+                          ? "Upload a different image for your pending replacement"
+                          : "Upload replacement document"
+                  }
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-current" />
+                      <span>Uploading Replacement...</span>
+                    </>
+                  ) : !doc ? (
+                    <>
+                      <Upload className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                      <span>Upload Document</span>
+                    </>
+                  ) : doc?.hasRejectedReplacement ? (
+                    <>
+                      <Upload className="h-4 w-4 text-white" />
+                      <span>Upload New Replacement</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                      <span>{hasPendingReplacement ? "Change Image" : "Replace"}</span>
+                    </>
+                  )}
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => fileInputRefs.current[code]?.click()}
-                      disabled={isProcessing}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border bg-[var(--color-canvas)] text-[var(--color-ink)] hover:bg-[var(--color-hairline)] border-[var(--color-hairline)] shadow-2xs cursor-pointer min-h-[44px] flex-1 sm:flex-initial"
-                      title={hasPendingReplacement ? "Upload a different image for your pending replacement" : "Upload replacement document"}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
-                          <span>Uploading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                          <span>{hasPendingReplacement ? "Change Image" : "Replace"}</span>
-                        </>
-                      )}
-                    </button>
-                  </>
-                ) : (
+                {/* Secondary Acknowledge / Dismiss Affordance */}
+                {doc?.hasRejectedReplacement && doc.rejectedReplacement && (
                   <button
                     type="button"
-                    onClick={() => fileInputRefs.current[code]?.click()}
-                    disabled={isProcessing}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow-2xs transition-all cursor-pointer min-h-[44px]"
+                    onClick={() => handleAcknowledge(doc.rejectedReplacement!.id, code)}
+                    disabled={acknowledgingDocCode === code}
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-1 text-[11px] font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isProcessing ? (
+                    {acknowledgingDocCode === code ? (
                       <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>Uploading...</span>
+                        <Loader2 className="h-3 w-3 animate-spin text-current" />
+                        <span>Dismissing Notice...</span>
                       </>
                     ) : (
                       <>
-                        <Upload className="h-3.5 w-3.5" />
-                        <span>Upload Document</span>
+                        <Check className="h-3 w-3" />
+                        <span>Dismiss Notice & Keep Current</span>
                       </>
                     )}
                   </button>

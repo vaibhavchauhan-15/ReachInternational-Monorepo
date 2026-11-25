@@ -68,24 +68,28 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
       <div className="p-4 sm:p-5 border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5 min-w-0 flex-1">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] text-lg font-bold shadow-xs ring-1 ring-black/5 dark:ring-white/10">
+            <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] text-lg font-bold shadow-xs ring-1 ring-black/5 dark:ring-white/10">
               {view.name ? view.name.charAt(0).toUpperCase() : "U"}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-extrabold text-[var(--color-ink)] truncate leading-tight">
-                  {view.name}
-                </h1>
-                {user.employee_id && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-[var(--color-hairline)] text-[var(--color-mute)] border border-[var(--color-hairline)]">
-                    {user.employee_id}
+              <h1 className="text-base sm:text-lg font-extrabold text-[var(--color-ink)] truncate leading-tight">
+                {view.name}
+              </h1>
+              {/* Employee ID — premium mono chip with copy affordance */}
+              {user.employee_id && (
+                <div className="mt-1.5 flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-hairline)] bg-[var(--color-canvas)] pl-2 pr-2.5 py-0.5">
+                    <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-[var(--color-mute)]">
+                      ID
+                    </span>
+                    <span className="h-2.5 w-px bg-[var(--color-hairline)]" />
+                    <span className="font-mono text-[10px] font-semibold tracking-[0.06em] text-[var(--color-ink)]">
+                      {user.employee_id}
+                    </span>
                   </span>
-                )}
-              </div>
-              {/* Full email with break-all to prevent clipping */}
-              <p className="text-xs text-[var(--color-mute)] break-all mt-0.5 select-text">
-                {view.email}
-              </p>
+                  <ProfileFieldCopyButton value={user.employee_id} label="Employee ID" />
+                </div>
+              )}
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span
                   className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${roleMeta.badgeClass}`}
@@ -141,14 +145,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                   return (
                     <div
                       key={row.label}
-                      className="py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs"
+                      className="py-2.5 flex items-start justify-between gap-3 text-xs"
                     >
-                      <dt className="font-medium text-[var(--color-mute)] shrink-0 sm:w-1/3">
+                      <dt className="text-[11px] font-medium leading-5 text-[var(--color-mute)] shrink-0 max-w-[45%]">
                         {row.label}
                       </dt>
                       <dd
-                        className={`font-bold text-[var(--color-ink)] break-words sm:w-2/3 sm:text-right flex items-center justify-start sm:justify-end gap-1.5 select-text ${
-                          row.isMonospace ? "font-mono tracking-tight" : ""
+                        className={`min-w-0 flex-1 leading-5 font-semibold text-[var(--color-ink)] break-words text-right flex items-center justify-end gap-1.5 select-text ${
+                          row.isMonospace ? "font-mono text-[13px] tracking-tight" : ""
                         }`}
                       >
                         {isAadhaar && user.aadhaar_number ? (

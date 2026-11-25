@@ -14,6 +14,7 @@ import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
 import {
   submitDocumentReplacement,
+  acknowledgeRejectedDocumentReplacement,
   type SubmitReplacementResult,
 } from "@/lib/server/document-replacement";
 import {
@@ -39,6 +40,17 @@ export interface UserDocumentPendingReplacement {
   status: "pending";
 }
 
+export interface UserDocumentRejectedReplacement {
+  id: string;
+  staging_path: string;
+  staging_thumb_path?: string | null;
+  signed_url?: string | null;
+  thumb_signed_url?: string | null;
+  rejection_reason: string;
+  reviewed_at?: string | null;
+  created_at: string;
+}
+
 export interface UserDocument {
   id: string;
   user_id: string;
@@ -59,6 +71,8 @@ export interface UserDocument {
   pending_request_id?: string;
   pending_replacement?: UserDocumentPendingReplacement | null;
   has_pending_replacement?: boolean;
+  rejected_replacement?: UserDocumentRejectedReplacement | null;
+  has_rejected_replacement?: boolean;
 }
 
 export interface DocumentType {
@@ -120,9 +134,9 @@ export async function getUserDocumentsAction(
       .order("document_type_code"),
     adminSupabase
       .from("document_change_requests")
-      .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, created_at")
+      .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, rejection_reason, reviewed_at, created_at")
       .eq("user_id", userId)
-      .eq("status", "pending")
+      .in("status", ["pending", "rejected"])
       .order("created_at", { ascending: false }),
   ]);
 
@@ -181,16 +195,31 @@ export async function getUserDocumentsAction(
     const cr = changeReqMap.get(doc.document_type_code);
 
     let pendingReplacement: UserDocumentPendingReplacement | null = null;
+    let rejectedReplacement: UserDocumentRejectedReplacement | null = null;
+
     if (cr) {
-      pendingReplacement = {
-        id: cr.id,
-        staging_path: cr.staging_path,
-        staging_thumb_path: cr.staging_thumb_path,
-        signed_url: stagingMap.get(cr.staging_path) || null,
-        thumb_signed_url: cr.staging_thumb_path ? stagingMap.get(cr.staging_thumb_path) || null : null,
-        created_at: cr.created_at,
-        status: "pending",
-      };
+      if (cr.status === "pending") {
+        pendingReplacement = {
+          id: cr.id,
+          staging_path: cr.staging_path,
+          staging_thumb_path: cr.staging_thumb_path,
+          signed_url: stagingMap.get(cr.staging_path) || null,
+          thumb_signed_url: cr.staging_thumb_path ? stagingMap.get(cr.staging_thumb_path) || null : null,
+          created_at: cr.created_at,
+          status: "pending",
+        };
+      } else if (cr.status === "rejected") {
+        rejectedReplacement = {
+          id: cr.id,
+          staging_path: cr.staging_path,
+          staging_thumb_path: cr.staging_thumb_path,
+          signed_url: stagingMap.get(cr.staging_path) || null,
+          thumb_signed_url: cr.staging_thumb_path ? stagingMap.get(cr.staging_thumb_path) || null : null,
+          rejection_reason: cr.rejection_reason || "Document replacement rejected by administrator.",
+          reviewed_at: cr.reviewed_at,
+          created_at: cr.created_at,
+        };
+      }
     }
 
     result.push({
@@ -199,6 +228,8 @@ export async function getUserDocumentsAction(
       thumb_signed_url: doc.thumb_path ? userFilesMap.get(doc.thumb_path) || null : null,
       pending_replacement: pendingReplacement,
       has_pending_replacement: Boolean(pendingReplacement),
+      rejected_replacement: rejectedReplacement,
+      has_rejected_replacement: Boolean(rejectedReplacement),
     });
   }
 
@@ -228,6 +259,33 @@ export async function getUserDocumentsAction(
   }
 
   return result;
+}
+
+// ─── Acknowledge rejected document replacement ──────────────────────
+
+/**
+ * Called by the user to acknowledge a rejected replacement request:
+ * 1. Verifies ownership of the rejected request.
+ * 2. Purges the rejected files from doc_staging bucket.
+ * 3. Updates status to 'acknowledged' with timestamp.
+ * 4. User profile re-renders cleanly without the rejected banner.
+ */
+export async function acknowledgeRejectedReplacementAction(params: {
+  changeRequestId?: string;
+  docType?: DocType;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await verifySession();
+    return await acknowledgeRejectedDocumentReplacement({
+      userId: session.userId,
+      changeRequestId: params.changeRequestId,
+      docType: params.docType,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[acknowledgeRejectedReplacementAction] Error:", msg);
+    return { success: false, error: "Failed to acknowledge rejected document." };
+  }
 }
 
 // ─── Confirm document upload (upsert after XHR upload completes) ────

@@ -132,19 +132,28 @@ console.log('\n--- 4. Web & Mobile 100% Parity for Multi-Document Cards ---');
 const webRowPath = path.resolve(rootDir, 'apps/web/app/(app)/approvals/components/ApprovalRow.tsx');
 const webRowContent = fs.readFileSync(webRowPath, 'utf8');
 
-check('Web ApprovalRow renders multi-document strip when isDocVerify has documents.length > 1', () => {
-  assert(webRowContent.includes('isDocVerify && ('), 'Handles isDocVerify');
-  assert(webRowContent.includes('documents.length > 1 ? ('), 'Checks documents.length > 1');
-  assert(webRowContent.includes('Documents for Verification ({documents.length})'), 'Renders document count header');
+check('Web ApprovalRow renders multi-document strip for document_verify with documents.length > 1', () => {
+  assert(webRowContent.includes('document_verify: DocumentVerifyBody'), 'Registry maps document_verify to its type body');
+  assert(webRowContent.includes('docs.length > 1'), 'Checks documents.length > 1');
+  assert(webRowContent.includes('Documents for Verification (${docs.length})'), 'Renders document count header');
 });
 
 const mobileCardPath = path.resolve(rootDir, 'apps/mobile/components/approvals/MobileApprovalCard.tsx');
 const mobileCardContent = fs.readFileSync(mobileCardPath, 'utf8');
 
-check('Mobile MobileApprovalCard renders multi-document strip when isDocVerify has documents.length > 1', () => {
-  assert(mobileCardContent.includes('isDocVerify && ('), 'Handles isDocVerify');
-  assert(mobileCardContent.includes('documents.length > 1 ? ('), 'Checks documents.length > 1');
-  assert(mobileCardContent.includes('Documents for Verification ({documents.length})'), 'Renders document count header matching web 100%');
+check('Mobile MobileApprovalCard renders multi-document strip for document_verify with documents.length > 1', () => {
+  assert(mobileCardContent.includes('document_verify: DocumentVerifyBody'), 'Registry maps document_verify to its type body');
+  assert(mobileCardContent.includes('docs.length > 1'), 'Checks documents.length > 1');
+  assert(mobileCardContent.includes('Documents for Verification (${docs.length})'), 'Renders document count header matching web 100%');
+});
+
+check('Web & Mobile share the reusable approval card architecture (type body registry + per-type user-data facts)', () => {
+  for (const [name, content] of [['web', webRowContent], ['mobile', mobileCardContent]]) {
+    assert(content.includes('TYPE_BODY'), `${name} uses the type body registry`);
+    assert(content.includes('TYPE_FACTS'), `${name} uses the per-type user-data facts registry`);
+    assert(content.includes('registration: RegistrationBody'), `${name} registers the registration body`);
+    assert(content.includes('document_replace: DocumentReplaceBody'), `${name} registers the document replacement body`);
+  }
 });
 
 const webShellPath = path.resolve(rootDir, 'apps/web/app/(app)/approvals/ApprovalsClientShell.tsx');

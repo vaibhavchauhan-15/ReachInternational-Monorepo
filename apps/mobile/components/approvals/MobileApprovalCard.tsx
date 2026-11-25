@@ -11,7 +11,7 @@ import { formatTinyRelativeTime } from "@reachinternational/utils";
 import {
   ChevronRight,
   Clock,
-  User,
+  UserCheck,
   Hash,
   Mail,
   Phone,
@@ -51,6 +51,698 @@ export interface MobileApprovalCardProps {
   isRejectLoading?: boolean;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Shared card context — every approval type renders through the same
+// reusable primitives below (100% parity with the web ApprovalRow).
+// ─────────────────────────────────────────────────────────────────────
+
+interface CardCtx {
+  item: ApprovalRequestListItem;
+  fullName: string;
+  payload: Record<string, any>;
+  userId?: string;
+  canDecide: boolean;
+  isActionLoading: boolean;
+  isRejectLoading: boolean;
+  onOpenDocViewer?: MobileApprovalCardProps["onOpenDocViewer"];
+  onVerifyDocument?: MobileApprovalCardProps["onVerifyDocument"];
+  onRejectDocumentPrompt?: MobileApprovalCardProps["onRejectDocumentPrompt"];
+  onDocPress: (doc: AttachedDocumentSummary) => void;
+}
+
+type ThemeColors = ReturnType<typeof useTheme>["colors"];
+
+// ── Primitives ──────────────────────────────────────────────────────
+
+/** Uniform content panel used by every approval type. */
+function SectionPanel({
+  colors,
+  icon,
+  title,
+  titleColor,
+  rightSlot,
+  children,
+}: {
+  colors: ThemeColors;
+  icon: React.ReactNode;
+  title: string;
+  titleColor?: string;
+  rightSlot?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        styles.docsContainer,
+        { backgroundColor: colors.canvas, borderColor: colors.hairline },
+      ]}
+    >
+      <View style={styles.docsHeader}>
+        <View style={styles.docsHeaderLeft}>
+          {icon}
+          <Text variant="label" style={{ color: titleColor || colors.ink }}>
+            {title}
+          </Text>
+        </View>
+        {rightSlot || null}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/** Compact empty-state row inside a SectionPanel. */
+function PanelEmptyNote({
+  colors,
+  text,
+}: {
+  colors: ThemeColors;
+  text: string;
+}) {
+  return (
+    <View style={[styles.dashedEmptyCard, { borderColor: colors.hairline }]}>
+      <FileText size={14} color={colors.mute} />
+      <Text variant="caption" style={{ color: colors.mute, marginLeft: 6 }}>
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+/** Single identity fact — muted icon, ink value. */
+function Fact({
+  colors,
+  icon,
+  value,
+  fullWidth = false,
+}: {
+  colors: ThemeColors;
+  icon: React.ReactNode;
+  value: string;
+  fullWidth?: boolean;
+}) {
+  return (
+    <View style={fullWidth ? styles.contactItemFull : styles.contactItem}>
+      {icon}
+      <Text
+        variant="caption"
+        numberOfLines={1}
+        style={styles.contactText}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+// ── Document chip (shared by every type that shows documents) ───────
+
+interface DocChipProps {
+  colors: ThemeColors;
+  doc: AttachedDocumentSummary;
+  displayLabel: string;
+  /** Footer mode: inline actions, status pill, active pill, or nothing. */
+  footer: "actions" | "status" | "active" | "none";
+  canDecide: boolean;
+  isActionLoading: boolean;
+  isRejectLoading: boolean;
+  onDocPress: (doc: AttachedDocumentSummary) => void;
+  onVerifyDocument?: (docId: string, userId?: string) => Promise<void> | void;
+  onRejectDocumentPrompt?: (doc: AttachedDocumentSummary, userId?: string) => void;
+  userId?: string;
+}
+
+const DocChip = React.memo(function DocChip({
+  colors,
+  doc,
+  displayLabel,
+  footer,
+  canDecide,
+  isActionLoading,
+  isRejectLoading,
+  onDocPress,
+  onVerifyDocument,
+  onRejectDocumentPrompt,
+  userId,
+}: DocChipProps) {
+  const docUrl = doc.thumb_signed_url || doc.signed_url;
+  const isDocPending = doc.verification_status === "pending";
+  const isDocVerified = doc.verification_status === "verified";
+  const isDocRejected = doc.verification_status === "rejected";
+  const showInlineActions =
+    footer === "actions" &&
+    canDecide &&
+    isDocPending &&
+    Boolean(onVerifyDocument) &&
+    Boolean(onRejectDocumentPrompt);
+
+  return (
+    <View
+      style={[
+        styles.docCard,
+        {
+          backgroundColor: colors.canvasElevated,
+          borderColor: colors.hairline,
+        },
+      ]}
+    >
+      <Pressable
+        onPress={() => onDocPress(doc)}
+        style={styles.docThumbContainer}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${doc.label} document`}
+      >
+        {docUrl ? (
+          <Image
+            source={{ uri: docUrl }}
+            style={styles.docThumbImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.docThumbFallback}>
+            <FileText size={20} color={colors.mute} />
+          </View>
+        )}
+        <View style={styles.docThumbOverlay}>
+          <Eye size={12} color={colors.onPrimary} />
+        </View>
+      </Pressable>
+
+      <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
+        {displayLabel}
+      </Text>
+
+      {footer === "none" ? null : footer === "active" ? (
+        <View style={[styles.docStatusPill, { backgroundColor: colors.linkSoft }]}>
+          <Text variant="micro" style={{ color: colors.primary }}>
+            ACTIVE
+          </Text>
+        </View>
+      ) : showInlineActions ? (
+        <View style={[styles.docActionRow, { borderColor: colors.hairline }]}>
+          <Pressable
+            onPress={() => onRejectDocumentPrompt?.(doc, userId)}
+            disabled={isActionLoading || isRejectLoading}
+            style={[
+              styles.docActionBtn,
+              { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Reject ${doc.label}`}
+          >
+            <X size={15} color={colors.error} strokeWidth={2.5} />
+          </Pressable>
+          <Pressable
+            onPress={() => void onVerifyDocument?.(doc.id, userId)}
+            disabled={isActionLoading || isRejectLoading}
+            style={({ pressed }) => [
+              styles.docActionBtn,
+              {
+                borderColor: colors.success,
+                backgroundColor: pressed ? colors.successDeep : colors.success,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Approve ${doc.label}`}
+          >
+            <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
+          </Pressable>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.docStatusPill,
+            {
+              backgroundColor: isDocVerified
+                ? colors.successSoft
+                : isDocRejected
+                  ? colors.errorSoft
+                  : colors.warningSoft,
+            },
+          ]}
+        >
+          <Text
+            variant="micro"
+            style={{
+              color: isDocVerified
+                ? colors.success
+                : isDocRejected
+                  ? colors.error
+                  : colors.warningDeep,
+            }}
+          >
+            {isDocVerified ? "APPROVED" : isDocRejected ? "REJECTED" : "PENDING"}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+});
+
+/** Horizontal document strip used by every document-bearing approval type. */
+function DocumentStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.docsScroll}
+    >
+      {children}
+    </ScrollView>
+  );
+}
+
+// ── Type-driven content renderers (one per approval type) ───────────
+
+function RegistrationBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const docs = ctx.item.documents || [];
+  return (
+    <SectionPanel
+      colors={colors}
+      icon={<FileText size={13} color={colors.primary} />}
+      title={`Attached Documents (${docs.length})`}
+    >
+      {docs.length > 0 ? (
+        <DocumentStrip>
+          {docs.map((doc) => (
+            <DocChip
+              key={doc.id}
+              colors={colors}
+              doc={doc}
+              displayLabel={doc.label}
+              footer="actions"
+              canDecide={ctx.canDecide}
+              isActionLoading={ctx.isActionLoading}
+              isRejectLoading={ctx.isRejectLoading}
+              onDocPress={ctx.onDocPress}
+              onVerifyDocument={ctx.onVerifyDocument}
+              onRejectDocumentPrompt={ctx.onRejectDocumentPrompt}
+              userId={ctx.userId}
+            />
+          ))}
+        </DocumentStrip>
+      ) : (
+        <PanelEmptyNote colors={colors} text="No KYC statutory documents attached yet" />
+      )}
+    </SectionPanel>
+  );
+}
+
+function DocumentVerifyBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const docs = ctx.item.documents || [];
+  const payload = ctx.payload;
+  const singleDocTarget =
+    docs.find(
+      (d) =>
+        d.id === ctx.item.subject_id ||
+        d.document_type_code === payload.document_type_code
+    ) ||
+    docs[0] ||
+    null;
+
+  if (docs.length > 1) {
+    return (
+      <SectionPanel
+        colors={colors}
+        icon={<FileCheck2 size={13} color={colors.primary} />}
+        title={`Documents for Verification (${docs.length})`}
+      >
+        <DocumentStrip>
+          {docs.map((doc) => (
+            <DocChip
+              key={doc.id}
+              colors={colors}
+              doc={doc}
+              displayLabel={doc.label}
+              footer="actions"
+              canDecide={ctx.canDecide}
+              isActionLoading={ctx.isActionLoading}
+              isRejectLoading={ctx.isRejectLoading}
+              onDocPress={ctx.onDocPress}
+              onVerifyDocument={ctx.onVerifyDocument}
+              onRejectDocumentPrompt={ctx.onRejectDocumentPrompt}
+              userId={ctx.userId}
+            />
+          ))}
+        </DocumentStrip>
+      </SectionPanel>
+    );
+  }
+
+  return (
+    <SectionPanel
+      colors={colors}
+      icon={<FileCheck2 size={13} color={colors.primary} />}
+      title="Document for Verification"
+    >
+      {singleDocTarget ? (
+        <DocumentStrip>
+          <DocChip
+            colors={colors}
+            doc={singleDocTarget}
+            displayLabel={singleDocTarget.label}
+            footer="actions"
+            canDecide={false}
+            isActionLoading={ctx.isActionLoading}
+            isRejectLoading={ctx.isRejectLoading}
+            onDocPress={ctx.onDocPress}
+            onVerifyDocument={ctx.onVerifyDocument}
+            onRejectDocumentPrompt={ctx.onRejectDocumentPrompt}
+            userId={ctx.userId}
+          />
+        </DocumentStrip>
+      ) : (
+        <PanelEmptyNote
+          colors={colors}
+          text="Statutory KYC document pending administrative review"
+        />
+      )}
+    </SectionPanel>
+  );
+}
+
+function DocumentReplaceBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const { item, payload } = ctx;
+  const docs = item.documents || [];
+
+  const replacementDocs = docs.filter(
+    (d) => d.id === item.id || d.label?.includes("(Replacement)")
+  );
+  if (replacementDocs.length === 0 && docs.length > 0) {
+    replacementDocs.push(docs[0]);
+  }
+  const isMultiReplacement = replacementDocs.length > 1;
+
+  const activeDocBeingReplaced = !isMultiReplacement
+    ? docs.find(
+      (d) =>
+        !replacementDocs.includes(d) &&
+        d.document_type_code === payload.document_type_code
+    ) || null
+    : null;
+
+  const docTypeName = (payload.document_type_code || replacementDocs[0]?.label || "Document").replace(
+    /_/g,
+    " "
+  );
+
+  return (
+    <SectionPanel
+      colors={colors}
+      icon={<RefreshCw size={13} color={colors.primary} />}
+      title={
+        isMultiReplacement
+          ? `Replacement Documents (${replacementDocs.length})`
+          : `Replacement: ${docTypeName}`
+      }
+    >
+      <DocumentStrip>
+        {replacementDocs.map((rDoc) => (
+          <DocChip
+            key={rDoc.id}
+            colors={colors}
+            doc={rDoc}
+            displayLabel={
+              rDoc.label?.includes("(Replacement)")
+                ? rDoc.label
+                : `${rDoc.label || docTypeName} (Replacement)`
+            }
+            footer="actions"
+            canDecide={ctx.canDecide && isMultiReplacement}
+            isActionLoading={ctx.isActionLoading}
+            isRejectLoading={ctx.isRejectLoading}
+            onDocPress={ctx.onDocPress}
+            onVerifyDocument={ctx.onVerifyDocument}
+            onRejectDocumentPrompt={ctx.onRejectDocumentPrompt}
+            userId={ctx.userId}
+          />
+        ))}
+        {activeDocBeingReplaced ? (
+          <DocChip
+            key={activeDocBeingReplaced.id}
+            colors={colors}
+            doc={activeDocBeingReplaced}
+            displayLabel={`${activeDocBeingReplaced.label || docTypeName} (Active)`}
+            footer="active"
+            canDecide={false}
+            isActionLoading={false}
+            isRejectLoading={false}
+            onDocPress={ctx.onDocPress}
+            userId={ctx.userId}
+          />
+        ) : null}
+      </DocumentStrip>
+    </SectionPanel>
+  );
+}
+
+function ProfileChangeBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const { payload, item } = ctx;
+  const changes: [string, any][] = payload.changes
+    ? Object.entries(payload.changes)
+    : [];
+  const visibleChanges = changes.slice(0, 3);
+  const hiddenCount = changes.length - visibleChanges.length;
+
+  return (
+    <SectionPanel
+      colors={colors}
+      icon={<UserCog size={13} color={colors.primary} />}
+      title="Profile Modifications Requested"
+      rightSlot={
+        payload.reason ? (
+          <Text variant="micro" numberOfLines={1} style={styles.reasonText}>
+            &ldquo;{payload.reason}&rdquo;
+          </Text>
+        ) : null
+      }
+    >
+      {visibleChanges.length > 0 ? (
+        <View style={styles.diffStack}>
+          {visibleChanges.map(([field, val]) => {
+            const oldVal =
+              val?.old_value !== undefined && val?.old_value !== null
+                ? String(val.old_value)
+                : "";
+            const newVal =
+              val?.new_value !== undefined && val?.new_value !== null
+                ? String(val.new_value)
+                : String(val ?? "");
+
+            return (
+              <View
+                key={field}
+                style={[
+                  styles.diffRow,
+                  {
+                    backgroundColor: colors.canvasElevated,
+                    borderColor: colors.hairline,
+                  },
+                ]}
+              >
+                <Text variant="caption" style={styles.diffField}>
+                  {field.replace(/_/g, " ")}:
+                </Text>
+                <View style={styles.diffValuesRow}>
+                  {oldVal ? (
+                    <Text
+                      variant="mono"
+                      numberOfLines={1}
+                      style={[styles.diffOld, { color: colors.error }]}
+                    >
+                      {oldVal}
+                    </Text>
+                  ) : null}
+                  {oldVal ? (
+                    <Text variant="caption" style={{ color: colors.mute, marginHorizontal: 4 }}>
+                      &rarr;
+                    </Text>
+                  ) : null}
+                  <Text
+                    variant="mono"
+                    numberOfLines={1}
+                    style={[styles.diffNew, { color: colors.success }]}
+                  >
+                    {newVal || "(empty)"}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+          {hiddenCount > 0 ? (
+            <Text variant="micro" style={{ color: colors.mute, marginTop: 2 }}>
+              +{hiddenCount} more change{hiddenCount > 1 ? "s" : ""} in request details
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <Text variant="caption" style={{ color: colors.mute }}>
+          {item.summary || "Sensitive profile changes pending review."}
+        </Text>
+      )}
+    </SectionPanel>
+  );
+}
+
+function AccountDeletionBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const { payload, item } = ctx;
+  return (
+    <SectionPanel
+      colors={colors}
+      icon={<ShieldAlert size={14} color={colors.error} />}
+      title="Account Deletion Request"
+      titleColor={colors.error}
+      rightSlot={
+        <View style={[styles.docStatusPill, { backgroundColor: colors.errorSoft }]}>
+          <Text variant="micro" style={{ color: colors.error }}>
+            7-DAY GRACE
+          </Text>
+        </View>
+      }
+    >
+      <View
+        style={[
+          styles.diffRow,
+          {
+            backgroundColor: colors.canvasElevated,
+            borderColor: colors.hairline,
+            marginTop: 4,
+          },
+        ]}
+      >
+        <Text variant="caption" style={{ color: colors.ink }}>
+          Reason: &ldquo;{payload.reason || item.summary || "Permanent deletion requested by user"}&rdquo;
+        </Text>
+      </View>
+    </SectionPanel>
+  );
+}
+
+function ShiftConflictBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const { payload, item } = ctx;
+  return (
+    <SectionPanel
+      colors={colors}
+      icon={<AlertTriangle size={14} color={colors.warning} />}
+      title="Shift Conflict / Override"
+      titleColor={colors.warningDeep}
+    >
+      <View style={styles.shiftConflictGrid}>
+        <View
+          style={[
+            styles.shiftConflictBox,
+            { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
+          ]}
+        >
+          <Text variant="micro" style={{ color: colors.mute }}>
+            MACHINE
+          </Text>
+          <Text variant="label" numberOfLines={1} style={{ color: colors.ink, marginTop: 2 }}>
+            {payload.machine_code || payload.machine_id || "Fleet Machine"}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.shiftConflictBox,
+            { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
+          ]}
+        >
+          <Text variant="micro" style={{ color: colors.mute }}>
+            DATE &amp; SHIFT
+          </Text>
+          <Text variant="label" numberOfLines={1} style={{ color: colors.ink, marginTop: 2 }}>
+            {payload.log_date || "—"} ({payload.shift_code || "—"})
+          </Text>
+        </View>
+      </View>
+      {item.summary ? (
+        <Text variant="caption" numberOfLines={1} style={{ color: colors.mute, marginTop: 6 }}>
+          {item.summary}
+        </Text>
+      ) : null}
+    </SectionPanel>
+  );
+}
+
+function FallbackBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
+  const docs = ctx.item.documents || [];
+  if (docs.length > 0) {
+    return (
+      <SectionPanel
+        colors={colors}
+        icon={<FileText size={13} color={colors.primary} />}
+        title={`Attached Documents (${docs.length})`}
+      >
+        <DocumentStrip>
+          {docs.map((doc) => (
+            <DocChip
+              key={doc.id}
+              colors={colors}
+              doc={doc}
+              displayLabel={doc.label}
+              footer="none"
+              canDecide={false}
+              isActionLoading={false}
+              isRejectLoading={false}
+              onDocPress={ctx.onDocPress}
+              userId={ctx.userId}
+            />
+          ))}
+        </DocumentStrip>
+      </SectionPanel>
+    );
+  }
+  if (ctx.item.summary) {
+    return (
+      <View
+        style={[
+          styles.fallbackSummaryBox,
+          { backgroundColor: colors.canvas, borderColor: colors.hairline },
+        ]}
+      >
+        <Text variant="caption" numberOfLines={2}>
+          {ctx.item.summary}
+        </Text>
+      </View>
+    );
+  }
+  return null;
+}
+
+// ── Registry: type_key → content body ───────────────────────────────
+
+const TYPE_BODY: Record<
+  string,
+  React.ComponentType<{ ctx: CardCtx; colors: ThemeColors }>
+> = {
+  registration: RegistrationBody,
+  document_verify: DocumentVerifyBody,
+  document_replace: DocumentReplaceBody,
+  profile_change: ProfileChangeBody,
+  account_deletion: AccountDeletionBody,
+  shift_conflict: ShiftConflictBody,
+};
+
+// ── Registry: type_key → which user-data facts are relevant ─────────
+
+type FactKey = "email" | "phone" | "fleet" | "supervisor";
+
+const TYPE_FACTS: Record<string, FactKey[]> = {
+  registration: ["email", "phone", "fleet", "supervisor"],
+  document_verify: ["email", "phone"],
+  document_replace: ["email", "phone"],
+  profile_change: ["email"],
+  account_deletion: ["email"],
+  shift_conflict: ["fleet", "supervisor"],
+};
+
+const FALLBACK_FACTS: FactKey[] = ["email", "phone", "fleet", "supervisor"];
+
+// ─────────────────────────────────────────────────────────────────────
+// The single reusable approval card — every approval type renders
+// through this shell (header → identity → type body → action footer).
+// ─────────────────────────────────────────────────────────────────────
+
 export const MobileApprovalCard = React.memo(function MobileApprovalCard({
   item,
   onPress,
@@ -63,19 +755,16 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
   isActionLoading = false,
   isRejectLoading = false,
 }: MobileApprovalCardProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const isPending = item.status === "pending";
   const showDecideActions = isPending && canDecide && Boolean(onApprove) && Boolean(onRejectPrompt);
 
+  // Identity resolution
+  const payload = (item.payload || {}) as Record<string, any>;
   const fullName = item.requester_name || item.subject_label || "Applicant";
   const role = item.role;
   const empId = item.employee_id;
-  const email = item.email;
-  const phone = item.phone;
-  const machineCategory = item.machine_category;
-  const documents = item.documents || [];
-  const payload = (item.payload || {}) as Record<string, any>;
 
   const isOperator =
     role?.toLowerCase() === "operator" ||
@@ -86,39 +775,9 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
     payload.supervisorName ||
     null;
 
-  // Type categorization
-  const isRegistration = item.type_key === "registration";
-  const isDocVerify = item.type_key === "document_verify";
-  const isDocReplace = item.type_key === "document_replace";
-  const isProfileChange = item.type_key === "profile_change";
-  const isAccountDeletion = item.type_key === "account_deletion";
-  const isShiftConflict = item.type_key === "shift_conflict";
-
-  // Target document resolution for document-specific approval types
-  const replacementDocTarget = isDocReplace
-    ? documents.find((d) => d.id === item.id || d.label?.includes("(Replacement)")) ||
-      documents.find((d) => d.id === item.subject_id) ||
-      documents[0] ||
-      null
-    : null;
-
-  const activeDocBeingReplaced = isDocReplace
-    ? documents.find(
-        (d) =>
-          d !== replacementDocTarget &&
-          d.document_type_code === payload.document_type_code
-      ) || null
-    : null;
-
-  const singleDocTarget = isDocReplace
-    ? replacementDocTarget
-    : documents.find(
-        (d) =>
-          d.id === item.subject_id ||
-          d.document_type_code === payload.document_type_code
-      ) ||
-      documents[0] ||
-      null;
+  // Type-driven content + user-data facts ("show the data the approval needs")
+  const TypeBody = TYPE_BODY[item.type_key] || FallbackBody;
+  const factKeys = TYPE_FACTS[item.type_key] || FALLBACK_FACTS;
 
   const handleCardPress = () => {
     haptics.select();
@@ -139,20 +798,37 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
     }
   };
 
-  const handleDocThumbPress = (doc: AttachedDocumentSummary) => {
-    haptics.select();
-    const docUrl = doc.signed_url || doc.thumb_signed_url;
-    if (docUrl && onOpenDocViewer) {
-      onOpenDocViewer(
-        doc.label || "DOCUMENT",
-        docUrl,
-        `${doc.document_type_code}.jpg`,
-        doc.id,
-        doc.verification_status === "pending"
-      );
-    } else {
-      onPress(item);
-    }
+  const handleDocPress = React.useCallback(
+    (doc: AttachedDocumentSummary) => {
+      haptics.select();
+      const docUrl = doc.signed_url || doc.thumb_signed_url;
+      if (docUrl && onOpenDocViewer) {
+        onOpenDocViewer(
+          doc.label || "DOCUMENT",
+          docUrl,
+          `${doc.document_type_code}.jpg`,
+          doc.id,
+          doc.verification_status === "pending"
+        );
+      } else {
+        onPress(item);
+      }
+    },
+    [onOpenDocViewer, onPress, item]
+  );
+
+  const ctx: CardCtx = {
+    item,
+    fullName,
+    payload,
+    userId: payload.user_id || item.requested_by || item.subject_id || undefined,
+    canDecide,
+    isActionLoading,
+    isRejectLoading,
+    onOpenDocViewer,
+    onVerifyDocument,
+    onRejectDocumentPrompt,
+    onDocPress: handleDocPress,
   };
 
   return (
@@ -165,7 +841,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         },
       ]}
     >
-      {/* ── Top Header: Badges ── */}
+      {/* ── Header: type / status / role / priority chips ── */}
       <View style={styles.headerRow}>
         <View style={styles.badgeGroup}>
           <Badge variant="outline">
@@ -176,8 +852,8 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               item.status === "approved"
                 ? "default"
                 : item.status === "rejected"
-                ? "destructive"
-                : "secondary"
+                  ? "destructive"
+                  : "secondary"
             }
           >
             <Text variant="micro">{item.status.toUpperCase()}</Text>
@@ -215,7 +891,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         </View>
       </View>
 
-      {/* ── Identity & Essential Info (Clean Header, No redundant summary) ── */}
+      {/* ── Identity: name + employee chip + per-type user-data facts ── */}
       <Pressable
         onPress={handleCardPress}
         style={({ pressed }) => [
@@ -245,915 +921,44 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           ) : null}
         </View>
 
-        {/* Contact Info (Email, Phone, Machine Category & Operator Supervisor) */}
         <View style={styles.contactGrid}>
-          {email ? (
-            <View style={styles.contactItem}>
-              <Mail size={12} color={colors.success} />
-              <Text variant="caption" numberOfLines={1} style={styles.contactText}>
-                {email}
-              </Text>
-            </View>
+          {factKeys.includes("email") && item.email ? (
+            <Fact
+              colors={colors}
+              icon={<Mail size={12} color={colors.mute} />}
+              value={item.email}
+            />
           ) : null}
-          {phone ? (
-            <View style={styles.contactItem}>
-              <Phone size={12} color={colors.warning} />
-              <Text variant="caption" numberOfLines={1} style={styles.contactText}>
-                {phone}
-              </Text>
-            </View>
+          {factKeys.includes("phone") && item.phone ? (
+            <Fact
+              colors={colors}
+              icon={<Phone size={12} color={colors.mute} />}
+              value={item.phone}
+            />
           ) : null}
-          {machineCategory ? (
-            <View style={styles.contactItemFull}>
-              <Wrench size={12} color={colors.warning} />
-              <Text variant="caption" numberOfLines={1} style={styles.contactText}>
-                Fleet: {machineCategory}
-              </Text>
-            </View>
+          {factKeys.includes("fleet") && item.machine_category ? (
+            <Fact
+              colors={colors}
+              icon={<Wrench size={12} color={colors.mute} />}
+              value={`Fleet: ${item.machine_category}`}
+              fullWidth
+            />
           ) : null}
-          {isOperator ? (
-            <View style={styles.contactItemFull}>
-              <User size={12} color={colors.primary} />
-              <Text variant="caption" numberOfLines={1} style={styles.contactText}>
-                Supervisor: {supervisorName || "Unassigned"}
-              </Text>
-            </View>
+          {factKeys.includes("supervisor") && isOperator ? (
+            <Fact
+              colors={colors}
+              icon={<UserCheck size={12} color={colors.mute} />}
+              value={`Supervisor: ${supervisorName || "Unassigned"}`}
+              fullWidth
+            />
           ) : null}
         </View>
       </Pressable>
 
-      {/* ── Type-Specific Content Section (100% Parity for all 6 types) ── */}
+      {/* ── Type-specific content (same panel + primitives for every type) ── */}
+      <TypeBody ctx={ctx} colors={colors} />
 
-      {/* 1. Document Initial Verification (Single Document or Multi-Document Bound Card) */}
-      {isDocVerify && (
-        documents.length > 1 ? (
-          <View
-            style={[
-              styles.docsContainer,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <View style={styles.docsHeader}>
-              <View style={styles.docsHeaderLeft}>
-                <FileCheck2 size={13} color={colors.primary} />
-                <Text variant="label" style={{ color: colors.ink }}>
-                  Documents for Verification ({documents.length})
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.docsScroll}
-            >
-              {documents.map((doc) => {
-                const docUrl = doc.thumb_signed_url || doc.signed_url;
-                const isDocPending = doc.verification_status === "pending";
-                const isVerified = doc.verification_status === "verified";
-                const isRejected = doc.verification_status === "rejected";
-
-                return (
-                  <View
-                    key={doc.id}
-                    style={[
-                      styles.docCard,
-                      {
-                        backgroundColor: colors.canvasElevated,
-                        borderColor: colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Pressable
-                      onPress={() => handleDocThumbPress(doc)}
-                      style={styles.docThumbContainer}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${doc.label} document`}
-                    >
-                      {docUrl ? (
-                        <Image
-                          source={{ uri: docUrl }}
-                          style={styles.docThumbImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.docThumbFallback}>
-                          <FileText size={20} color={colors.mute} />
-                        </View>
-                      )}
-                      <View style={styles.docThumbOverlay}>
-                        <Eye size={12} color={colors.onPrimary} />
-                      </View>
-                    </Pressable>
-
-                    <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
-                      {doc.label}
-                    </Text>
-
-                    {/* Either show Approve/Reject action buttons OR show the verified/rejected status badge */}
-                    {canDecide && isDocPending && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
-                      <View
-                        style={[
-                          styles.docActionRow,
-                          { borderTopColor: colors.hairline },
-                        ]}
-                      >
-                        <Pressable
-                          onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
-                          disabled={isActionLoading || isRejectLoading}
-                          style={[
-                            styles.docActionBtn,
-                            { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Reject ${doc.label}`}
-                        >
-                          <X size={15} color={colors.error} strokeWidth={2.5} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
-                          disabled={isActionLoading || isRejectLoading}
-                          style={({ pressed }) => [
-                            styles.docActionBtn,
-                            { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Verify ${doc.label}`}
-                        >
-                          <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View
-                        style={[
-                          styles.docStatusPill,
-                          {
-                            backgroundColor: isVerified
-                              ? colors.successSoft
-                              : isRejected
-                              ? colors.errorSoft
-                              : colors.warningSoft,
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="micro"
-                          style={{
-                            color: isVerified
-                              ? colors.success
-                              : isRejected
-                              ? colors.error
-                              : colors.warningDeep,
-                          }}
-                        >
-                          {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : singleDocTarget ? (
-          <View
-            style={[
-              styles.docsContainer,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <View style={styles.docsHeader}>
-              <View style={styles.docsHeaderLeft}>
-                <FileCheck2 size={13} color={colors.primary} />
-                <Text variant="label" style={{ color: colors.ink }}>
-                  Documents for Verification ({documents.length || 1})
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.docsScroll}
-            >
-              {(() => {
-                const doc = singleDocTarget;
-                const docUrl = doc.thumb_signed_url || doc.signed_url;
-                const isDocPending = doc.verification_status === "pending";
-                const isVerified = doc.verification_status === "verified";
-                const isRejected = doc.verification_status === "rejected";
-
-                return (
-                  <View
-                    key={doc.id}
-                    style={[
-                      styles.docCard,
-                      {
-                        backgroundColor: colors.canvasElevated,
-                        borderColor: colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Pressable
-                      onPress={() => handleDocThumbPress(doc)}
-                      style={styles.docThumbContainer}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${doc.label} document`}
-                    >
-                      {docUrl ? (
-                        <Image
-                          source={{ uri: docUrl }}
-                          style={styles.docThumbImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.docThumbFallback}>
-                          <FileText size={20} color={colors.mute} />
-                        </View>
-                      )}
-                      <View style={styles.docThumbOverlay}>
-                        <Eye size={12} color={colors.onPrimary} />
-                      </View>
-                    </Pressable>
-
-                    <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
-                      {doc.label}
-                    </Text>
-
-                    {canDecide && isDocPending && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
-                      <View
-                        style={[
-                          styles.docActionRow,
-                          { borderTopColor: colors.hairline },
-                        ]}
-                      >
-                        <Pressable
-                          onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
-                          disabled={isActionLoading || isRejectLoading}
-                          style={[
-                            styles.docActionBtn,
-                            { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Reject ${doc.label}`}
-                        >
-                          <X size={15} color={colors.error} strokeWidth={2.5} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
-                          disabled={isActionLoading || isRejectLoading}
-                          style={({ pressed }) => [
-                            styles.docActionBtn,
-                            { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Verify ${doc.label}`}
-                        >
-                          <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View
-                        style={[
-                          styles.docStatusPill,
-                          {
-                            backgroundColor: isVerified
-                              ? colors.successSoft
-                              : isRejected
-                              ? colors.errorSoft
-                              : colors.warningSoft,
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="micro"
-                          style={{
-                            color: isVerified
-                              ? colors.success
-                              : isRejected
-                              ? colors.error
-                              : colors.warningDeep,
-                          }}
-                        >
-                          {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
-            </ScrollView>
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.docsContainer,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <View style={styles.docsHeader}>
-              <View style={styles.docsHeaderLeft}>
-                <FileCheck2 size={13} color={colors.primary} />
-                <Text variant="label" style={{ color: colors.ink }}>
-                  Document Verification
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.dashedEmptyCard, { borderColor: colors.hairline }]}>
-              <FileText size={14} color={colors.mute} />
-              <Text variant="caption" style={{ color: colors.mute, marginLeft: 6 }}>
-                Statutory KYC document pending administrative review
-              </Text>
-            </View>
-          </View>
-        )
-      )}
-
-      {/* 2. Document Replacement */}
-      {isDocReplace && (
-        <View
-          style={[
-            styles.docsContainer,
-            {
-              backgroundColor: colors.canvas,
-              borderColor: colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.docsHeader}>
-            <View style={styles.docsHeaderLeft}>
-              <RefreshCw size={13} color={colors.primary} />
-              <Text variant="label" style={{ color: colors.ink }}>
-                Replacement: {(payload.document_type_code || singleDocTarget?.label || "Document").replace(/_/g, " ")}
-              </Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.docsScroll}
-          >
-            {replacementDocTarget ? (
-              <View
-                style={[
-                  styles.docCard,
-                  {
-                    backgroundColor: colors.canvasElevated,
-                    borderColor: colors.hairline,
-                  },
-                ]}
-              >
-                <Pressable
-                  onPress={() => handleDocThumbPress(replacementDocTarget)}
-                  style={styles.docThumbContainer}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${replacementDocTarget.label || "Replacement"} document`}
-                >
-                  {replacementDocTarget.thumb_signed_url || replacementDocTarget.signed_url ? (
-                    <Image
-                      source={{ uri: (replacementDocTarget.thumb_signed_url || replacementDocTarget.signed_url)! }}
-                      style={styles.docThumbImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.docThumbFallback}>
-                      <FileText size={20} color={colors.mute} />
-                    </View>
-                  )}
-                  <View style={styles.docThumbOverlay}>
-                    <Eye size={12} color={colors.onPrimary} />
-                  </View>
-                </Pressable>
-
-                <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
-                  {replacementDocTarget.label?.includes("(Replacement)")
-                    ? replacementDocTarget.label
-                    : `${replacementDocTarget.label || (payload.document_type_code || "Document").replace(/_/g, " ")} (Replacement)`}
-                </Text>
-
-                {canDecide && replacementDocTarget.verification_status === "pending" && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
-                  <View style={[styles.docActionRow, { borderTopColor: colors.hairline }]}>
-                    <Pressable
-                      onPress={() => onRejectDocumentPrompt?.(replacementDocTarget, payload.user_id || item.requested_by)}
-                      disabled={isActionLoading || isRejectLoading}
-                      style={[
-                        styles.docActionBtn,
-                        { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Reject ${replacementDocTarget.label}`}
-                    >
-                      <X size={15} color={colors.error} strokeWidth={2.5} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => onVerifyDocument?.(replacementDocTarget.id, payload.user_id || item.requested_by)}
-                      disabled={isActionLoading || isRejectLoading}
-                      style={({ pressed }) => [
-                        styles.docActionBtn,
-                        { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Approve ${replacementDocTarget.label}`}
-                    >
-                      <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <View
-                    style={[
-                      styles.docStatusPill,
-                      {
-                        backgroundColor:
-                          replacementDocTarget.verification_status === "verified"
-                            ? colors.successSoft
-                            : replacementDocTarget.verification_status === "rejected"
-                            ? colors.errorSoft
-                            : colors.warningSoft,
-                      },
-                    ]}
-                  >
-                    <Text
-                      variant="micro"
-                      style={{
-                        color:
-                          replacementDocTarget.verification_status === "verified"
-                            ? colors.success
-                            : replacementDocTarget.verification_status === "rejected"
-                            ? colors.error
-                            : colors.warningDeep,
-                      }}
-                    >
-                      {replacementDocTarget.verification_status.toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
-
-            {activeDocBeingReplaced ? (
-              <View
-                style={[
-                  styles.docCard,
-                  {
-                    backgroundColor: colors.canvasElevated,
-                    borderColor: colors.hairline,
-                  },
-                ]}
-              >
-                <Pressable
-                  onPress={() => handleDocThumbPress(activeDocBeingReplaced)}
-                  style={styles.docThumbContainer}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${activeDocBeingReplaced.label || "Current Active"} document`}
-                >
-                  {activeDocBeingReplaced.thumb_signed_url || activeDocBeingReplaced.signed_url ? (
-                    <Image
-                      source={{ uri: (activeDocBeingReplaced.thumb_signed_url || activeDocBeingReplaced.signed_url)! }}
-                      style={styles.docThumbImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.docThumbFallback}>
-                      <FileText size={20} color={colors.mute} />
-                    </View>
-                  )}
-                  <View style={styles.docThumbOverlay}>
-                    <Eye size={12} color={colors.onPrimary} />
-                  </View>
-                </Pressable>
-
-                <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
-                  {`${activeDocBeingReplaced.label || (payload.document_type_code || "Document").replace(/_/g, " ")} (Active)`}
-                </Text>
-
-                <View
-                  style={[
-                    styles.docStatusPill,
-                    { backgroundColor: colors.linkSoft },
-                  ]}
-                >
-                  <Text variant="micro" style={{ color: colors.primary }}>
-                    ACTIVE
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* 3. Profile Sensitive Change */}
-      {isProfileChange && (
-        <View
-          style={[
-            styles.docsContainer,
-            {
-              backgroundColor: colors.canvas,
-              borderColor: colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.docsHeader}>
-            <View style={styles.docsHeaderLeft}>
-              <UserCog size={13} color={colors.primary} />
-              <Text variant="label" style={{ color: colors.ink }}>
-                Profile Modifications Requested
-              </Text>
-            </View>
-            {payload.reason ? (
-              <Text variant="micro" numberOfLines={1} style={styles.reasonText}>
-                &ldquo;{payload.reason}&rdquo;
-              </Text>
-            ) : null}
-          </View>
-
-          {payload.changes && Object.keys(payload.changes).length > 0 ? (
-            <View style={styles.diffStack}>
-              {Object.entries(payload.changes).slice(0, 3).map(([field, val]: [string, any]) => {
-                const oldVal =
-                  val?.old_value !== undefined && val?.old_value !== null
-                    ? String(val.old_value)
-                    : "";
-                const newVal =
-                  val?.new_value !== undefined && val?.new_value !== null
-                    ? String(val.new_value)
-                    : String(val ?? "");
-
-                return (
-                  <View
-                    key={field}
-                    style={[
-                      styles.diffRow,
-                      {
-                        backgroundColor: colors.canvasElevated,
-                        borderColor: colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Text variant="caption" style={styles.diffField}>
-                      {field.replace(/_/g, " ")}:
-                    </Text>
-                    <View style={styles.diffValuesRow}>
-                      {oldVal ? (
-                        <Text variant="mono" numberOfLines={1} style={[styles.diffOld, { color: colors.error }]}>
-                          {oldVal}
-                        </Text>
-                      ) : null}
-                      {oldVal ? (
-                        <Text variant="caption" style={{ color: colors.mute, marginHorizontal: 4 }}>
-                          &rarr;
-                        </Text>
-                      ) : null}
-                      <Text variant="mono" numberOfLines={1} style={[styles.diffNew, { color: colors.success }]}>
-                        {newVal || "(empty)"}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          ) : (
-            <Text variant="caption" style={{ color: colors.mute }}>
-              {item.summary || "Sensitive profile changes pending review."}
-            </Text>
-          )}
-        </View>
-      )}
-
-      {/* 4. Account Deletion Request */}
-      {isAccountDeletion && (
-        <View
-          style={[
-            styles.docsContainer,
-            {
-              backgroundColor: colors.canvas,
-              borderColor: colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.docsHeader}>
-            <View style={styles.docsHeaderLeft}>
-              <ShieldAlert size={14} color={colors.error} />
-              <Text variant="label" style={{ color: colors.error }}>
-                Account Deletion Request
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.docStatusPill,
-                { backgroundColor: colors.errorSoft },
-              ]}
-            >
-              <Text variant="micro" style={{ color: colors.error }}>
-                7-DAY GRACE
-              </Text>
-            </View>
-          </View>
-          <View
-            style={[
-              styles.diffRow,
-              {
-                backgroundColor: colors.canvasElevated,
-                borderColor: colors.hairline,
-                marginTop: 4,
-              },
-            ]}
-          >
-            <Text variant="caption" style={{ color: colors.ink }}>
-              Reason: &ldquo;{payload.reason || item.summary || "Permanent deletion requested by user"}&rdquo;
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* 5. Shift Conflict / Override */}
-      {isShiftConflict && (
-        <View
-          style={[
-            styles.docsContainer,
-            {
-              backgroundColor: colors.canvas,
-              borderColor: colors.hairline,
-            },
-          ]}
-        >
-          <View style={styles.docsHeader}>
-            <View style={styles.docsHeaderLeft}>
-              <AlertTriangle size={14} color={colors.warning} />
-              <Text variant="label" style={{ color: colors.warningDeep }}>
-                Shift Conflict / Override
-              </Text>
-            </View>
-          </View>
-          <View style={styles.shiftConflictGrid}>
-            <View
-              style={[
-                styles.shiftConflictBox,
-                { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
-              ]}
-            >
-              <Text variant="micro" style={{ color: colors.mute }}>
-                MACHINE
-              </Text>
-              <Text variant="label" numberOfLines={1} style={{ color: colors.ink, marginTop: 2 }}>
-                {payload.machine_code || payload.machine_id || "Fleet Machine"}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.shiftConflictBox,
-                { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
-              ]}
-            >
-              <Text variant="micro" style={{ color: colors.mute }}>
-                DATE &amp; SHIFT
-              </Text>
-              <Text variant="label" numberOfLines={1} style={{ color: colors.ink, marginTop: 2 }}>
-                {payload.log_date || "—"} ({payload.shift_code || "—"})
-              </Text>
-            </View>
-          </View>
-          {item.summary ? (
-            <Text variant="caption" numberOfLines={1} style={{ color: colors.mute, marginTop: 6 }}>
-              {item.summary}
-            </Text>
-          ) : null}
-        </View>
-      )}
-
-      {/* 6. Registration KYC Documents (Multiple Attached Documents or Empty Placeholder) */}
-      {isRegistration && (
-        documents.length > 0 ? (
-          <View
-            style={[
-              styles.docsContainer,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <View style={styles.docsHeader}>
-              <View style={styles.docsHeaderLeft}>
-                <FileText size={13} color={colors.primary} />
-                <Text variant="label" style={{ color: colors.ink }}>
-                  Attached Documents ({documents.length})
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.docsScroll}
-            >
-              {documents.map((doc) => {
-                const docUrl = doc.thumb_signed_url || doc.signed_url;
-                const isDocPending = doc.verification_status === "pending";
-                const isVerified = doc.verification_status === "verified";
-                const isRejected = doc.verification_status === "rejected";
-
-                return (
-                  <View
-                    key={doc.id}
-                    style={[
-                      styles.docCard,
-                      {
-                        backgroundColor: colors.canvasElevated,
-                        borderColor: colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Pressable
-                      onPress={() => handleDocThumbPress(doc)}
-                      style={styles.docThumbContainer}
-                      accessibilityRole="button"
-                      accessibilityLabel={`View ${doc.label} document`}
-                    >
-                      {docUrl ? (
-                        <Image
-                          source={{ uri: docUrl }}
-                          style={styles.docThumbImage}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.docThumbFallback}>
-                          <FileText size={20} color={colors.mute} />
-                        </View>
-                      )}
-                      <View style={styles.docThumbOverlay}>
-                        <Eye size={12} color={colors.onPrimary} />
-                      </View>
-                    </Pressable>
-
-                    <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
-                      {doc.label}
-                    </Text>
-
-                    {/* Either show Approve/Reject action buttons OR show the verified/rejected status badge */}
-                    {canDecide && isDocPending && Boolean(onVerifyDocument) && Boolean(onRejectDocumentPrompt) ? (
-                      <View style={[styles.docActionRow, { borderColor: colors.hairline }]}>
-                        <Pressable
-                          onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
-                          disabled={isActionLoading || isRejectLoading}
-                          style={[
-                            styles.docActionBtn,
-                            { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Reject ${doc.label}`}
-                        >
-                          <X size={15} color={colors.error} strokeWidth={2.5} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => void onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
-                          disabled={isActionLoading || isRejectLoading}
-                          style={({ pressed }) => [
-                            styles.docActionBtn,
-                            { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
-                          ]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Approve ${doc.label}`}
-                        >
-                          <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View
-                        style={[
-                          styles.docStatusPill,
-                          {
-                            backgroundColor: isVerified
-                              ? colors.successSoft
-                              : isRejected
-                              ? colors.errorSoft
-                              : colors.warningSoft,
-                          },
-                        ]}
-                      >
-                        <Text
-                          variant="micro"
-                          style={{
-                            color: isVerified
-                              ? colors.success
-                              : isRejected
-                              ? colors.error
-                              : colors.warningDeep,
-                          }}
-                        >
-                          {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.dashedEmptyCard,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <FileText size={14} color={colors.mute} />
-            <Text variant="caption" style={{ color: colors.mute, marginLeft: 6 }}>
-              No KYC statutory documents attached yet
-            </Text>
-          </View>
-        )
-      )}
-
-      {/* 7. Fallback for custom approval types */}
-      {!isDocVerify && !isDocReplace && !isProfileChange && !isAccountDeletion && !isShiftConflict && !isRegistration && (
-        documents.length > 0 ? (
-          <View
-            style={[
-              styles.docsContainer,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <View style={styles.docsHeader}>
-              <View style={styles.docsHeaderLeft}>
-                <FileText size={13} color={colors.primary} />
-                <Text variant="label" style={{ color: colors.ink }}>
-                  Attached Documents ({documents.length})
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.docsScroll}
-            >
-              {documents.map((doc) => (
-                <Pressable
-                  key={doc.id}
-                  onPress={() => handleDocThumbPress(doc)}
-                  style={[
-                    styles.docCard,
-                    {
-                      backgroundColor: colors.canvasElevated,
-                      borderColor: colors.hairline,
-                    },
-                  ]}
-                >
-                  <View style={styles.docThumbContainer}>
-                    {doc.thumb_signed_url || doc.signed_url ? (
-                      <Image
-                        source={{ uri: (doc.thumb_signed_url || doc.signed_url)! }}
-                        style={styles.docThumbImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.docThumbFallback}>
-                        <FileText size={20} color={colors.mute} />
-                      </View>
-                    )}
-                  </View>
-                  <Text variant="micro" numberOfLines={1} style={styles.docLabel}>
-                    {doc.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : item.summary ? (
-          <View
-            style={[
-              styles.fallbackSummaryBox,
-              {
-                backgroundColor: colors.canvas,
-                borderColor: colors.hairline,
-              },
-            ]}
-          >
-            <Text variant="caption" numberOfLines={2}>
-              {item.summary}
-            </Text>
-          </View>
-        ) : null
-      )}
-
-      {/* ── Bottom Action Bar (Timestamp on bottom left, Quick Actions on right) ── */}
+      {/* ── Footer: submitted time + decision controls ── */}
       <View style={[styles.actionBar, { borderTopColor: colors.hairline }]}>
         <View style={styles.timeRow}>
           <Clock size={12} color={colors.mute} />
@@ -1174,7 +979,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                 styles.rejectBtn,
                 {
                   borderColor: colors.errorSoft,
-                  backgroundColor: isDark ? colors.errorSoft : colors.errorSoft,
+                  backgroundColor: colors.errorSoft,
                 },
               ]}
             >
@@ -1328,89 +1133,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   contactText: {
-    flex: 1,
-  },
-  showcaseCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
-    marginBottom: 12,
-  },
-  showcaseContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  showcaseThumbContainer: {
-    width: 72,
-    height: 52,
-    borderRadius: 8,
-    overflow: "hidden",
-    position: "relative",
-    backgroundColor: "rgba(0, 0, 0, 0.08)",
-  },
-  showcaseThumbImage: {
-    width: "100%",
-    height: "100%",
-  },
-  showcaseThumbFallback: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  showcaseThumbOverlay: {
-    position: "absolute",
-    bottom: 3,
-    right: 3,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-    borderRadius: 8,
-    padding: 3,
-  },
-  showcaseInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  showcaseLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  showcaseFallback: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
-    marginBottom: 12,
-  },
-  iconBadgeBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  typeSectionBox: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
-    marginBottom: 12,
-  },
-  typeHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-    gap: 6,
-  },
-  typeHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
     flex: 1,
   },
   reasonText: {

@@ -427,6 +427,50 @@ export async function submitDocumentReplacementClient(params: {
   return response.json();
 }
 
+/**
+ * Universal API Client: Acknowledge a rejected document replacement request.
+ * Calls POST /api/documents/replace/acknowledge
+ */
+export async function acknowledgeRejectedDocumentReplacementClient(params: {
+  baseUrl?: string;
+  changeRequestId?: string;
+  docType?: DocType;
+  token?: string;
+}): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const base = params.baseUrl || "";
+  const url = `${base}/api/documents/replace/acknowledge`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (params.token) {
+    headers["Authorization"] = `Bearer ${params.token}`;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      changeRequestId: params.changeRequestId,
+      docType: params.docType,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorJson = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+    };
+    throw new Error(errorJson.message || errorJson.error || `HTTP ${response.status} failed to acknowledge rejection`);
+  }
+
+  return response.json();
+}
+
+
 // ─── Phase 8: Admin & HR Read & Inspection Transport ─────────────────────────
 
 export interface AdminDocumentItem {

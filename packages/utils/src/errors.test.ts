@@ -94,6 +94,29 @@ test("sanitizeUserErrorMessage: scrubs raw SQL syntax messages", () => {
   assert.ok(!msg.includes("SELECT"));
 });
 
+test("sanitizeUserErrorMessage: normalizes User document not found with UUID", () => {
+  const msg = sanitizeUserErrorMessage("User document not found with ID 09d89890-3769-4979-b6d6-9c4a4f125374");
+  assert.equal(msg, "Document record not found or has already been reviewed.");
+});
+
+test("sanitizeDatabaseError: normalizes P0001 User document not found", () => {
+  const res = sanitizeDatabaseError({
+    code: "P0001",
+    message: "User document not found with ID 09d89890-3769-4979-b6d6-9c4a4f125374",
+  });
+  assert.equal(res.error, "Document record not found or has already been reviewed.");
+  assert.equal(res.statusCode, 404);
+});
+
+test("sanitizeDatabaseError: normalizes P0001 terminal state conflict", () => {
+  const res = sanitizeDatabaseError({
+    code: "P0001",
+    message: "Request is already in terminal state approved",
+  });
+  assert.equal(res.error, "This request was already decided by an administrator.");
+  assert.equal(res.statusCode, 409);
+});
+
 test("sanitizeUserErrorMessage: preserves safe plain text messages", () => {
   const msg = sanitizeUserErrorMessage("Please check your email address.");
   assert.equal(msg, "Please check your email address.");

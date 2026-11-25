@@ -177,8 +177,8 @@ export const getApprovalsListDAL = cache(
       const rawItems: any[] = Array.isArray(resObj.items)
         ? resObj.items
         : Array.isArray(rpcRes)
-        ? rpcRes
-        : [];
+          ? rpcRes
+          : [];
       const nextCursor: ApprovalCursor | null = resObj.next_cursor || null;
       const hasMore: boolean = Boolean(resObj.has_more);
       const pendingTotal: number =
@@ -308,8 +308,53 @@ export const getApprovalsListDAL = cache(
         };
       });
 
+      // Consolidate multiple requests of the same type for the same applicant into a single card
+      const consolidatedItems: ApprovalRequestListItem[] = [];
+      const userTypeMap = new Map<string, ApprovalRequestListItem>();
+
+      for (const item of items) {
+        if (item.type_key === "document_replace" || item.type_key === "document_verify") {
+          const applicantKey = `${item.type_key}:${item.requested_by || (item.payload as any)?.user_id || item.subject_id}`;
+          const existing = userTypeMap.get(applicantKey);
+          if (existing) {
+            // Merge bound_request_ids
+            const existingBound = existing.bound_request_ids || [];
+            const itemBound = item.bound_request_ids || [];
+            const boundSet = new Set([...existingBound, ...itemBound, item.id]);
+            existing.bound_request_ids = Array.from(boundSet);
+
+            // Merge documents (prevent duplicates by doc ID + label)
+            const existingDocs = existing.documents || [];
+            const itemDocs = item.documents || [];
+            const seenKeys = new Set(existingDocs.map((d) => `${d.id}:${d.label}`));
+            for (const doc of itemDocs) {
+              const k = `${doc.id}:${doc.label}`;
+              if (!seenKeys.has(k)) {
+                existingDocs.push(doc);
+                seenKeys.add(k);
+              }
+            }
+            existing.documents = existingDocs;
+
+            // Update summary and subject_label
+            if (item.type_key === "document_replace") {
+              const count = existingDocs.filter((d) => d.label?.includes("(Replacement)")).length;
+              existing.summary = `Document replacement request (${count} documents pending)`;
+              existing.subject_label = `${existing.requester_name || "Applicant"} (${count} Replacements)`;
+            } else {
+              const count = existingDocs.length;
+              existing.summary = `Document verification (${count} documents pending)`;
+              existing.subject_label = `${existing.requester_name || "Applicant"} (${count} Documents)`;
+            }
+            continue;
+          }
+          userTypeMap.set(applicantKey, item);
+        }
+        consolidatedItems.push(item);
+      }
+
       return {
-        data: items,
+        data: consolidatedItems,
         next_cursor: nextCursor,
         has_more: hasMore,
         pending_total: pendingTotal,

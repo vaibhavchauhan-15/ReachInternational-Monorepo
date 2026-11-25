@@ -1,3 +1,25 @@
+## [2026-11-25] Reusable Approval Card Unification & Per-Type User-Data Fact Filtering (Web + Native)
+- **Changed**: Rebuilt `ApprovalRow.tsx` (Web) and `MobileApprovalCard.tsx` (Native) on ONE reusable card architecture — shared shell + primitives (`SectionPanel`, `DocumentChip`/`DocumentStrip`, `Fact`) + `TYPE_BODY` / `TYPE_FACTS` registries. Every approval type (registration, document_verify, document_replace, profile_change, account_deletion, shift_conflict, fallback) renders through the same components; each type shows only the user data it needs. Mobile's 3 duplicated doc-chip blocks collapsed into one memoized `DocChip`; web's 7 duplicated section branches collapsed into registry bodies. Premium UI polish (rounded-2xl cards, neutral fact icons, consistent section headers, `+N more changes` hint). Props contracts, decision flows, per-doc control semantics, and terminology preserved 100% (profile-change panel title unified to "Profile Modifications Requested").
+- **Files**: `apps/web/app/(app)/approvals/components/ApprovalRow.tsx`, `apps/mobile/components/approvals/MobileApprovalCard.tsx`, `tests/approvals/test-approval-normalization-and-deduplication.mjs` (2 stale source-grep checks updated to new invariants + 1 new architecture-parity check).
+- **Verified**: `pnpm typecheck` 7/7 · mobile 357/357 · approvals engine 44/44 · unified engine 77/77 · normalization suite 12 pass (5 pre-existing failures identical to git-stash baseline) · ESLint 0 errors · typography guard 0 · dev-server route compile clean. NOT RUN — reason: `pnpm build` (:3000 held by live dev server) and visual pass.
+
+## [2026-11-25] /profile Page Review-Feedback Pass — Deduplication, Premium Key-Value Rows & Document Card Cleanup (Web + Native)
+- **Changed** (13 feedback items on `/profile` @ 360×800, applied on both platforms):
+  - Header card (items 1–2, 13): email removed from the hero (shown once in Contact Information), employee ID rendered as a premium mono `ID | EMP-0471` chip with copy button, role/status pills re-organized, 48px mobile avatar.
+  - Six info sections (items 3–8): compact single-line label/value rows on all viewports (Web now matches Native), consistent hierarchy (11px label mute / 12px value semibold ink / 13px mono values), tighter row padding. Fixed Native mono rows rendering non-mono (`weight` overrides GeistMono family in `Text`).
+  - Document cards (items 9–12): removed duplicate pending-replacement callout, removed `KB • JPEG` meta, removed the View button (thumbnail tap = view), single clean full-width 44px action button.
+  - Dedup (item 13): shared `toProfileView` no longer emits "Account Status"/"System Role" rows (duplicated by header pills).
+- **Files**: `packages/utils/src/profile-view.ts`, `apps/web/app/(app)/profile/page.tsx`, `apps/web/components/documents/MyDocumentsSection.tsx`, `apps/web/lib/profile-view.test.ts` (stale/failing test rewritten + dedup assertion), `apps/mobile/app/(app)/profile/index.tsx`, `apps/mobile/app/(app)/profile/documents.tsx`.
+- **Verified**: `pnpm typecheck` 7/7 · utils 59/59 · mobile 357/357 · profile-view tests 4/4 · ESLint 0 errors · typography guard 0 violations · `test-phase7-document-read-replace.mjs` 9/9. NOT RUN — reason: `pnpm build` (guard-build.js blocks while dev server holds :3000) and visual pass (DeepAI preview automation timeouts).
+
+## [2026-11-25] /approvals DocumentLightboxModal — Review-Feedback UX/Accessibility & Performance Pass (Web)
+- **Page-feedback fixes** in `apps/web/app/(app)/approvals/components/DocumentLightboxModal.tsx` (single-file change; `ApprovalsClientShell.tsx` props contract unchanged):
+  1. Removed the header "Open image in new tab" external-link button.
+  2. Removed the Original/Thumbnail view-mode toggle (and the corrupted-upload auto-switch banner) — the viewer now always shows the original uploaded document. The verified thumbnail remains a silent last-resort fallback only when the original fails to load. **Behavior change**: ≤9KB blank Android canvas-drop uploads now display the original (blank) instead of auto-switching to the verified thumbnail.
+  3–7. Canvas + modal rebuilt for smooth/optimized interaction and 3-tier responsiveness (mobile ≤640 / desktop ≥1024): imperative-transform gesture engine (drag-to-pan when zoomed via Pointer Events + `setPointerCapture`, two-finger pinch-to-zoom, wheel zoom with non-passive listener, double-tap/double-click zoom toggle, keyboard pan/zoom/reset `arrows/+/-/0` on a focusable `role="group"` stage), zero re-renders during gestures (rAF state sync), `will-change-transform`, `touch-action: none`, `transform: translate3d/scale/rotate` with smooth programmatic transitions. Accessibility: `aria-label`s on all icon buttons, `aria-describedby` hidden instructions, Escape-to-close, initial focus on the close button, 44px mobile touch targets (`h-11 w-11 sm:h-9 sm:w-9`). Responsive header/footer (stacked full-width action buttons on mobile), `dvh` sizing, `decoding="async"`, loading/error states derived from the active URL (no effect-driven `setState`).
+- **Parity audit**: `apps/mobile/components/documents/MobileDocumentViewerModal.tsx` already shows the original only (no thumbnail toggle / external-link button) and has native pinch-to-zoom + pan (`ScrollView` `maximumZoomScale`) — these web fixes bring web INTO parity; no mobile change required.
+- **Verification**: `tsc --noEmit` 0 errors · ESLint on the modal 0 errors/0 warnings (the 14 warnings in `ApprovalsClientShell.tsx` are pre-existing and untouched). NOT RUN — reason: `pnpm build` (guard-build.js blocks while the 2026-11-23 dev server holds :3000) and visual browser pass (DeepAI preview MCP `invalid_mcp_credential`).
+
 ## [2026-11-25] Approvals Engine — DB-Enforced RBAC Hardening (3 privilege escalations closed), Group-Atomic Lifecycle, Cursor Contract & Payload-Cast Safety
 - **Live audit of Dev before touching code** (`vlmxciuogczumumrwyot`, read-only). Confirmed migration 235 was applied and re-confirmed the root cause of "only top 7 shown": the queue held 2 top-level `registration` items backed by 5 raw `approval_requests` rows (2 parents + 3 linked `document_verify` children). A raw-row fetch folds those into ~7 cards; the grouped queue returns 2 rows with `pending_total = 2`, identical in `approval_list` and `approval_counts`.
 - **Migration 236 — `236_approvals_rbac_null_role_guard_and_execute_hardening.sql`** (Dev applied, `NOTIFY pgrst, 'reload schema'`, zero production writes). Three privilege escalations, each reproduced live on Dev first and rolled back:
@@ -21517,3 +21539,17 @@ On user registration, 3 separate "Document Initial Verification" approval reques
   - `pnpm --filter @reachinternational/web typecheck` (0 errors).
   - ESLint on approvals module (0 errors).
   - `pnpm test` (Comprehensive Test Runner): **34/34 SUITES PASSED (100%)**.
+
+
+## [2026-11-25] - Production Deployment: Migration 240 Applied to Production DB
+- **Target DB**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`, Region: `ap-south-1`).
+- **Authority**: Explicit user instruction to apply Migration 240 to Production DB.
+- **Migration Applied**: `supabase/migrations/240_approval_decide_child_independence.sql` (Version: `20261125240000`).
+- **Rollback File**: `supabase/rollbacks/240_rollback_approval_decide_child_independence.sql`.
+- **Database Changes**:
+  - Replaced `public.approval_decide(uuid, text, text, integer, uuid, text)` to remove child-to-parent redirection on single document verification. Verifying an individual KYC document (`document_verify`) now verifies that document without prematurely approving the master registration and activating the user account.
+  - Cascading resolution on master parent registration decisions preserved atomically for all pending children.
+  - Aligned caller resolution with Migration 239 (`COALESCE(current_setting('role', true), 'none') IN ('postgres', 'service_role', 'none')`).
+  - Recorded version `20261125240000` in `supabase_migrations.schema_migrations`.
+  - Reloaded schema cache with `NOTIFY pgrst, 'reload schema'`.
+- **Verification**: Verified schema migrations entry and executed `public.approval_counts()`, returning healthy counts (`{"total": 2, "by_type": {"registration": 1, "document_replace": 1}}`).

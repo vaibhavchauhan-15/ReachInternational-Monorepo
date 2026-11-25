@@ -675,39 +675,17 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                         onPress={() => handleCopy(mergedUserData.employee_id, 'Employee ID')}
                         accessibilityLabel={`Copy Employee ID ${mergedUserData.employee_id}`}
                       >
-                        <Text variant="micro" weight="semibold" style={{ color: theme.colors.ink }}>
+                        <Text variant="micro" weight="bold" style={{ color: theme.colors.mute }}>
+                          ID
+                        </Text>
+                        <View style={[styles.empBadgeDivider, { backgroundColor: isDark ? '#383838' : '#e4e4e7' }]} />
+                        <Text variant="mono" style={{ color: theme.colors.ink }}>
                           {mergedUserData.employee_id}
                         </Text>
                         {copiedField === 'Employee ID' ? (
                           <Check size={11} color="#10b981" />
                         ) : (
                           <Copy size={11} color={theme.colors.mute} />
-                        )}
-                      </Pressable>
-                    )}
-                  </View>
-
-                  <View style={styles.userEmailRow}>
-                    <Text
-                      variant="caption"
-                      style={[styles.userEmail, { color: theme.colors.mute }]}
-                      numberOfLines={1}
-                      selectable
-                    >
-                      {view.email}
-                    </Text>
-                    {Boolean(view.email) && (
-                      <Pressable
-                        variant="iconButton"
-                        hitSlopToMin48
-                        style={styles.headerCopyBtn}
-                        onPress={() => handleCopy(view.email, 'Email')}
-                        accessibilityLabel="Copy Email"
-                      >
-                        {copiedField === 'Email' ? (
-                          <Check size={12} color="#10b981" />
-                        ) : (
-                          <Copy size={12} color={theme.colors.mute} />
                         )}
                       </Pressable>
                     )}
@@ -879,7 +857,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                           <View style={styles.rowContent}>
                             {/* Label */}
                             <Text
-                              variant="caption"
+                              variant="micro"
                               weight="medium"
                               style={[
                                 styles.rowLabel,
@@ -895,7 +873,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                                 <View style={styles.aadhaarArea}>
                                   <Text
                                     variant={row.isMonospace ? 'mono' : 'caption'}
-                                    weight="semibold"
+                                    weight={row.isMonospace ? undefined : 'semibold'}
                                     style={[
                                       styles.rowValue,
                                       { color: theme.colors.ink },
@@ -977,7 +955,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                                 <View style={styles.valueWithCopyArea}>
                                   <Text
                                     variant={row.isMonospace ? 'mono' : 'caption'}
-                                    weight="semibold"
+                                    weight={row.isMonospace ? undefined : 'semibold'}
                                     style={[
                                       styles.rowValue,
                                       { color: theme.colors.ink },
@@ -1171,15 +1149,7 @@ export default function ProfileScreen({ onPressBack, backRoute }: ProfileScreenP
                               style={[styles.existingDocFileName, { color: theme.colors.ink }]}
                               numberOfLines={1}
                             >
-                              {existing.storage_path.split('/').pop() || docType.label}
-                            </Text>
-                            <Text
-                              variant="micro"
-                              style={[styles.existingDocMeta, { color: theme.colors.mute }]}
-                              numberOfLines={1}
-                            >
-                              {isPdf ? 'PDF' : isImage ? (path.split('.').pop()?.toUpperCase() || 'IMAGE') : 'DOC'}
-                              {existing.file_size_bytes ? ` • ${(Number(existing.file_size_bytes) / 1024).toFixed(0)} KB` : ''}
+                              {docType.label}
                             </Text>
                           </View>
                         </Pressable>
@@ -1403,30 +1373,15 @@ const styles = StyleSheet.create({
   empBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
     borderWidth: 1,
   },
-  empBadgeText: {},
-  userEmailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-    flexWrap: 'wrap',
-  },
-  userEmail: {
-    flexShrink: 1,
-  },
-  headerCopyBtn: {
-    padding: 3,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 24,
-    minWidth: 24,
+  empBadgeDivider: {
+    width: 1,
+    height: 10,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -1570,12 +1525,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   rowContent: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    minHeight: 38,
+    minHeight: 36,
   },
   rowLabel: {
     flexShrink: 0,
@@ -1723,7 +1678,6 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   existingDocFileName: {},
-  existingDocMeta: {},
   existingDocCard: {
     flexDirection: 'row',
     alignItems: 'center',

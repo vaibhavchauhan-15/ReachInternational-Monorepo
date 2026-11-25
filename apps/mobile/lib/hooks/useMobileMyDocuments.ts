@@ -7,10 +7,21 @@ import {
   fetchReplacementUploadUrl,
   uploadToSignedUrl,
   submitDocumentReplacementClient,
+  acknowledgeRejectedDocumentReplacementClient,
 } from '@reachinternational/utils';
 import { compressMobileImage } from '../utils/mobileImageCompression';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
+
+export interface MobileRejectedReplacementInfo {
+  id: string;
+  document_type_code: DocType;
+  rejectionReason: string;
+  reviewedAt?: string | null;
+  stagingPath: string;
+  signedUrl?: string | null;
+  thumbSignedUrl?: string | null;
+}
 
 export interface MobileMyDocumentItem {
   id: string;
@@ -33,6 +44,8 @@ export interface MobileMyDocumentItem {
   pendingSignedUrl?: string | null;
   pendingCreatedAt?: string | null;
   isPendingChangeRequest?: boolean;
+  hasRejectedReplacement?: boolean;
+  rejectedReplacement?: MobileRejectedReplacementInfo | null;
 }
 
 export const MOBILE_MY_DOCUMENTS_QUERY_KEY = ['mobile-my-documents'] as const;
@@ -105,9 +118,9 @@ export function useMobileMyDocuments() {
           .order('document_type_code'),
         supabase
           .from('document_change_requests')
-          .select('id, document_type_code, staging_path, staging_thumb_path, status, created_at')
+          .select('id, document_type_code, staging_path, staging_thumb_path, status, rejection_reason, reviewed_at, created_at')
           .eq('user_id', user.id)
-          .eq('status', 'pending'),
+          .in('status', ['pending', 'rejected']),
       ]);
 
       if (docsResult.error) {
@@ -117,8 +130,13 @@ export function useMobileMyDocuments() {
 
       const docs = docsResult.data || [];
       const pendingMap = new Map<string, any>();
+      const rejectedMap = new Map<string, any>();
       (pendingResult.data || []).forEach((r) => {
-        pendingMap.set(r.document_type_code, r);
+        if (r.status === 'pending' && !pendingMap.has(r.document_type_code)) {
+          pendingMap.set(r.document_type_code, r);
+        } else if (r.status === 'rejected' && !rejectedMap.has(r.document_type_code)) {
+          rejectedMap.set(r.document_type_code, r);
+        }
       });
 
       // Batch generate signed thumbnail URLs straight to Supabase
@@ -169,7 +187,13 @@ export function useMobileMyDocuments() {
         covered.add(doc.document_type_code);
         const thumbKey = doc.thumb_path || doc.storage_path;
         const pendingReq = pendingMap.get(doc.document_type_code);
+        const rejectedReq = rejectedMap.get(doc.document_type_code);
         const pendingThumbKey = pendingReq ? (pendingReq.staging_thumb_path || pendingReq.staging_path) : null;
+        const rejectedThumbKey = rejectedReq ? (rejectedReq.staging_thumb_path || rejectedReq.staging_path) : null;
+
+        const hasPendingReplacement = Boolean(pendingReq);
+        const hasRejectedReplacement = Boolean(rejectedReq);
+
         return {
           id: doc.id,
           user_id: doc.user_id,
@@ -179,13 +203,22 @@ export function useMobileMyDocuments() {
           mime_type: doc.mime_type,
           file_size_bytes: doc.file_size_bytes,
           file_name: doc.file_name,
-          verification_status: pendingReq ? 'pending' : (doc.verification_status as 'pending' | 'verified' | 'rejected'),
-          rejection_reason: pendingReq ? null : doc.rejection_reason,
+          verification_status: hasPendingReplacement ? 'pending' : (doc.verification_status as 'pending' | 'verified' | 'rejected'),
+          rejection_reason: hasPendingReplacement ? null : doc.rejection_reason,
           created_at: doc.created_at,
           updated_at: doc.updated_at,
-          thumbSignedUrl: (pendingThumbKey && thumbUrlMap.get(pendingThumbKey)) || thumbUrlMap.get(thumbKey) || null,
-          hasPendingReplacement: Boolean(pendingReq),
+          thumbSignedUrl: (hasPendingReplacement && pendingThumbKey && thumbUrlMap.get(pendingThumbKey)) || thumbUrlMap.get(thumbKey) || null,
+          hasPendingReplacement,
           pendingRequestId: pendingReq?.id || null,
+          hasRejectedReplacement,
+          rejectedReplacement: hasRejectedReplacement ? {
+            id: rejectedReq.id,
+            document_type_code: doc.document_type_code as DocType,
+            rejectionReason: rejectedReq.rejection_reason || 'Document replacement rejected by administrator.',
+            reviewedAt: rejectedReq.reviewed_at,
+            stagingPath: rejectedReq.staging_path,
+            thumbSignedUrl: rejectedThumbKey ? thumbUrlMap.get(rejectedThumbKey) || null : null,
+          } : null,
         };
       });
 
@@ -334,6 +367,29 @@ export function useMobileMyDocuments() {
     },
   });
 
+  const acknowledgeMutation = useMutation({
+    mutationFn: async ({
+      changeRequestId,
+      docType,
+    }: {
+      changeRequestId?: string;
+      docType?: DocType;
+    }): Promise<{ success: boolean; error?: string }> => {
+      const appUrl = getAppUrl();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      return await acknowledgeRejectedDocumentReplacementClient({
+        baseUrl: appUrl || '',
+        changeRequestId,
+        docType,
+        token,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MOBILE_MY_DOCUMENTS_QUERY_KEY });
+    },
+  });
+
   return {
     ...query,
     documents: query.data || [],
@@ -341,5 +397,7 @@ export function useMobileMyDocuments() {
     replaceDocument: replaceMutation.mutateAsync,
     isReplacing: replaceMutation.isPending,
     replaceError: replaceMutation.error,
+    acknowledgeRejectedReplacement: acknowledgeMutation.mutateAsync,
+    isAcknowledging: acknowledgeMutation.isPending,
   };
 }

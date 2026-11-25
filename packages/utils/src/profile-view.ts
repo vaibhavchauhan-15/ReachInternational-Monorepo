@@ -237,16 +237,9 @@ export function toProfileView(
     },
   ];
 
-  // Account & System rows (Profile Status moved here from Work & Operations)
+  // Account & System rows (Profile Status moved here from Work & Operations;
+  // "Account Status" and "System Role" removed — they duplicate the header role/status pills)
   const accountRows: ProfileRow[] = [
-    {
-      label: "Account Status",
-      value: (clean(u.status) || "active").toUpperCase(),
-      badge: {
-        label: (clean(u.status) || "active").toUpperCase(),
-        variant: u.status === "inactive" ? "warning" : "success",
-      },
-    },
     {
       label: "Profile Status",
       value: u.complete_profile ? "Complete (100%)" : "Incomplete (Update in Profile)",
@@ -254,10 +247,6 @@ export function toProfileView(
         label: u.complete_profile ? "100% COMPLETE" : "INCOMPLETE",
         variant: u.complete_profile ? "success" : "warning",
       },
-    },
-    {
-      label: "System Role",
-      value: (clean(u.role) || "operator").replace(/_/g, " ").toUpperCase(),
     },
     {
       label: "Member Since",

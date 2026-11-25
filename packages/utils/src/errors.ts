@@ -50,6 +50,12 @@ export function sanitizeUserErrorMessage(error: unknown, fallback = "An unexpect
   // Check for database / SQL artifacts
   const lower = trimmed.toLowerCase();
   if (
+    lower.includes("user document not found") ||
+    lower.includes("document not found with id")
+  ) {
+    return "Document record not found or has already been reviewed.";
+  }
+  if (
     lower.includes("(sqlstate") ||
     lower.includes("relation \"") ||
     lower.includes("violates foreign key") ||
@@ -516,8 +522,43 @@ function _sanitizeDatabaseErrorRaw(
 
   // 8. Custom Postgres Raise Exceptions (P0001)
   if (code === "P0001") {
-    // If the database trigger raised an explicit human-readable error, sanitize it
-    let cleanMsg = msg.replace(/^error:\s*/i, "").trim();
+    const lowerMsg = msg.toLowerCase();
+    if (lowerMsg.includes("user document not found") || lowerMsg.includes("document not found")) {
+      return {
+        error: "Document record not found or has already been reviewed.",
+        code: "P0001",
+        statusCode: 404,
+      };
+    }
+    if (lowerMsg.includes("already in terminal state") || lowerMsg.includes("already decided")) {
+      return {
+        error: "This request was already decided by an administrator.",
+        code: "P0001",
+        statusCode: 409,
+      };
+    }
+    if (lowerMsg.includes("concurrency conflict") || lowerMsg.includes("expected version")) {
+      return {
+        error: "This request was modified by another user. Please refresh.",
+        code: "P0001",
+        statusCode: 409,
+      };
+    }
+    if (lowerMsg.includes("is not authorized") || lowerMsg.includes("access denied")) {
+      return {
+        error: "Your role is not authorized to decide this request.",
+        code: "P0001",
+        statusCode: 403,
+      };
+    }
+
+    // Strip raw UUIDs or technical identifiers from cleanMsg to prevent technical leakage
+    let cleanMsg = msg
+      .replace(/^error:\s*/i, "")
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
     if (cleanMsg.length > 140) {
       cleanMsg = "A database business rule check failed. Please review your entries.";
     }

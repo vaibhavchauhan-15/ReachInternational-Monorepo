@@ -97,15 +97,33 @@ export default function MyDocumentsScreen() {
     refetch,
     getFullImageUrl,
     replaceDocument,
+    acknowledgeRejectedReplacement,
   } = useMobileMyDocuments();
 
   // Full-screen viewer state
   const [activeDoc, setActiveDoc] = useState<MobileViewerDoc | null>(null);
   const [openingDocCode, setOpeningDocCode] = useState<string | null>(null);
+  const [acknowledgingDocCode, setAcknowledgingDocCode] = useState<string | null>(null);
 
   // Picker selection sheet state
   const [selectedDocTypeForReplace, setSelectedDocTypeForReplace] = useState<DocType | null>(null);
   const [processingDocCode, setProcessingDocCode] = useState<string | null>(null);
+
+  const handleAcknowledge = async (changeRequestId: string, docType: DocType) => {
+    try {
+      haptics.select();
+      setAcknowledgingDocCode(docType);
+      await acknowledgeRejectedReplacement({ changeRequestId, docType });
+      haptics.confirm();
+      toast('success', 'Rejection Acknowledged', 'The rejected replacement document has been removed.');
+    } catch (err: any) {
+      haptics.reject();
+      console.error('[MyDocumentsScreen] Acknowledge error:', err);
+      toast('error', 'Acknowledgment Failed', err?.message || 'Failed to acknowledge rejected document.');
+    } finally {
+      setAcknowledgingDocCode(null);
+    }
+  };
 
   const handleOpenFullImage = async (doc: MobileMyDocumentItem, label: string) => {
     try {
@@ -277,11 +295,11 @@ export default function MyDocumentsScreen() {
                       <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
                         {meta.label}
                       </Text>
-                      <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 1 }}>
-                        {doc
-                          ? `${(doc.file_size_bytes / 1024).toFixed(0)} KB • JPEG`
-                          : 'Not uploaded'}
-                      </Text>
+                      {!doc && (
+                        <Text variant="micro" style={{ color: theme.colors.mute, marginTop: 1 }}>
+                          Not uploaded
+                        </Text>
+                      )}
                     </View>
                   </View>
 
@@ -306,50 +324,93 @@ export default function MyDocumentsScreen() {
                       </Text>
                     </View>
                   )}
-                  {status === 'pending' && (
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          backgroundColor: isDark ? '#451a03' : '#fffbeb',
-                          borderColor: isDark ? '#78350f' : '#fde68a',
-                        },
-                      ]}
-                    >
-                      <Clock size={12} color={isDark ? '#fde68a' : '#b45309'} />
-                      <Text
-                        variant="micro"
-                        weight="bold"
-                        style={{ color: isDark ? '#fde68a' : '#b45309', marginLeft: 4 }}
+                  {/* Verification Status Badges */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {status === 'verified' && (
+                      <View
+                        style={[
+                          styles.statusPill,
+                          {
+                            backgroundColor: isDark ? '#064e3b' : '#ecfdf5',
+                            borderColor: isDark ? '#047857' : '#a7f3d0',
+                          },
+                        ]}
                       >
-                        UNDER REVIEW
-                      </Text>
-                    </View>
-                  )}
-                  {status === 'rejected' && (
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          backgroundColor: isDark ? '#450a0a' : '#fef2f2',
-                          borderColor: isDark ? '#991b1b' : '#fecaca',
-                        },
-                      ]}
-                    >
-                      <AlertTriangle size={12} color={isDark ? '#fca5a5' : '#b91c1c'} />
-                      <Text
-                        variant="micro"
-                        weight="bold"
-                        style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginLeft: 4 }}
+                        <CheckCircle2 size={12} color={isDark ? '#6ee7b7' : '#059669'} />
+                        <Text
+                          variant="micro"
+                          weight="bold"
+                          style={{ color: isDark ? '#6ee7b7' : '#059669', marginLeft: 4 }}
+                        >
+                          VERIFIED
+                        </Text>
+                      </View>
+                    )}
+                    {status === 'pending' && (
+                      <View
+                        style={[
+                          styles.statusPill,
+                          {
+                            backgroundColor: isDark ? '#451a03' : '#fffbeb',
+                            borderColor: isDark ? '#78350f' : '#fde68a',
+                          },
+                        ]}
                       >
-                        REJECTED
-                      </Text>
-                    </View>
-                  )}
+                        <Clock size={12} color={isDark ? '#fde68a' : '#b45309'} />
+                        <Text
+                          variant="micro"
+                          weight="bold"
+                          style={{ color: isDark ? '#fde68a' : '#b45309', marginLeft: 4 }}
+                        >
+                          UNDER REVIEW
+                        </Text>
+                      </View>
+                    )}
+                    {status === 'rejected' && !doc?.hasRejectedReplacement && (
+                      <View
+                        style={[
+                          styles.statusPill,
+                          {
+                            backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                            borderColor: isDark ? '#991b1b' : '#fecaca',
+                          },
+                        ]}
+                      >
+                        <AlertTriangle size={12} color={isDark ? '#fca5a5' : '#b91c1c'} />
+                        <Text
+                          variant="micro"
+                          weight="bold"
+                          style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginLeft: 4 }}
+                        >
+                          REJECTED
+                        </Text>
+                      </View>
+                    )}
+                    {doc?.hasRejectedReplacement && (
+                      <View
+                        style={[
+                          styles.statusPill,
+                          {
+                            backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                            borderColor: isDark ? '#991b1b' : '#fecaca',
+                          },
+                        ]}
+                      >
+                        <AlertTriangle size={12} color={isDark ? '#fca5a5' : '#b91c1c'} />
+                        <Text
+                          variant="micro"
+                          weight="bold"
+                          style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginLeft: 4 }}
+                        >
+                          ACTION NEEDED
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
-                {/* Rejection Reason Alert */}
-                {status === 'rejected' && doc?.rejection_reason && (
+                {/* Initial Upload Rejection Reason Alert (if active doc itself was rejected) */}
+                {status === 'rejected' && !doc?.hasRejectedReplacement && doc?.rejection_reason && (
                   <View
                     style={[
                       styles.alertBox,
@@ -378,38 +439,230 @@ export default function MyDocumentsScreen() {
                   </View>
                 )}
 
-                {/* Pending Replacement Callout */}
-                {hasPendingReplacement && (
+                {/* Refined Rejection Callout for Document Replacement */}
+                {doc?.hasRejectedReplacement && doc.rejectedReplacement && (
                   <View
                     style={[
                       styles.alertBox,
                       {
-                        backgroundColor: isDark ? '#082f49' : '#f0f9ff',
-                        borderColor: isDark ? '#0369a1' : '#bae6fd',
+                        backgroundColor: isDark ? '#271012' : '#fef2f2',
+                        borderColor: isDark ? '#5c1d24' : '#fecaca',
+                        marginBottom: 10,
                       },
                     ]}
                   >
-                    <View style={styles.alertHeaderRow}>
-                      <Clock size={14} color={isDark ? '#38bdf8' : '#0284c7'} />
-                      <Text
-                        variant="micro"
-                        weight="bold"
-                        style={{ color: isDark ? '#38bdf8' : '#0284c7', marginLeft: 4 }}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={styles.alertHeaderRow}>
+                        <AlertTriangle size={14} color={isDark ? '#fca5a5' : '#b91c1c'} />
+                        <Text
+                          variant="micro"
+                          weight="bold"
+                          style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginLeft: 4 }}
+                        >
+                          Replacement Declined:
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => handleAcknowledge(doc.rejectedReplacement!.id, code)}
+                        disabled={acknowledgingDocCode === code}
+                        hitSlopToMin48
+                        style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? '#5c1d24' : '#fecaca' }}
+                        accessibilityLabel="Dismiss rejection notice"
                       >
-                        Replacement Under Review
-                      </Text>
+                        {acknowledgingDocCode === code ? (
+                          <ActivityIndicator size="small" color={isDark ? '#fca5a5' : '#b91c1c'} />
+                        ) : (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <X size={10} color={isDark ? '#fca5a5' : '#b91c1c'} />
+                            <Text variant="micro" weight="semibold" style={{ color: isDark ? '#fca5a5' : '#b91c1c' }}>
+                              Dismiss
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
                     </View>
+
                     <Text
                       variant="micro"
-                      style={{ color: isDark ? '#bae6fd' : '#0369a1', marginTop: 3 }}
+                      style={{ color: isDark ? '#fecaca' : '#7f1d1d', marginTop: 4 }}
                     >
-                      A newly uploaded document is pending administrator review. Your existing document remains active.
+                      {doc.rejectedReplacement.rejectionReason}
+                    </Text>
+
+                    <Text
+                      variant="micro"
+                      style={{ color: theme.colors.mute, marginTop: 4 }}
+                    >
+                      Your existing verified document remains active on file while you prepare a replacement.
                     </Text>
                   </View>
                 )}
 
-                {/* Thumbnail Preview Area */}
-                {doc ? (
+                {/* ─── Document Preview Gallery ─── */}
+                {doc?.hasRejectedReplacement && doc.rejectedReplacement ? (
+                  /* Dual Document Comparison Gallery (Active vs Rejected) */
+                  <View style={styles.dualComparisonRow}>
+                    {/* Tile 1: Current Active Document */}
+                    <Pressable
+                      style={[
+                        styles.dualComparisonTile,
+                        {
+                          borderColor: isDark ? 'rgba(16,185,129,0.35)' : 'rgba(16,185,129,0.45)',
+                          backgroundColor: theme.colors.canvas,
+                        },
+                      ]}
+                      onPress={() => handleOpenFullImage(doc, `${meta.label} (Current Active)`)}
+                      accessibilityLabel={`View active ${meta.label}`}
+                      disabled={isOpening}
+                    >
+                      <View style={styles.tileHeaderRow}>
+                        <View
+                          style={[
+                            styles.tileStatusPill,
+                            {
+                              backgroundColor: isDark ? '#064e3b' : '#ecfdf5',
+                              borderColor: isDark ? '#047857' : '#a7f3d0',
+                            },
+                          ]}
+                        >
+                          <CheckCircle2 size={10} color={isDark ? '#6ee7b7' : '#059669'} />
+                          <Text
+                            variant="micro"
+                            weight="bold"
+                            style={{ color: isDark ? '#6ee7b7' : '#059669', marginLeft: 3 }}
+                          >
+                            ACTIVE
+                          </Text>
+                        </View>
+                        <Text variant="micro" style={{ color: theme.colors.mute }}>
+                          On file
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.dualThumbBox,
+                          { backgroundColor: isDark ? '#1c1917' : '#f5f5f4' },
+                        ]}
+                      >
+                        {doc.thumbSignedUrl ? (
+                          <Image
+                            source={{ uri: doc.thumbSignedUrl }}
+                            style={styles.thumbImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.noThumbPlaceholder}>
+                            <FileCheck size={20} color="#10b981" />
+                            <Text variant="micro" style={{ color: '#10b981', marginTop: 2 }}>
+                              Verified
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.thumbHoverPill}>
+                          <Eye size={10} color="#ffffff" />
+                          <Text variant="micro" weight="bold" style={{ color: '#ffffff', marginLeft: 3 }}>
+                            Active
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text
+                        variant="micro"
+                        weight="medium"
+                        style={{ color: theme.colors.ink, textAlign: 'center' }}
+                        numberOfLines={1}
+                      >
+                        Current Verified
+                      </Text>
+                    </Pressable>
+
+                    {/* Tile 2: Rejected Replacement */}
+                    <Pressable
+                      style={[
+                        styles.dualComparisonTile,
+                        {
+                          borderColor: isDark ? 'rgba(239,68,68,0.35)' : 'rgba(239,68,68,0.45)',
+                          backgroundColor: theme.colors.canvas,
+                        },
+                      ]}
+                      onPress={() => {
+                        haptics.select();
+                        setActiveDoc({
+                          id: doc.rejectedReplacement!.id,
+                          title: `${meta.label} (Declined Replacement)`,
+                          url: doc.rejectedReplacement!.signedUrl || doc.rejectedReplacement!.thumbSignedUrl!,
+                          mimeType: 'image/jpeg',
+                          fileSizeBytes: 0,
+                          fileName: `${code}_declined.jpg`,
+                        });
+                      }}
+                      accessibilityLabel={`View declined ${meta.label}`}
+                    >
+                      <View style={styles.tileHeaderRow}>
+                        <View
+                          style={[
+                            styles.tileStatusPill,
+                            {
+                              backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                              borderColor: isDark ? '#991b1b' : '#fecaca',
+                            },
+                          ]}
+                        >
+                          <X size={10} color={isDark ? '#fca5a5' : '#b91c1c'} />
+                          <Text
+                            variant="micro"
+                            weight="bold"
+                            style={{ color: isDark ? '#fca5a5' : '#b91c1c', marginLeft: 3 }}
+                          >
+                            REJECTED
+                          </Text>
+                        </View>
+                        <Text variant="micro" style={{ color: isDark ? '#fca5a5' : '#b91c1c' }}>
+                          Declined
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.dualThumbBox,
+                          { backgroundColor: isDark ? '#1c1917' : '#f5f5f4' },
+                        ]}
+                      >
+                        {doc.rejectedReplacement.thumbSignedUrl ? (
+                          <Image
+                            source={{ uri: doc.rejectedReplacement.thumbSignedUrl }}
+                            style={styles.thumbImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.noThumbPlaceholder}>
+                            <AlertTriangle size={20} color="#ef4444" />
+                            <Text variant="micro" style={{ color: '#ef4444', marginTop: 2 }}>
+                              Declined
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.thumbHoverPill}>
+                          <Eye size={10} color="#ffffff" />
+                          <Text variant="micro" weight="bold" style={{ color: '#ffffff', marginLeft: 3 }}>
+                            Rejected
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text
+                        variant="micro"
+                        weight="medium"
+                        style={{ color: isDark ? '#fca5a5' : '#b91c1c', textAlign: 'center' }}
+                        numberOfLines={1}
+                      >
+                        Declined Upload
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : doc ? (
+                  /* Standard Single Thumbnail Preview Area */
                   <Pressable
                     style={[
                       styles.thumbContainer,
@@ -471,90 +724,70 @@ export default function MyDocumentsScreen() {
                   </View>
                 )}
 
-                {/* Card Actions: View & Replace */}
-                <View style={[styles.cardActionsRow, { borderTopColor: theme.colors.hairline }]}>
+                {/* Card Action: Upload / Replace */}
+                <View style={[styles.cardActionsRow, { borderTopColor: theme.colors.hairline, flexDirection: 'column', gap: 6 }]}>
                   {doc ? (
-                    <>
-                      <Pressable
-                        style={[
-                          styles.actionButton,
-                          {
-                            backgroundColor: theme.colors.canvas,
-                            borderColor: theme.colors.hairline,
-                          },
-                        ]}
-                        onPress={() => handleOpenFullImage(doc, meta.label)}
-                        disabled={isOpening}
-                        accessibilityLabel={`View full ${meta.label}`}
-                      >
-                        {isOpening ? (
-                          <ActivityIndicator size="small" color={theme.colors.link} />
-                        ) : (
-                          <>
-                            <Eye size={14} color={theme.colors.ink} />
-                            <Text
-                              variant="caption"
-                              weight="semibold"
-                              style={{ color: theme.colors.ink, marginLeft: 6 }}
-                            >
-                              View Image
-                            </Text>
-                          </>
-                        )}
-                      </Pressable>
-
-                      <Pressable
-                        style={[
-                          styles.actionButton,
-                          {
-                            backgroundColor: isDark ? '#082f49' : '#e0f2fe',
-                            borderColor: isDark ? '#0369a1' : '#bae6fd',
-                          },
-                        ]}
-                        onPress={() => {
-                          haptics.select();
-                          setSelectedDocTypeForReplace(code);
-                        }}
-                        disabled={isProcessing}
-                        accessibilityLabel={hasPendingReplacement ? `Change image for ${meta.label}` : `Replace ${meta.label}`}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <ActivityIndicator size="small" color={theme.colors.link} />
-                            <Text
-                              variant="caption"
-                              weight="semibold"
-                              style={{ color: theme.colors.link, marginLeft: 6 }}
-                            >
-                              Uploading...
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw
-                              size={14}
-                              color={isDark ? '#38bdf8' : '#0284c7'}
-                            />
-                            <Text
-                              variant="caption"
-                              weight="semibold"
-                              style={{
-                                color: isDark ? '#38bdf8' : '#0284c7',
-                                marginLeft: 6,
-                              }}
-                            >
-                              {hasPendingReplacement ? 'Change Image' : 'Replace'}
-                            </Text>
-                          </>
-                        )}
-                      </Pressable>
-                    </>
+                    <Pressable
+                      style={[
+                        styles.actionButton,
+                        {
+                          backgroundColor: doc.hasRejectedReplacement ? (theme.colors.link || '#0284c7') : theme.colors.canvas,
+                          borderColor: doc.hasRejectedReplacement ? 'transparent' : theme.colors.hairline,
+                          width: '100%',
+                        },
+                      ]}
+                      onPress={() => {
+                        haptics.select();
+                        setSelectedDocTypeForReplace(code);
+                      }}
+                      disabled={isProcessing}
+                      accessibilityLabel={
+                        doc.hasRejectedReplacement
+                          ? `Upload new replacement for ${meta.label}`
+                          : hasPendingReplacement
+                            ? `Change image for ${meta.label}`
+                            : `Replace ${meta.label}`
+                      }
+                    >
+                      {isProcessing ? (
+                        <>
+                          <ActivityIndicator size="small" color={doc.hasRejectedReplacement ? '#ffffff' : theme.colors.link} />
+                          <Text
+                            variant="caption"
+                            weight="semibold"
+                            style={{ color: doc.hasRejectedReplacement ? '#ffffff' : theme.colors.ink, marginLeft: 6 }}
+                          >
+                            Uploading...
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          {doc.hasRejectedReplacement ? (
+                            <Upload size={14} color="#ffffff" />
+                          ) : (
+                            <RefreshCw size={14} color={isDark ? '#38bdf8' : '#0284c7'} />
+                          )}
+                          <Text
+                            variant="caption"
+                            weight="semibold"
+                            style={{ color: doc.hasRejectedReplacement ? '#ffffff' : theme.colors.ink, marginLeft: 6 }}
+                          >
+                            {doc.hasRejectedReplacement
+                              ? 'Upload New Replacement'
+                              : hasPendingReplacement
+                                ? 'Change Image'
+                                : 'Replace'}
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
                   ) : (
                     <Pressable
                       style={[
                         styles.fullUploadButton,
                         {
                           backgroundColor: theme.colors.link,
+                          width: '100%',
                         },
                       ]}
                       onPress={() => {
@@ -584,6 +817,27 @@ export default function MyDocumentsScreen() {
                             style={{ color: '#ffffff', marginLeft: 6 }}
                           >
                             Upload Photo
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  )}
+
+                  {/* Secondary Dismiss Notice Button on Mobile */}
+                  {doc?.hasRejectedReplacement && doc.rejectedReplacement && (
+                    <Pressable
+                      style={styles.secondaryAckButton}
+                      onPress={() => handleAcknowledge(doc.rejectedReplacement!.id, code)}
+                      disabled={acknowledgingDocCode === code}
+                      hitSlopToMin48
+                    >
+                      {acknowledgingDocCode === code ? (
+                        <ActivityIndicator size="small" color={theme.colors.mute} />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={12} color={theme.colors.mute} />
+                          <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                            Dismiss Notice & Keep Current
                           </Text>
                         </>
                       )}
@@ -862,5 +1116,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
+  },
+  ackButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  dualComparisonRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dualComparisonTile: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 8,
+    gap: 6,
+  },
+  tileHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tileStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  dualThumbBox: {
+    height: 84,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryAckButton: {
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    flexDirection: 'row',
+    gap: 6,
   },
 });

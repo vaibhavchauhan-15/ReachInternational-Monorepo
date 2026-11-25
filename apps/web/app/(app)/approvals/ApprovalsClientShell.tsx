@@ -73,41 +73,41 @@ const STATUS_FILTER_OPTIONS: Array<{
   label: string;
   dotColor: string;
 }> = [
-  {
-    id: "pending",
-    label: "Pending",
-    dotColor: "bg-amber-500",
-  },
-  {
-    id: "approved",
-    label: "Approved",
-    dotColor: "bg-emerald-500",
-  },
-  {
-    id: "rejected",
-    label: "Rejected",
-    dotColor: "bg-red-500",
-  },
-  {
-    id: "all",
-    label: "All Statuses",
-    dotColor: "bg-neutral-400",
-  },
-];
+    {
+      id: "pending",
+      label: "Pending",
+      dotColor: "bg-amber-500",
+    },
+    {
+      id: "approved",
+      label: "Approved",
+      dotColor: "bg-emerald-500",
+    },
+    {
+      id: "rejected",
+      label: "Rejected",
+      dotColor: "bg-red-500",
+    },
+    {
+      id: "all",
+      label: "All Statuses",
+      dotColor: "bg-neutral-400",
+    },
+  ];
 
 const TYPE_FILTER_OPTIONS: Array<{
   id: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
 }> = [
-  { id: "all", label: "All Request Types", icon: Layers },
-  { id: "registration", label: "New Registrations", icon: UserPlus },
-  { id: "document_verify", label: "Document Verifications", icon: FileCheck2 },
-  { id: "document_replace", label: "Document Replacements", icon: RefreshCw },
-  { id: "profile_change", label: "Profile Changes", icon: UserCog },
-  { id: "account_deletion", label: "Account Deletions", icon: ShieldAlert },
-  { id: "shift_conflict", label: "Shift Conflicts", icon: AlertTriangle },
-];
+    { id: "all", label: "All Request Types", icon: Layers },
+    { id: "registration", label: "New Registrations", icon: UserPlus },
+    { id: "document_verify", label: "Document Verifications", icon: FileCheck2 },
+    { id: "document_replace", label: "Document Replacements", icon: RefreshCw },
+    { id: "profile_change", label: "Profile Changes", icon: UserCog },
+    { id: "account_deletion", label: "Account Deletions", icon: ShieldAlert },
+    { id: "shift_conflict", label: "Shift Conflicts", icon: AlertTriangle },
+  ];
 
 /** Keyset page size for infinite scroll */
 const PAGE_SIZE = 20;
@@ -161,6 +161,8 @@ export function ApprovalsClientShell({
   const statusRef = useRef(status);
   const typeFilterRef = useRef(typeFilter);
   const isLoadingMoreRef = useRef(isLoadingMore);
+  // ⚡ Synchronous in-flight guard to eliminate rapid double-click race conditions
+  const inFlightDecisionsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     itemsRef.current = items;
@@ -318,8 +320,8 @@ export function ApprovalsClientShell({
             const fetchedItems: ApprovalRequestListItem[] = Array.isArray(json)
               ? json
               : Array.isArray(json.items)
-              ? json.items
-              : [];
+                ? json.items
+                : [];
             setItems(fetchedItems);
             setBufferItems([]);
             setCursor(json.next_cursor || null);
@@ -426,8 +428,8 @@ export function ApprovalsClientShell({
       const newRows: ApprovalRequestListItem[] = Array.isArray(json)
         ? json
         : Array.isArray(json.items)
-        ? json.items
-        : [];
+          ? json.items
+          : [];
 
       setCursor(json.next_cursor || null);
       setHasMore(Boolean(json.has_more));
@@ -544,9 +546,8 @@ export function ApprovalsClientShell({
               if (match && match.status === "pending") {
                 setToastMessage({
                   type: "info",
-                  text: `Request for ${
-                    match.requester_name || match.subject_label || "applicant"
-                  } was decided by another administrator.`,
+                  text: `Request for ${match.requester_name || match.subject_label || "applicant"
+                    } was decided by another administrator.`,
                 });
                 return prev.filter((i) => i.id !== updatedRow.id);
               }
@@ -616,7 +617,9 @@ export function ApprovalsClientShell({
   // ─── Action: Approve Request (Optimistic Collapse + Bottom Buffer Append) ──
   const handleApproveRequest = useCallback(
     async (requestId: string) => {
-      if (processingRequestIds[requestId]) return;
+      // ⚡ Immediate synchronous and state guards against double-clicks
+      if (inFlightDecisionsRef.current.has(requestId) || processingRequestIds[requestId]) return;
+      inFlightDecisionsRef.current.add(requestId);
       setToastMessage(null);
 
       const targetItem = itemsRef.current.find((i) => i.id === requestId);
@@ -690,11 +693,17 @@ export function ApprovalsClientShell({
 
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
-          // If already decided by someone else (P0004 or 409): inform user without rollback
+          // If already decided (P0004 or 409): gracefully dismiss from pending queue without stuck rollback
           if (res.status === 409 || json.isAlreadyDecided || json.error?.includes("already")) {
+            setItems((prev) => prev.filter((i) => i.id !== requestId));
+            setExitStates((prev) => {
+              const next = { ...prev };
+              delete next[requestId];
+              return next;
+            });
             setToastMessage({
               type: "info",
-              text: "This request was already decided by another administrator.",
+              text: json.error || "This request was already decided.",
             });
             refreshCountsDebounced();
             return;
@@ -728,9 +737,15 @@ export function ApprovalsClientShell({
           }
 
           if (result.isAlreadyDecided || result.error?.includes("already")) {
+            setItems((prev) => prev.filter((i) => i.id !== requestId));
+            setExitStates((prev) => {
+              const next = { ...prev };
+              delete next[requestId];
+              return next;
+            });
             setToastMessage({
               type: "info",
-              text: "This request was already decided by another administrator.",
+              text: result.error || "This request was already decided.",
             });
             refreshCountsDebounced();
             return;
@@ -750,9 +765,10 @@ export function ApprovalsClientShell({
             fallbackErr instanceof Error
               ? fallbackErr.message
               : String(fallbackErr);
-          setToastMessage({ type: "error", text: msg });
+          setToastMessage({ type: "error", text: sanitizeUserErrorMessage(msg, "Failed to verify document.") });
         }
       } finally {
+        inFlightDecisionsRef.current.delete(requestId);
         setProcessingRequestIds((prev) => {
           const next = { ...prev };
           delete next[requestId];
@@ -835,7 +851,7 @@ export function ApprovalsClientShell({
             fallbackErr instanceof Error
               ? fallbackErr.message
               : String(fallbackErr);
-          setToastMessage({ type: "error", text: msg });
+          setToastMessage({ type: "error", text: sanitizeUserErrorMessage(msg, "Failed to verify document.") });
         }
       }
     },
@@ -872,6 +888,9 @@ export function ApprovalsClientShell({
       try {
         if (target.kind === "request") {
           const requestId = target.requestId;
+          if (inFlightDecisionsRef.current.has(requestId) || processingRequestIds[requestId]) return;
+          inFlightDecisionsRef.current.add(requestId);
+
           const targetItem = itemsRef.current.find((i) => i.id === requestId);
 
           // ⚡ INSTANT OPTIMISTIC UI: Mark rejected / exit state immediately
@@ -938,9 +957,15 @@ export function ApprovalsClientShell({
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
               if (res.status === 409 || json.isAlreadyDecided || json.error?.includes("already")) {
+                setItems((prev) => prev.filter((i) => i.id !== requestId));
+                setExitStates((prev) => {
+                  const next = { ...prev };
+                  delete next[requestId];
+                  return next;
+                });
                 setToastMessage({
                   type: "info",
-                  text: "This request was already decided by another administrator.",
+                  text: json.error || "This request was already decided.",
                 });
                 refreshCountsDebounced();
                 return;
@@ -965,9 +990,15 @@ export function ApprovalsClientShell({
                 return;
               }
               if (result.isAlreadyDecided || result.error?.includes("already")) {
+                setItems((prev) => prev.filter((i) => i.id !== requestId));
+                setExitStates((prev) => {
+                  const next = { ...prev };
+                  delete next[requestId];
+                  return next;
+                });
                 setToastMessage({
                   type: "info",
-                  text: "This request was already decided by another administrator.",
+                  text: result.error || "This request was already decided.",
                 });
                 refreshCountsDebounced();
                 return;
@@ -988,6 +1019,7 @@ export function ApprovalsClientShell({
               setToastMessage({ type: "error", text: msg });
             }
           } finally {
+            inFlightDecisionsRef.current.delete(requestId);
             setProcessingRequestIds((prev) => {
               const next = { ...prev };
               delete next[requestId];
@@ -1024,7 +1056,7 @@ export function ApprovalsClientShell({
             } else {
               setToastMessage({
                 type: "error",
-                text: result.error || "Failed to reject document.",
+                text: sanitizeUserErrorMessage(result.error, "Failed to reject document."),
               });
             }
           } finally {
@@ -1033,7 +1065,7 @@ export function ApprovalsClientShell({
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        setToastMessage({ type: "error", text: msg });
+        setToastMessage({ type: "error", text: sanitizeUserErrorMessage(msg, "Failed to process request.") });
       }
     },
     [counts, fetchNextBatch, processingRequestIds, refreshCountsDebounced, rejectTarget]
@@ -1055,9 +1087,8 @@ export function ApprovalsClientShell({
       setApproveAllModalOpen(false);
       setToastMessage({
         type: "success",
-        text: `Successfully approved all pending requests (${
-          result.data?.approved_count || 0
-        }).`,
+        text: `Successfully approved all pending requests (${result.data?.approved_count || 0
+          }).`,
       });
 
       // Refetch page 1 cleanly
@@ -1090,13 +1121,12 @@ export function ApprovalsClientShell({
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.95 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className={`fixed top-4 right-4 z-50 p-3.5 rounded-xl border text-xs font-semibold shadow-xl flex items-center gap-2.5 backdrop-blur-md ${
-              toastMessage.type === "success"
+            className={`fixed top-4 right-4 z-50 p-3.5 rounded-xl border text-xs font-semibold shadow-xl flex items-center gap-2.5 backdrop-blur-md ${toastMessage.type === "success"
                 ? "bg-emerald-50/95 text-emerald-900 border-emerald-300 dark:bg-emerald-950/95 dark:text-emerald-100 dark:border-emerald-700"
                 : toastMessage.type === "info"
-                ? "bg-sky-50/95 text-sky-900 border-sky-300 dark:bg-sky-950/95 dark:text-sky-100 dark:border-sky-700"
-                : "bg-red-50/95 text-red-900 border-red-300 dark:bg-red-950/95 dark:text-red-100 dark:border-red-700"
-            }`}
+                  ? "bg-sky-50/95 text-sky-900 border-sky-300 dark:bg-sky-950/95 dark:text-sky-100 dark:border-sky-700"
+                  : "bg-red-50/95 text-red-900 border-red-300 dark:bg-red-950/95 dark:text-red-100 dark:border-red-700"
+              }`}
           >
             {toastMessage.type === "success" ? (
               <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -1216,18 +1246,16 @@ export function ApprovalsClientShell({
                     setStatusDropdownOpen((prev) => !prev);
                     setTypeDropdownOpen(false);
                   }}
-                  className={`w-full h-10 px-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer shadow-2xs ${
-                    statusDropdownOpen
+                  className={`w-full h-10 px-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer shadow-2xs ${statusDropdownOpen
                       ? "border-sky-500 bg-[var(--color-canvas)] ring-2 ring-sky-500/20 text-[var(--color-ink)]"
                       : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:border-[#0284c7]/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     <span
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                        STATUS_FILTER_OPTIONS.find((s) => s.id === status)?.dotColor ||
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_FILTER_OPTIONS.find((s) => s.id === status)?.dotColor ||
                         "bg-neutral-400"
-                      }`}
+                        }`}
                     />
                     <span className="truncate">
                       {STATUS_FILTER_OPTIONS.find((s) => s.id === status)?.label || "Status"}
@@ -1240,9 +1268,8 @@ export function ApprovalsClientShell({
                   </div>
                   <ChevronDown
                     size={14}
-                    className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-                      statusDropdownOpen ? "rotate-180 text-sky-500" : ""
-                    }`}
+                    className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${statusDropdownOpen ? "rotate-180 text-sky-500" : ""
+                      }`}
                   />
                 </button>
 
@@ -1272,11 +1299,10 @@ export function ApprovalsClientShell({
                               handleStatusChange(opt.id);
                               setStatusDropdownOpen(false);
                             }}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-left transition-colors cursor-pointer min-h-[38px] ${
-                              isSelected
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-left transition-colors cursor-pointer min-h-[38px] ${isSelected
                                 ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
                                 : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-2.5 truncate">
                               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.dotColor}`} />
@@ -1329,11 +1355,10 @@ export function ApprovalsClientShell({
                           setTypeDropdownOpen((prev) => !prev);
                           setStatusDropdownOpen(false);
                         }}
-                        className={`w-full h-10 px-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer shadow-2xs ${
-                          typeDropdownOpen
+                        className={`w-full h-10 px-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer shadow-2xs ${typeDropdownOpen
                             ? "border-sky-500 bg-[var(--color-canvas)] ring-2 ring-sky-500/20 text-[var(--color-ink)]"
                             : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] hover:border-[#0284c7]/40"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2 truncate">
                           <TypeIcon size={14} className="text-sky-500 shrink-0" />
@@ -1348,9 +1373,8 @@ export function ApprovalsClientShell({
                         </div>
                         <ChevronDown
                           size={14}
-                          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-                            typeDropdownOpen ? "rotate-180 text-sky-500" : ""
-                          }`}
+                          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${typeDropdownOpen ? "rotate-180 text-sky-500" : ""
+                            }`}
                         />
                       </button>
 
@@ -1380,11 +1404,10 @@ export function ApprovalsClientShell({
                                     handleTypeChange(opt.id);
                                     setTypeDropdownOpen(false);
                                   }}
-                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-left transition-colors cursor-pointer min-h-[38px] ${
-                                    isSelected
+                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-left transition-colors cursor-pointer min-h-[38px] ${isSelected
                                       ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
                                       : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                                  }`}
+                                    }`}
                                 >
                                   <div className="flex items-center gap-2.5 truncate">
                                     <Icon size={14} className="text-sky-500 shrink-0" />
@@ -1585,11 +1608,11 @@ export function ApprovalsClientShell({
                     prefersReducedMotion
                       ? { opacity: 0 }
                       : {
-                          opacity: 0,
-                          scale: 0.92,
-                          y: -8,
-                          transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
-                        }
+                        opacity: 0,
+                        scale: 0.92,
+                        y: -8,
+                        transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+                      }
                   }
                   transition={{
                     layout: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
@@ -1647,39 +1670,39 @@ export function ApprovalsClientShell({
           onVerifyDocument={
             canDecide
               ? async (docId) => {
-                  const replaceItem = items.find(
-                    (i) =>
-                      i.type_key === "document_replace" &&
-                      (i.id === docId ||
-                        i.subject_id === docId ||
-                        (i.documents && i.documents.some((d) => d.id === docId)))
-                  );
-                  if (replaceItem) {
-                    setLightboxOpen(false);
-                    await handleApproveRequest(replaceItem.id);
-                  } else {
-                    await handleVerifyDocument(docId, lightboxUserId);
-                  }
+                const replaceItem = items.find(
+                  (i) =>
+                    i.type_key === "document_replace" &&
+                    (i.id === docId ||
+                      i.subject_id === docId ||
+                      (i.documents && i.documents.some((d) => d.id === docId)))
+                );
+                if (replaceItem) {
+                  setLightboxOpen(false);
+                  await handleApproveRequest(replaceItem.id);
+                } else {
+                  await handleVerifyDocument(docId, lightboxUserId);
                 }
+              }
               : undefined
           }
           onRejectDocumentPrompt={
             canDecide
               ? (doc) => {
-                  const replaceItem = items.find(
-                    (i) =>
-                      i.type_key === "document_replace" &&
-                      (i.id === doc.id ||
-                        i.subject_id === doc.id ||
-                        (i.documents && i.documents.some((d) => d.id === doc.id)))
-                  );
-                  if (replaceItem) {
-                    setLightboxOpen(false);
-                    handleRejectPromptRequest(replaceItem.id);
-                  } else {
-                    handleRejectPromptDocument(doc, lightboxUserId);
-                  }
+                const replaceItem = items.find(
+                  (i) =>
+                    i.type_key === "document_replace" &&
+                    (i.id === doc.id ||
+                      i.subject_id === doc.id ||
+                      (i.documents && i.documents.some((d) => d.id === doc.id)))
+                );
+                if (replaceItem) {
+                  setLightboxOpen(false);
+                  handleRejectPromptRequest(replaceItem.id);
+                } else {
+                  handleRejectPromptDocument(doc, lightboxUserId);
                 }
+              }
               : undefined
           }
           canDecide={canDecide}

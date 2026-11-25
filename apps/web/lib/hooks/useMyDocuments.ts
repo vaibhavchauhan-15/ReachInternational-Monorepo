@@ -10,7 +10,17 @@ import {
   submitDocumentReplacementClient,
 } from "@reachinternational/utils";
 import { compressImageForUpload } from "@/lib/utils/image-compression";
-import { getDocumentViewUrlAction } from "@/app/actions/documents";
+import { getDocumentViewUrlAction, acknowledgeRejectedReplacementAction } from "@/app/actions/documents";
+
+export interface RejectedReplacementInfo {
+  id: string;
+  document_type_code: DocType;
+  rejectionReason: string;
+  reviewedAt?: string | null;
+  stagingPath: string;
+  signedUrl?: string | null;
+  thumbSignedUrl?: string | null;
+}
 
 export interface MyDocumentItem {
   id: string;
@@ -33,6 +43,8 @@ export interface MyDocumentItem {
   pendingSignedUrl?: string | null;
   pendingCreatedAt?: string | null;
   isPendingChangeRequest?: boolean;
+  hasRejectedReplacement?: boolean;
+  rejectedReplacement?: RejectedReplacementInfo | null;
 }
 
 export const MY_DOCUMENTS_QUERY_KEY = ["my-documents"] as const;
@@ -207,6 +219,32 @@ export function useMyDocuments() {
     },
   });
 
+  /**
+   * Mutation to acknowledge a rejected document replacement request:
+   * 1. Calls acknowledgeRejectedReplacementAction.
+   * 2. Purges the rejected files from doc_staging.
+   * 3. Sets status to acknowledged in database.
+   * 4. Invalidates React Query cache so the rejected banner disappears.
+   */
+  const acknowledgeMutation = useMutation({
+    mutationFn: async ({
+      changeRequestId,
+      docType,
+    }: {
+      changeRequestId?: string;
+      docType?: DocType;
+    }): Promise<{ success: boolean; error?: string }> => {
+      const res = await acknowledgeRejectedReplacementAction({ changeRequestId, docType });
+      if (!res.success) {
+        throw new Error(res.error || "Failed to acknowledge rejected document.");
+      }
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MY_DOCUMENTS_QUERY_KEY });
+    },
+  });
+
   return {
     ...documentsQuery,
     documents: documentsQuery.data || [],
@@ -215,5 +253,8 @@ export function useMyDocuments() {
     replaceMutation,
     isReplacing: replaceMutation.isPending,
     replaceError: replaceMutation.error,
+    acknowledgeRejectedReplacement: acknowledgeMutation.mutateAsync,
+    acknowledgeMutation,
+    isAcknowledging: acknowledgeMutation.isPending,
   };
 }

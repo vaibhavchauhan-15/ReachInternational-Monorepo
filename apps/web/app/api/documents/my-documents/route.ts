@@ -58,9 +58,9 @@ export async function GET(req: NextRequest) {
         .order("document_type_code"),
       adminSupabase
         .from("document_change_requests")
-        .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, created_at")
+        .select("id, user_id, document_type_code, staging_path, staging_thumb_path, status, rejection_reason, reviewed_at, created_at")
         .eq("user_id", userId)
-        .eq("status", "pending")
+        .in("status", ["pending", "rejected"])
         .order("created_at", { ascending: false }),
     ]);
 
@@ -123,20 +123,37 @@ export async function GET(req: NextRequest) {
       coveredTypes.add(doc.document_type_code);
       const cr = changeReqMap.get(doc.document_type_code);
 
-      const hasPendingReplacement = Boolean(cr);
-      const pendingThumbSignedUrl = cr?.staging_thumb_path
-        ? stagingMap.get(cr.staging_thumb_path) || null
-        : cr?.staging_path
-        ? stagingMap.get(cr.staging_path) || null
+      const isPending = cr?.status === "pending";
+      const isRejected = cr?.status === "rejected";
+
+      const hasPendingReplacement = Boolean(isPending);
+      const hasRejectedReplacement = Boolean(isRejected);
+
+      const pendingThumbSignedUrl = isPending
+        ? cr?.staging_thumb_path
+          ? stagingMap.get(cr.staging_thumb_path) || null
+          : cr?.staging_path
+          ? stagingMap.get(cr.staging_path) || null
+          : null
         : null;
-      const pendingSignedUrl = cr?.staging_path ? stagingMap.get(cr.staging_path) || null : null;
+      const pendingSignedUrl = isPending && cr?.staging_path ? stagingMap.get(cr.staging_path) || null : null;
+
+      const rejectedThumbSignedUrl = isRejected
+        ? cr?.staging_thumb_path
+          ? stagingMap.get(cr.staging_thumb_path) || null
+          : cr?.staging_path
+          ? stagingMap.get(cr.staging_path) || null
+          : null
+        : null;
+      const rejectedSignedUrl = isRejected && cr?.staging_path ? stagingMap.get(cr.staging_path) || null : null;
 
       const originalThumbUrl = doc.thumb_path ? userFilesMap.get(doc.thumb_path) || null : userFilesMap.get(doc.storage_path) || null;
       const originalSignedUrl = userFilesMap.get(doc.storage_path) || null;
 
       // When replacement is pending, prioritize the new replacement thumbnail and preview
-      const displayThumbUrl = pendingThumbSignedUrl || originalThumbUrl;
-      const displaySignedUrl = pendingSignedUrl || originalSignedUrl;
+      // When replacement is rejected, the user STILL HAS the active original older document displayed as primary
+      const displayThumbUrl = hasPendingReplacement ? (pendingThumbSignedUrl || originalThumbUrl) : originalThumbUrl;
+      const displaySignedUrl = hasPendingReplacement ? (pendingSignedUrl || originalSignedUrl) : originalSignedUrl;
 
       items.push({
         id: doc.id,
@@ -154,10 +171,20 @@ export async function GET(req: NextRequest) {
         thumbSignedUrl: displayThumbUrl,
         signedUrl: displaySignedUrl,
         hasPendingReplacement,
-        pendingRequestId: cr?.id || null,
+        pendingRequestId: isPending ? cr?.id || null : null,
         pendingThumbSignedUrl,
         pendingSignedUrl,
-        pendingCreatedAt: cr?.created_at || null,
+        pendingCreatedAt: isPending ? cr?.created_at || null : null,
+        hasRejectedReplacement,
+        rejectedReplacement: isRejected && cr ? {
+          id: cr.id,
+          document_type_code: cr.document_type_code as DocType,
+          rejectionReason: cr.rejection_reason || "Document replacement rejected by administrator.",
+          reviewedAt: cr.reviewed_at,
+          stagingPath: cr.staging_path,
+          signedUrl: rejectedSignedUrl,
+          thumbSignedUrl: rejectedThumbSignedUrl,
+        } : null,
         originalVerificationStatus: doc.verification_status,
       });
     }
