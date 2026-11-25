@@ -40,9 +40,16 @@ export async function GET(req: NextRequest) {
     if (searchParams.get("limit")) queryObj.limit = parseInt(searchParams.get("limit")!, 10);
 
     const parsed = ApprovalListQuerySchema.safeParse(queryObj);
-    const params = parsed.success ? parsed.data : {};
+    if (!parsed.success) {
+      // Deny by default: never silently fall back to page 1 for a malformed cursor.
+      return NextResponse.json(
+        { error: parsed.error.errors[0]?.message || "Invalid pagination query parameters." },
+        { status: 400, headers: NO_CACHE_HEADERS }
+      );
+    }
+    const params = parsed.data;
 
-    const { data, error } = await getApprovalsListDAL(params, {
+    const { data, next_cursor, has_more, pending_total, error } = await getApprovalsListDAL(params, {
       id: auth.user.id,
       role: auth.user.role,
     });
@@ -51,7 +58,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
-    return NextResponse.json(data, { headers: NO_CACHE_HEADERS });
+    return NextResponse.json(
+      {
+        items: data,
+        data,
+        next_cursor,
+        has_more,
+        pending_total,
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500, headers: NO_CACHE_HEADERS });

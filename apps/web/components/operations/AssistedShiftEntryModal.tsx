@@ -178,35 +178,36 @@ export function AssistedShiftEntryModal({
 
       if (row.machine_id && !hasCurrentMeter && !hasEndMeter) {
         const supabase = createSupabaseBrowserClient();
-        supabase
-          .from("equipment_hour_logs")
-          .select("end_meter")
-          .eq("machine_id", row.machine_id)
-          .order("log_date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .then(({ data }: { data: any }) => {
-            if (data && data[0]?.end_meter != null && Number(data[0].end_meter) > 0) {
-              const prev = String(data[0].end_meter);
-              setStartMeter(prev);
-              setEndMeter((cur) => (cur === "0" || cur === startVal ? prev : cur));
-            } else {
-              supabase
-                .from("machines")
-                .select("hour_meter")
-                .eq("id", row.machine_id)
-                .single()
-                .then(({ data: mData }: { data: any }) => {
-                  if (mData?.hour_meter != null && Number(mData.hour_meter) > 0) {
-                    const prev = String(mData.hour_meter);
-                    setStartMeter(prev);
-                    setEndMeter((cur) => (cur === "0" || cur === startVal ? prev : cur));
-                  }
-                })
-                .catch(() => {});
-            }
-          })
-          .catch(() => {});
+        // Both meter sources are independent reads: issue them together and pick in
+        // priority order instead of waiting for the first query to come back before
+        // starting the fallback (previously a guaranteed two-round-trip waterfall on
+        // every open of a machine without a meter history).
+        Promise.all([
+          supabase
+            .from("equipment_hour_logs")
+            .select("end_meter")
+            .eq("machine_id", row.machine_id)
+            .order("log_date", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .then(({ data }: { data: any }) => data?.[0]?.end_meter ?? null)
+            .catch(() => null),
+          supabase
+            .from("machines")
+            .select("hour_meter")
+            .eq("id", row.machine_id)
+            .single()
+            .then(({ data }: { data: any }) => data?.hour_meter ?? null)
+            .catch(() => null),
+        ]).then(([equipmentMeter, machineMeter]) => {
+          const positive = (value: unknown) =>
+            value != null && Number(value) > 0 ? value : null;
+          const resolved = positive(equipmentMeter) ?? positive(machineMeter);
+          if (resolved == null) return;
+          const prev = String(resolved);
+          setStartMeter(prev);
+          setEndMeter((cur) => (cur === "0" || cur === startVal ? prev : cur));
+        });
       }
 
       const initialShift = row.shift_code || "S1";

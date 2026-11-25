@@ -113,7 +113,7 @@ export function FilterToolbar({
             placeholder={placeholder}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className={`w-full h-11 sm:h-9 pl-9 pr-8 text-[16px] sm:text-xs placeholder:text-[11px] sm:placeholder:text-xs rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-[var(--color-ink)] focus:ring-1 focus:ring-[var(--color-ink)]/20 transition-all ${
+            className={`w-full h-11 lg:h-9 pl-9 pr-8 text-[16px] sm:text-xs placeholder:text-[11px] sm:placeholder:text-xs rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-[var(--color-ink)] focus:ring-1 focus:ring-[var(--color-ink)]/20 transition-all ${
               isLoading
                 ? "border-[var(--color-ink)]/40 ring-1 ring-[var(--color-ink)]/10"
                 : "border-[var(--color-hairline)]"
@@ -140,7 +140,7 @@ export function FilterToolbar({
             onMouseLeave={() => filterIconRef.current?.stopAnimation?.()}
             aria-expanded={isOpen}
             aria-controls="filter-panel-content"
-            className={`flex items-center gap-1.5 px-3 h-11 sm:h-9 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 h-11 lg:h-9 rounded-lg border text-xs font-semibold motion-press shrink-0 select-none cursor-pointer ${
               isOpen || activeFilterCount > 0
                 ? "bg-[#0284c7] text-white border-[#0284c7] shadow-xs hover:bg-[#0369a1]"
                 : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[#0284c7]/40 hover:text-[#0284c7] hover:bg-[var(--color-hairline-soft-surface)]"
@@ -176,7 +176,7 @@ export function FilterToolbar({
             onClick={onResetFilters}
             onMouseEnter={() => resetIconRef.current?.startAnimation?.()}
             onMouseLeave={() => resetIconRef.current?.stopAnimation?.()}
-            className="flex items-center gap-1 px-2.5 h-11 sm:h-9 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shrink-0 cursor-pointer active:scale-95"
+            className="flex items-center gap-1 px-2.5 h-11 lg:h-9 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] motion-press shrink-0 cursor-pointer"
             title="Reset all filters"
           >
             <AnimatedRotateCcw ref={resetIconRef as any} size={14} className="shrink-0" />
@@ -195,10 +195,10 @@ export function FilterToolbar({
               setIsTransitioning(false);
             }
           }}
-          className={`grid transition-[grid-template-rows,opacity] ${
+          className={`grid transition-[grid-template-rows,opacity] ease-[cubic-bezier(0.16,1,0.3,1)] ${
             isOpen
-              ? "grid-rows-[1fr] opacity-100 duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-              : "grid-rows-[0fr] opacity-0 duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none"
+              ? "grid-rows-[1fr] opacity-100 duration-200"
+              : "grid-rows-[0fr] opacity-0 duration-200 pointer-events-none"
           }`}
         >
           <div

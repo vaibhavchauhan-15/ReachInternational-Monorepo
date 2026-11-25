@@ -10,6 +10,8 @@ import type {
   ApprovalRequestListItem,
   ApprovalStatus,
   ApprovalApproveAllResult,
+  ApprovalListResponse,
+  ApprovalDecideResult,
 } from "@reachinternational/types";
 import { sanitizeUserErrorMessage } from "./errors.ts";
 
@@ -53,6 +55,7 @@ export interface DecideApprovalInput {
   note?: string;
   expected_version?: number;
   actor_id?: string | null;
+  idempotency_key?: string;
 }
 
 export interface ApproveAllInput {
@@ -154,6 +157,7 @@ export async function decideApproval(
         p_note: input.note ?? null,
         p_expected_version: input.expected_version ?? null,
         p_actor_id: input.actor_id ?? null,
+        p_idempotency_key: input.idempotency_key ?? null,
       });
 
       if (error) {
@@ -367,6 +371,7 @@ export async function rejectDocument(
 
 /**
  * List approval requests using keyset pagination.
+ * Returns array of items (backward-compatible with mobile and web callers).
  */
 export async function listApprovals(
   transport: ApprovalClientTransport,
@@ -374,7 +379,7 @@ export async function listApprovals(
 ): Promise<ClientResult<ApprovalRequestListItem[]>> {
   try {
     if (isRpcClient(transport)) {
-      const { data, error } = await transport.rpc<ApprovalRequestListItem[]>("approval_list", {
+      const { data, error } = await transport.rpc<any>("approval_list", {
         p_status: params.status ?? "pending",
         p_type_key: params.type_key ?? null,
         p_cursor_created_at: params.cursor_created_at ?? null,
@@ -385,7 +390,12 @@ export async function listApprovals(
       if (error) {
         return { data: null, error: sanitizeUserErrorMessage(error) };
       }
-      return { data: Array.isArray(data) ? data : [], error: null };
+      const items = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+        ? data.items
+        : [];
+      return { data: items, error: null };
     }
 
     const fetchImpl = transport.fetchFn || fetch;
@@ -409,7 +419,109 @@ export async function listApprovals(
     if (!res.ok) {
       return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
     }
-    return { data: json.data || json, error: null };
+    const raw = json.data || json;
+    const items = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.items)
+      ? raw.items
+      : [];
+    return { data: items, error: null };
+  } catch (err) {
+    return { data: null, error: sanitizeUserErrorMessage(err) };
+  }
+}
+
+/**
+ * List approval requests returning the full keyset-paginated response structure:
+ * { items, next_cursor, has_more, pending_total }
+ */
+export async function listApprovalsPaginated(
+  transport: ApprovalClientTransport,
+  params: ListApprovalsInput = {}
+): Promise<ClientResult<ApprovalListResponse>> {
+  try {
+    if (isRpcClient(transport)) {
+      const { data, error } = await transport.rpc<any>("approval_list", {
+        p_status: params.status ?? "pending",
+        p_type_key: params.type_key ?? null,
+        p_cursor_created_at: params.cursor_created_at ?? null,
+        p_cursor_id: params.cursor_id ?? null,
+        p_limit: params.limit ?? 20,
+      });
+
+      if (error) {
+        return { data: null, error: sanitizeUserErrorMessage(error) };
+      }
+
+      if (data && typeof data === "object" && !Array.isArray(data)) {
+        return {
+          data: {
+            items: Array.isArray(data.items) ? data.items : [],
+            next_cursor: data.next_cursor || null,
+            has_more: Boolean(data.has_more),
+            pending_total: typeof data.pending_total === "number" ? data.pending_total : 0,
+          },
+          error: null,
+        };
+      }
+
+      const items = Array.isArray(data) ? data : [];
+      return {
+        data: {
+          items,
+          next_cursor: null,
+          has_more: false,
+          pending_total: items.length,
+        },
+        error: null,
+      };
+    }
+
+    const fetchImpl = transport.fetchFn || fetch;
+    const base = transport.baseUrl || "";
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (transport.token) headers["Authorization"] = `Bearer ${transport.token}`;
+
+    const q = new URLSearchParams();
+    if (params.status) q.set("status", params.status);
+    if (params.type_key) q.set("type_key", params.type_key);
+    if (params.cursor_created_at) q.set("cursor_created_at", params.cursor_created_at);
+    if (params.cursor_id) q.set("cursor_id", params.cursor_id);
+    if (params.limit) q.set("limit", String(params.limit));
+
+    const res = await fetchImpl(`${base}/api/approvals?${q.toString()}`, {
+      method: "GET",
+      headers,
+    });
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, any>;
+    if (!res.ok) {
+      return { data: null, error: sanitizeUserErrorMessage(json.error || json.message) };
+    }
+
+    const raw = json.data || json;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      return {
+        data: {
+          items: Array.isArray(raw.items) ? raw.items : [],
+          next_cursor: raw.next_cursor || null,
+          has_more: Boolean(raw.has_more),
+          pending_total: typeof raw.pending_total === "number" ? raw.pending_total : 0,
+        },
+        error: null,
+      };
+    }
+
+    const items = Array.isArray(raw) ? raw : [];
+    return {
+      data: {
+        items,
+        next_cursor: null,
+        has_more: false,
+        pending_total: items.length,
+      },
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: sanitizeUserErrorMessage(err) };
   }

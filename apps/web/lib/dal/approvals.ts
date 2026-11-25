@@ -8,11 +8,12 @@ import type {
   ApprovalRequest,
   ApprovalRequestListItem,
   ApprovalStatus,
+  ApprovalCursor,
 } from "@reachinternational/types";
 import { sanitizeUserErrorMessage } from "@reachinternational/utils";
 
 export interface ApprovalListParams {
-  status?: ApprovalStatus;
+  status?: ApprovalStatus | "all";
   type_key?: string;
   cursor_created_at?: string;
   cursor_id?: string;
@@ -22,6 +23,14 @@ export interface ApprovalListParams {
 export interface ApprovalCallerContext {
   id: string;
   role: string;
+}
+
+export interface ApprovalListDALResult {
+  data: ApprovalRequestListItem[];
+  next_cursor: ApprovalCursor | null;
+  has_more: boolean;
+  pending_total: number;
+  error: string | null;
 }
 
 // ⚡ In-memory signed URL cache with TTL (45 minutes) to avoid repeated Supabase Storage API round-trips
@@ -44,12 +53,14 @@ async function resolveSignedUrlsBatch(
   const missingPaths: string[] = [];
 
   for (const p of paths) {
-    const cacheKey = `${bucket}:${p}`;
+    const cleanPath = p.replace(/^\/+/, "");
+    const cacheKey = `${bucket}:${cleanPath}`;
     const cached = signedUrlCache.get(cacheKey);
     if (cached && cached.expiresAt > now) {
+      result.set(cleanPath, cached.url);
       result.set(p, cached.url);
     } else {
-      missingPaths.push(p);
+      missingPaths.push(cleanPath);
     }
   }
 
@@ -84,15 +95,30 @@ async function resolveSignedUrlsBatch(
   return result;
 }
 
+const formatDocLabel = (code: string): string => {
+  switch (code) {
+    case "aadhaar":
+      return "Aadhaar Card";
+    case "driving_license":
+      return "Driving License";
+    case "bank_document":
+      return "Bank Details";
+    default:
+      return code
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+};
+
 /**
- * Fetch keyset-paginated approvals list via approval_list RPC.
+ * Fetch keyset-paginated approvals list via approval_list RPC with DB-level grouping.
  * Queue review is strictly restricted to admin users (super_admin, admin).
  */
 export const getApprovalsListDAL = cache(
   async (
     params: ApprovalListParams = {},
     overrideCaller?: ApprovalCallerContext
-  ): Promise<{ data: ApprovalRequestListItem[]; error: string | null }> => {
+  ): Promise<ApprovalListDALResult> => {
     try {
       let userId = overrideCaller?.id;
       let userRole = overrideCaller?.role;
@@ -100,7 +126,13 @@ export const getApprovalsListDAL = cache(
       if (!userId || !userRole) {
         const user = await getCurrentUser();
         if (!user) {
-          return { data: [], error: "Unauthorized" };
+          return {
+            data: [],
+            next_cursor: null,
+            has_more: false,
+            pending_total: 0,
+            error: "Unauthorized",
+          };
         }
         userId = user.id;
         userRole = user.role;
@@ -108,227 +140,111 @@ export const getApprovalsListDAL = cache(
 
       const isAdmin = userRole === "admin" || userRole === "super_admin";
       if (!isAdmin) {
-        return { data: [], error: "Forbidden: Approvals queue is restricted to admin users." };
+        return {
+          data: [],
+          next_cursor: null,
+          has_more: false,
+          pending_total: 0,
+          error: "Forbidden: Approvals queue is restricted to admin users.",
+        };
       }
 
       const adminSupabase = createSupabaseAdminClient();
-      let query = adminSupabase
-        .from("approval_requests")
-        .select(`
-          id,
-          type_key,
-          subject_type,
-          subject_id,
-          subject_label,
-          requested_by,
-          status,
-          summary,
-          payload,
-          version,
-          created_at,
-          expires_at,
-          type:approval_types (
-            label,
-            priority
-          ),
-          requester:users!approval_requests_requested_by_fkey (
-            id,
-            full_name,
-            email,
-            phone,
-            role,
-            employee_id,
-            machine_category
-          )
-        `)
-        .order("created_at", { ascending: false })
-        .limit(params.limit ?? 50);
+      const statusParam = params.status && params.status !== "all" ? params.status : "pending";
+      const typeKeyParam = params.type_key && params.type_key !== "all" ? params.type_key : null;
+      const limitParam = params.limit ?? 20;
 
-      if (params.status && params.status !== ("all" as any)) {
-        query = query.eq("status", params.status);
-      }
-      if (params.type_key) {
-        query = query.eq("type_key", params.type_key);
+      // ⚡ Single RPC round-trip: Keyset cursor pagination + DB-level registration grouping + pending count
+      const { data: rpcRes, error: rpcErr } = await adminSupabase.rpc("approval_list", {
+        p_status: statusParam,
+        p_type_key: typeKeyParam,
+        p_cursor_created_at: params.cursor_created_at ?? null,
+        p_cursor_id: params.cursor_id ?? null,
+        p_limit: limitParam,
+      });
+
+      if (rpcErr) {
+        return {
+          data: [],
+          next_cursor: null,
+          has_more: false,
+          pending_total: 0,
+          error: sanitizeUserErrorMessage(rpcErr),
+        };
       }
 
-      const { data: rows, error: qErr } = await query;
-      if (qErr) {
-        return { data: [], error: sanitizeUserErrorMessage(qErr) };
-      }
+      const resObj = (rpcRes && typeof rpcRes === "object" ? rpcRes : {}) as any;
+      const rawItems: any[] = Array.isArray(resObj.items)
+        ? resObj.items
+        : Array.isArray(rpcRes)
+        ? rpcRes
+        : [];
+      const nextCursor: ApprovalCursor | null = resObj.next_cursor || null;
+      const hasMore: boolean = Boolean(resObj.has_more);
+      const pendingTotal: number =
+        typeof resObj.pending_total === "number" ? resObj.pending_total : rawItems.length;
 
-      const userProfileMap = new Map<string, any>();
-      for (const row of rows || []) {
-        const reqObj: any = Array.isArray(row.requester) ? row.requester[0] : row.requester;
-        if (reqObj?.id) {
-          userProfileMap.set(reqObj.id, reqObj);
-        }
-      }
-
-      const missingUserIds = (rows || [])
-        .map((r: any) => {
-          const p = r.payload || {};
-          return p.user_id || (r.subject_type === "user" ? r.subject_id : null);
-        })
-        .filter((id: string | null) => Boolean(id) && !userProfileMap.has(id!)) as string[];
-
-      const targetUserIds = Array.from(
-        new Set(
-          (rows || [])
-            .map((r: any) => {
-              const p = r.payload || {};
-              return (
-                p.user_id ||
-                (r.subject_type === "user" ? r.subject_id : null) ||
-                r.requested_by
-              );
-            })
-            .filter(Boolean)
-        )
-      ) as string[];
-
-      // Parallel data fetching for missing user profiles and associated documents
-      const [missingUsersRes, userDocsRes] = await Promise.all([
-        missingUserIds.length > 0
-          ? adminSupabase
-              .from("users")
-              .select("id, full_name, email, phone, role, employee_id, machine_category")
-              .in("id", Array.from(new Set(missingUserIds)))
-          : Promise.resolve({ data: null }),
-        targetUserIds.length > 0
-          ? adminSupabase
-              .from("user_documents")
-              .select(
-                "id, user_id, document_type_code, storage_path, thumb_path, verification_status, mime_type, file_size_bytes"
-              )
-              .in("user_id", targetUserIds)
-              .order("created_at", { ascending: true })
-          : Promise.resolve({ data: null }),
-      ]);
-
-      if (missingUsersRes.data) {
-        for (const u of missingUsersRes.data) {
-          userProfileMap.set(u.id, u);
-        }
-      }
-
-      const userDocsMap = new Map<string, any[]>();
+      // Batch sign storage paths in parallel for all attached documents across user_files and doc_staging
       const userFilesPaths: string[] = [];
+      const stagingPaths: string[] = [];
 
-      if (userDocsRes.data) {
-        for (const doc of userDocsRes.data) {
-          const list = userDocsMap.get(doc.user_id) || [];
-          list.push(doc);
-          userDocsMap.set(doc.user_id, list);
+      for (const item of rawItems) {
+        const p = (item.payload || {}) as Record<string, any>;
+        if (p.staging_path) stagingPaths.push(p.staging_path);
+        if (p.staging_thumb_path) stagingPaths.push(p.staging_thumb_path);
+        if (p.storage_path) userFilesPaths.push(p.storage_path);
+        if (p.thumb_path) userFilesPaths.push(p.thumb_path);
+
+        for (const doc of item.documents || []) {
           if (doc.storage_path) userFilesPaths.push(doc.storage_path);
           if (doc.thumb_path) userFilesPaths.push(doc.thumb_path);
         }
       }
 
-      const stagingPaths: string[] = [];
-      for (const row of rows || []) {
-        const p = (row.payload || {}) as Record<string, any>;
-        if (p.staging_path) stagingPaths.push(p.staging_path);
-        if (p.staging_thumb_path) stagingPaths.push(p.staging_thumb_path);
-        if (p.storage_path) userFilesPaths.push(p.storage_path);
-        if (p.thumb_path) userFilesPaths.push(p.thumb_path);
-      }
-
-      // ⚡ Parallel batch signed URL resolution across storage buckets with 45-min memory caching
       const [signedUserFilesMap, signedStagingMap] = await Promise.all([
         resolveSignedUrlsBatch(adminSupabase, "user_files", userFilesPaths),
         resolveSignedUrlsBatch(adminSupabase, "doc_staging", stagingPaths),
       ]);
 
-      const formatDocLabel = (code: string): string => {
-        switch (code) {
-          case "aadhaar":
-            return "Aadhaar Card";
-          case "driving_license":
-            return "Driving License";
-          case "bank_document":
-            return "Bank Details";
-          default:
-            return code
-              .replace(/_/g, " ")
-              .replace(/\b\w/g, (c) => c.toUpperCase());
-        }
-      };
-
-      const mapped: ApprovalRequestListItem[] = (rows || []).map((row: any) => {
+      const items: ApprovalRequestListItem[] = rawItems.map((row: any) => {
         const p = (row.payload || {}) as Record<string, any>;
-        const targetUserId =
-          p.user_id ||
-          (row.subject_type === "user" ? row.subject_id : null) ||
-          row.requested_by;
-        const reqObj: any = Array.isArray(row.requester) ? row.requester[0] : row.requester;
-        const profile = userProfileMap.get(targetUserId) || reqObj || null;
 
-        let empId = profile?.employee_id || p.employee_id || null;
-        if (!empId && row.subject_label?.includes("·")) {
-          const parts = row.subject_label.split("·").map((s: string) => s.trim());
-          if (
-            parts[0] &&
-            (parts[0].startsWith("EMP") ||
-              parts[0].startsWith("RI-") ||
-              parts[0].startsWith("#"))
-          ) {
-            empId = parts[0];
-          }
-        }
-
-        const rawDocs = targetUserId ? userDocsMap.get(targetUserId) || [] : [];
-        const attachedDocs = rawDocs.map((doc: any) => ({
-          id: doc.id,
-          document_type_code: doc.document_type_code,
-          label: formatDocLabel(doc.document_type_code),
-          thumb_signed_url:
-            (doc.thumb_path ? signedUserFilesMap.get(doc.thumb_path) : null) ||
-            (doc.storage_path ? signedUserFilesMap.get(doc.storage_path) : null) ||
-            null,
-          signed_url:
-            (doc.storage_path ? signedUserFilesMap.get(doc.storage_path) : null) ||
-            (doc.thumb_path ? signedUserFilesMap.get(doc.thumb_path) : null) ||
-            null,
-          verification_status: doc.verification_status || "pending",
-          file_size_bytes: doc.file_size_bytes,
-          mime_type: doc.mime_type,
-        }));
-
-        if (
-          row.type_key === "document_verify" &&
-          attachedDocs.length === 0 &&
-          p.document_type_code
-        ) {
-          attachedDocs.push({
-            id: p.document_id || row.id,
-            document_type_code: p.document_type_code,
-            label: formatDocLabel(p.document_type_code),
+        const documents = (row.documents || []).map((doc: any) => {
+          const sPath = doc.storage_path ? doc.storage_path.replace(/^\/+/, "") : "";
+          const tPath = doc.thumb_path ? doc.thumb_path.replace(/^\/+/, "") : "";
+          return {
+            id: doc.id,
+            document_type_code: doc.document_type_code,
+            label: formatDocLabel(doc.document_type_code),
             thumb_signed_url:
-              (p.thumb_path ? signedUserFilesMap.get(p.thumb_path) : null) ||
-              (p.storage_path ? signedUserFilesMap.get(p.storage_path) : null) ||
+              signedUserFilesMap.get(tPath) ||
+              signedUserFilesMap.get(sPath) ||
               null,
             signed_url:
-              (p.storage_path ? signedUserFilesMap.get(p.storage_path) : null) ||
-              (p.thumb_path ? signedUserFilesMap.get(p.thumb_path) : null) ||
+              signedUserFilesMap.get(sPath) ||
+              signedUserFilesMap.get(tPath) ||
               null,
-            verification_status: row.status,
-            file_size_bytes: p.file_size_bytes,
-            mime_type: p.mime_type || "image/jpeg",
-          });
-        }
+            verification_status: doc.verification_status || "pending",
+            file_size_bytes: doc.file_size_bytes,
+            mime_type: doc.mime_type,
+          };
+        });
 
+        // Document replacement: surface the staged replacement file
         if (row.type_key === "document_replace" && p.document_type_code) {
-          attachedDocs.unshift({
+          const sPath = p.staging_path ? p.staging_path.replace(/^\/+/, "") : "";
+          const tPath = p.staging_thumb_path ? p.staging_thumb_path.replace(/^\/+/, "") : "";
+          documents.unshift({
             id: row.id,
             document_type_code: p.document_type_code,
             label: `${formatDocLabel(p.document_type_code)} (Replacement)`,
             thumb_signed_url:
-              (p.staging_thumb_path ? signedStagingMap.get(p.staging_thumb_path) : null) ||
-              (p.staging_path ? signedStagingMap.get(p.staging_path) : null) ||
+              signedStagingMap.get(tPath) ||
+              signedStagingMap.get(sPath) ||
               null,
             signed_url:
-              (p.staging_path ? signedStagingMap.get(p.staging_path) : null) ||
-              (p.staging_thumb_path ? signedStagingMap.get(p.staging_thumb_path) : null) ||
+              signedStagingMap.get(sPath) ||
+              signedStagingMap.get(tPath) ||
               null,
             verification_status: "pending",
             file_size_bytes: p.file_size_bytes,
@@ -336,129 +252,77 @@ export const getApprovalsListDAL = cache(
           });
         }
 
+        // Standalone document verification fallback if documents array was empty
+        if (
+          row.type_key === "document_verify" &&
+          documents.length === 0 &&
+          p.document_type_code
+        ) {
+          const sPath = p.storage_path ? p.storage_path.replace(/^\/+/, "") : "";
+          const tPath = p.thumb_path ? p.thumb_path.replace(/^\/+/, "") : "";
+          documents.push({
+            id: p.document_id || row.id,
+            document_type_code: p.document_type_code,
+            label: formatDocLabel(p.document_type_code),
+            thumb_signed_url:
+              signedUserFilesMap.get(tPath) ||
+              signedUserFilesMap.get(sPath) ||
+              null,
+            signed_url:
+              signedUserFilesMap.get(sPath) ||
+              signedUserFilesMap.get(tPath) ||
+              null,
+            verification_status: row.status,
+            file_size_bytes: p.file_size_bytes,
+            mime_type: p.mime_type || "image/jpeg",
+          });
+        }
+
         return {
           id: row.id,
           type_key: row.type_key,
-          type_label: row.type?.label || row.type_key,
+          type_label: row.type_label || row.type_key,
           subject_type: row.subject_type,
           subject_id: row.subject_id,
           subject_label: row.subject_label,
           requested_by: row.requested_by,
-          requester_name:
-            profile?.full_name || reqObj?.full_name || p.full_name || null,
+          requester_name: row.requester_name || null,
           status: row.status,
           summary: row.summary,
-          priority: row.type?.priority ?? 0,
+          priority: row.priority ?? 0,
           created_at: row.created_at,
           expires_at: row.expires_at,
           version: row.version,
           payload: p,
-          role: profile?.role || p.role || null,
-          employee_id: empId,
-          email: profile?.email || p.email || null,
-          phone: profile?.phone || p.phone || null,
-          machine_category:
-            profile?.machine_category || p.machine_category || null,
-          documents: attachedDocs,
-          bound_request_ids: [row.id],
+          role: row.role || row.requester_role || p.role || null,
+          employee_id: row.employee_id || p.employee_id || null,
+          email: row.email || p.email || null,
+          phone: row.phone || p.phone || null,
+          machine_category: row.machine_category || p.machine_category || null,
+          supervisor_name: row.supervisor_name || p.supervisor_name || p.supervisorName || null,
+          supervisor_id: row.supervisor_id || p.supervisor_id || p.supervisorId || null,
+          documents,
+          bound_request_ids: Array.isArray(row.bound_request_ids)
+            ? row.bound_request_ids
+            : [row.id],
         };
       });
 
-      // ─── Approvals Normalization Engine ──────────────────────────
-      // 1. Group / suppress redundant document_verify requests for users undergoing registration
-      // 2. Bind multiple requests of same type for same user into one consolidated card
-      const pendingRegistrationUserIds = new Set<string>();
-      for (const item of mapped) {
-        if (item.type_key === "registration" && item.status === "pending") {
-          const uId = item.payload?.user_id || item.subject_id || item.requested_by;
-          if (uId) pendingRegistrationUserIds.add(uId);
-        }
-      }
-
-      // Map of registration items by userId for attaching bound document_verify IDs
-      const registrationByUserId = new Map<string, ApprovalRequestListItem>();
-      for (const item of mapped) {
-        if (item.type_key === "registration" && item.status === "pending") {
-          const uId = item.payload?.user_id || item.subject_id || item.requested_by;
-          if (uId) registrationByUserId.set(uId, item);
-        }
-      }
-
-      const normalized: ApprovalRequestListItem[] = [];
-      // Groups for binding same-user same-type requests: key = `${targetUserId}:${typeKey}`
-      const groupedIndex = new Map<string, ApprovalRequestListItem>();
-
-      for (const item of mapped) {
-        const targetUserId =
-          item.payload?.user_id ||
-          (item.subject_type === "user" ? item.subject_id : null) ||
-          item.requested_by;
-
-        // If this is a document_verify request for a user who already has a pending registration card:
-        // Absorb it into the registration card and suppress this duplicate standalone card!
-        if (
-          item.type_key === "document_verify" &&
-          targetUserId &&
-          pendingRegistrationUserIds.has(targetUserId)
-        ) {
-          const regItem = registrationByUserId.get(targetUserId);
-          if (regItem) {
-            regItem.bound_request_ids = regItem.bound_request_ids || [];
-            if (!regItem.bound_request_ids.includes(item.id)) {
-              regItem.bound_request_ids.push(item.id);
-            }
-          }
-          continue; // Suppress duplicate standalone document_verify card
-        }
-
-        // For document_verify or document_replace: bind multiple same-user requests into 1 consolidated card
-        if (
-          (item.type_key === "document_verify" || item.type_key === "document_replace") &&
-          targetUserId &&
-          item.status === "pending"
-        ) {
-          const groupKey = `${targetUserId}:${item.type_key}`;
-          const existing = groupedIndex.get(groupKey);
-
-          if (existing) {
-            // Bind into existing card
-            existing.bound_request_ids = existing.bound_request_ids || [existing.id];
-            if (!existing.bound_request_ids.includes(item.id)) {
-              existing.bound_request_ids.push(item.id);
-            }
-
-            // Merge documents without duplicate IDs
-            const existingDocIds = new Set((existing.documents || []).map((d) => d.id));
-            for (const doc of item.documents || []) {
-              if (!existingDocIds.has(doc.id)) {
-                existing.documents = existing.documents || [];
-                existing.documents.push(doc);
-                existingDocIds.add(doc.id);
-              }
-            }
-
-            // Update summary and subject_label for multi-document representation
-            const totalDocs = existing.documents?.length || 1;
-            if (totalDocs > 1) {
-              const uName = existing.requester_name || existing.subject_label || "User";
-              existing.subject_label = `${uName} (${totalDocs} Documents)`;
-              existing.summary = `${existing.type_label}: ${uName} (${totalDocs} documents pending review)`;
-            }
-            continue; // Absorbed into existing card
-          } else {
-            item.bound_request_ids = [item.id];
-            groupedIndex.set(groupKey, item);
-            normalized.push(item);
-            continue;
-          }
-        }
-
-        normalized.push(item);
-      }
-
-      return { data: normalized, error: null };
+      return {
+        data: items,
+        next_cursor: nextCursor,
+        has_more: hasMore,
+        pending_total: pendingTotal,
+        error: null,
+      };
     } catch (err) {
-      return { data: [], error: sanitizeUserErrorMessage(err) };
+      return {
+        data: [],
+        next_cursor: null,
+        has_more: false,
+        pending_total: 0,
+        error: sanitizeUserErrorMessage(err),
+      };
     }
   }
 );
@@ -582,7 +446,8 @@ export const getApprovalCountsDAL = cache(
         const { data: rows, error: fbErr } = await adminSupabase
           .from("approval_requests")
           .select("type_key")
-          .eq("status", "pending");
+          .eq("status", "pending")
+          .is("parent_id", null);
 
         if (fbErr) {
           return { data: { total: 0, by_type: {} }, error: sanitizeUserErrorMessage(fbErr) };

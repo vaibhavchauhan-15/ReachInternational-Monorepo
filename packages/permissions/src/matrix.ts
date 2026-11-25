@@ -7,7 +7,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   super_admin: ["*"],
 
   admin: [
-    "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
+    "machine.view", "machine.fleet_view", "machine.create", "machine.edit", "machine.edit_specs",
+    "machine.import", "machine.delete", "machine.assign", "machine.assign_supervisor",
+    "machine.status_update", "machine.assign_operator", "machine.assign_client",
+    "machine.rental_rates_view", "machine.audit_view", "machine.export",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
     "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close",
     "fsr.view", "fsr.create", "fsr.update", "fsr.review", "fsr.approve",
@@ -29,7 +32,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   manager: [
-    "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
+    "machine.view", "machine.fleet_view", "machine.create", "machine.edit", "machine.edit_specs",
+    "machine.import", "machine.delete", "machine.assign", "machine.assign_supervisor",
+    "machine.status_update", "machine.assign_operator", "machine.assign_client",
+    "machine.rental_rates_view", "machine.audit_view", "machine.export",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
     "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close",
     "fsr.view", "fsr.create", "fsr.update", "fsr.review", "fsr.approve",
@@ -53,7 +59,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   supervisor: [
-    "machine.view", "machine.status_update", "machine.assign_operator", "machine.assign_client",
+    "machine.view", "machine.fleet_view", "machine.status_update", "machine.assign_operator",
+    "machine.assign_client", "machine.audit_view", "machine.export",
     "complaint.view", "complaint.create",
     "service.view",
     "operator.view", "operator.assign", "operator.log_approve", "operator.create", "operator.salary_manage",
@@ -67,7 +74,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   hr: [
-    "machine.view",
     "operator.view", "operator.log_approve",
     "employee.view", "employee.create", "employee.edit", "employee.delete", "employee.onboard", "employee.status_change",
     "employee.salary.view", "employee.salary.create", "employee.salary.edit", "hr.payroll.view", "hr.payroll.manage",
@@ -83,7 +89,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   operator: [
-    "machine.view",
+    "machine.view", "machine.operator_view",
     "complaint.view",
     "complaint.create",
     "operator.view",
@@ -138,6 +144,10 @@ function normalizePermissionKey(perm: string): string {
     "machine:create": "machine.create",
     "machine:update": "machine.edit",
     "machine:delete": "machine.delete",
+    "machine:edit_specs": "machine.edit_specs",
+    "machine:import": "machine.import",
+    "machine:view_rates": "machine.rental_rates_view",
+    "machine:view_audit": "machine.audit_view",
     "service:read": "service.view",
     "service:create": "service.create",
     "service:update": "service.update",

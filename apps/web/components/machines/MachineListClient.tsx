@@ -37,6 +37,12 @@ import { deleteMachine, getMachineExportDataAction, searchMachinesServerAction, 
 import { MachineRowActionsMenu } from "./MachineRowActionsMenu";
 import { MachineKPIStrip } from "./MachineKPIStrip";
 import { useRegisterPageActions } from "@/components/layout/PageActionContext";
+import {
+  MACHINE_CAPABILITIES,
+  hasMachineCapability,
+  isOperatorMachineView,
+  type MachineCapability,
+} from "@reachinternational/permissions";
 import type { Machine, User, UserRole } from "@/lib/types/database";
 
 const MobileMachineCard = dynamic(
@@ -105,6 +111,10 @@ interface MachineListClientProps {
   operators?: User[];
   clients?: any[];
   userRole: UserRole;
+  /** Capability set computed once on the server from @reachinternational/permissions. */
+  capabilities?: readonly MachineCapability[];
+  /** Manager tier only: supervisor filter can target another supervisor. */
+  canFilterBySupervisor?: boolean;
   currentSearch?: string;
   currentStatus?: string;
   currentHealthStatus?: string;
@@ -436,13 +446,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
 
 // Secondary Action Header Menu
 const HeaderMoreMenu = memo(function HeaderMoreMenu({
-  isAdmin,
+  canImport,
   onOpenImport,
   onExportExcel,
   onExportCSV,
   onExportPDF,
 }: {
-  isAdmin: boolean;
+  canImport: boolean;
   onOpenImport: () => void;
   onExportExcel: () => void;
   onExportCSV: () => void;
@@ -467,7 +477,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const menuWidth = 208; // 13rem = 208px
-    const menuHeight = isAdmin ? 160 : 120;
+    const menuHeight = canImport ? 160 : 120;
     const spaceBelow = window.innerHeight - rect.bottom;
     const shouldOpenUpwards = spaceBelow < menuHeight + 16;
 
@@ -485,7 +495,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
       left: leftPos,
       openUpwards: shouldOpenUpwards,
     });
-  }, [isAdmin]);
+  }, [canImport]);
 
   const toggleOpen = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -571,7 +581,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
                 }}
                 className="pointer-events-auto z-50 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-xl text-xs space-y-0.5"
               >
-                {isAdmin && (
+                {canImport && (
                   <>
                     <button
                       type="button"
@@ -670,18 +680,15 @@ const MobileMachineCardSkeletonList = memo(function MobileMachineCardSkeletonLis
         >
           {/* Header Row */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="h-6 w-20 rounded bg-[var(--color-hairline)] shrink-0" />
-              <div className="h-4 w-16 rounded bg-[var(--color-hairline)]/70" />
-            </div>
+            <div className="h-5 w-20 rounded-full bg-[var(--color-hairline)] shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <div className="h-5 w-14 rounded-full bg-[var(--color-hairline)]" />
               <div className="h-5 w-14 rounded-full bg-[var(--color-hairline)]" />
             </div>
           </div>
 
-          {/* Sub Metadata Row */}
-          <div className="h-3 w-44 rounded bg-[var(--color-hairline)]/60" />
+          {/* Sub Metadata Row: Model & Number in one row */}
+          <div className="h-4 w-48 rounded bg-[var(--color-hairline)]/70" />
 
           {/* Inset Specs Well */}
           <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5">
@@ -711,10 +718,10 @@ const MobileMachineCardSkeletonList = memo(function MobileMachineCardSkeletonLis
           {/* Footer Row */}
           <div className="pt-2 border-t border-[var(--color-hairline)] flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <div className="h-7 w-14 rounded bg-[var(--color-hairline)]" />
-              <div className="h-7 w-16 rounded bg-[var(--color-hairline)]" />
+              <div className="h-7 w-8 rounded-lg bg-[var(--color-hairline)]" />
+              <div className="h-7 w-16 rounded-lg bg-[var(--color-hairline)]" />
             </div>
-            <div className="h-7 w-20 rounded bg-[var(--color-hairline)]" />
+            <div className="h-7 w-28 rounded-lg bg-[var(--color-hairline)]" />
           </div>
         </div>
       ))}
@@ -733,6 +740,8 @@ export function MachineListClient({
   operators = [],
   clients = [],
   userRole,
+  capabilities,
+  canFilterBySupervisor = false,
   currentSearch = "",
   currentStatus = "all",
   currentHealthStatus = "all",
@@ -827,15 +836,17 @@ export function MachineListClient({
     }
   }, [clients]);
 
-  // Quick-add trigger from the reusable MobilePageHeader (+ icon)
+  // Quick-add trigger from the reusable MobilePageHeader (+ icon).
+  // Guarded here as well as in the header so a stray event can never mount the create modal.
   useEffect(() => {
+    if (!hasMachineCapability(userRole, MACHINE_CAPABILITIES.CREATE)) return;
     const handleQuickAdd = () => {
       setEditingMachine(null);
       setModalOpen(true);
     };
     window.addEventListener("reach:quick-add", handleQuickAdd);
     return () => window.removeEventListener("reach:quick-add", handleQuickAdd);
-  }, []);
+  }, [userRole]);
 
   // Strip legacy tab parameter (e.g. ?tab=inventory or ?tab=assigned) to normalize URL to clean /machines
   useEffect(() => {
@@ -864,13 +875,11 @@ export function MachineListClient({
     return mobileMachinesList;
   }, [isSearchActive, searchResults, mobileMachinesList]);
 
-  const handleOpenEdit = useCallback((m: Machine) => {
-    setEditingMachine(m);
-    setModalOpen(true);
-  }, []);
-
+  const modalOptionsInFlightRef = useRef(false);
   const ensureModalOptionsLoaded = useCallback(async () => {
+    if (modalOptionsInFlightRef.current) return;
     if (hasLoadedModalOptions && lazySupervisors.length > 0 && lazyOperators.length > 0 && lazyClients.length > 0) return;
+    modalOptionsInFlightRef.current = true;
     try {
       const data = await getMachineModalOptionsAction();
       if (data.supervisors?.length) setLazySupervisors(data.supervisors);
@@ -880,6 +889,8 @@ export function MachineListClient({
     } catch (err) {
       console.error("[MachineListClient] Failed to load modal options:", err);
       toast("warning", "Could not load complete options", "Some personnel and client selections may be incomplete.");
+    } finally {
+      modalOptionsInFlightRef.current = false;
     }
   }, [hasLoadedModalOptions, lazySupervisors.length, lazyOperators.length, lazyClients.length, toast]);
 
@@ -912,17 +923,21 @@ export function MachineListClient({
 
   const handleViewAudit = useCallback(
     (m: Machine) => {
-      router.push(`/machines/${m.id}?tab=audit_trail`);
+      router.push(`/machines/${m.machine_id || m.id}?tab=audit_trail`);
     },
     [router]
   );
 
   const handleViewLogs = useCallback(
     (m: Machine) => {
-      router.push(`/machines/${m.id}?tab=running_hours`);
+      router.push(`/machines/${m.machine_id || m.id}?tab=running_hours`);
     },
     [router]
   );
+
+  const handleOpenLogEntry = useCallback(() => {
+    router.push("/operations?tab=entry");
+  }, [router]);
 
   const handleMachineUpdatedFromModal = useCallback((updatedFields: Partial<Machine>) => {
     setSearchResults((prev) =>
@@ -950,10 +965,16 @@ export function MachineListClient({
 
   const handleOpenDetail = useCallback(
     (machineOrId: Machine | string) => {
-      const id = typeof machineOrId === "string" ? machineOrId : machineOrId.id;
-      router.push(`/machines/${id}`);
+      let targetIdentifier: string;
+      if (typeof machineOrId === "string") {
+        const found = machines.find((m) => m.id === machineOrId);
+        targetIdentifier = found?.machine_id || machineOrId;
+      } else {
+        targetIdentifier = machineOrId.machine_id || machineOrId.id;
+      }
+      router.push(`/machines/${targetIdentifier}`);
     },
-    [router]
+    [router, machines]
   );
 
   const handleRowClick = useCallback(
@@ -989,15 +1010,27 @@ export function MachineListClient({
     setSortBy(currentSort);
   }, [currentSort]);
 
-  const canManage =
-    userRole === "super_admin" ||
-    userRole === "admin" ||
-    userRole === "manager";
+  // Single source of truth: server-computed capabilities (falls back to the shared matrix).
+  const can = useCallback(
+    (capability: string) =>
+      capabilities
+        ? capabilities.includes(capability as MachineCapability)
+        : hasMachineCapability(userRole, capability),
+    [capabilities, userRole]
+  );
   const isSupervisor = userRole === "supervisor";
+  const isOperatorView = isOperatorMachineView(userRole);
+  const canManage = can(MACHINE_CAPABILITIES.EDIT_SPECS);
   const isAdmin = canManage;
   const canEdit = canManage;
-  const canCreateMachine = canManage;
-  const canDelete = canManage;
+  const canCreateMachine = can(MACHINE_CAPABILITIES.CREATE);
+  const canDelete = can(MACHINE_CAPABILITIES.DELETE);
+  const canImport = can(MACHINE_CAPABILITIES.IMPORT);
+  const canExport = can(MACHINE_CAPABILITIES.EXPORT);
+  const canAssignSupervisor = can(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+  const canAssignOperator = can(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+  const canAssignClient = can(MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+  const canViewAudit = can(MACHINE_CAPABILITIES.AUDIT_VIEW);
 
   // Lazy-load complete supervisor directory in the background without blocking initial paint
   const loadSupervisors = useCallback(() => {
@@ -1155,13 +1188,15 @@ export function MachineListClient({
         setSearchPage(1);
         setIsSearchLoading(false);
 
-        // Update URL to remove search parameter
+        // Update the URL through the router (not history.replaceState) so the RSC tree
+        // refetches the unfiltered directory slice instead of leaving the last server
+        // search result set on screen after the query is cleared.
         if (typeof window !== "undefined") {
           const params = new URLSearchParams(window.location.search);
           params.delete("search");
-          if (params.get("page") === "1") params.delete("page");
+          params.delete("page");
           const qs = params.toString();
-          window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+          router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
         }
         return;
       }
@@ -1218,7 +1253,7 @@ export function MachineListClient({
         }
       }, 180);
     },
-    [currentStatus, healthStatusFilter, supervisorFilter, clientFilter, pathname]
+    [currentStatus, healthStatusFilter, supervisorFilter, clientFilter, pathname, router]
   );
 
   // Initial mount: execute server search if search parameter is present in URL
@@ -1314,6 +1349,9 @@ export function MachineListClient({
         } else {
           toast("success", `Machine ${deletingMachine.machine_id} deleted successfully`);
           setMobileMachinesList((prev) => prev.filter((m) => m.id !== deletingMachine.id));
+          setSearchResults((prev) =>
+            prev ? prev.filter((m) => m.id !== deletingMachine.id) : null
+          );
           setDeletingMachine(null);
           router.refresh();
         }
@@ -1502,8 +1540,9 @@ export function MachineListClient({
     handleLoadMoreMobile();
   }, [handleLoadMoreMobile]);
 
-  // Mobile Header quick actions (export & print)
+  // Mobile Header quick actions (export & print) — registered only when the role may export.
   useEffect(() => {
+    if (!canExport) return;
     const handleQuickExportExcel = () => {
       handleExportExcel(selectedIds);
     };
@@ -1524,26 +1563,34 @@ export function MachineListClient({
       window.removeEventListener("reach:quick-export-csv", handleQuickExportCSV);
       window.removeEventListener("reach:quick-print", handleQuickPrint);
     };
-  }, [handleExportExcel, handleExportCSV, handleOpenPDFModal, selectedIds]);
+  }, [canExport, handleExportExcel, handleExportCSV, handleOpenPDFModal, selectedIds]);
 
   useRegisterPageActions(
     useMemo(
       () => ({
-        onAdd: () => {
-          setEditingMachine(null);
-          setModalOpen(true);
-        },
-        onExportExcel: () => handleExportExcel(selectedIds),
-        onExportCSV: () => handleExportCSV(selectedIds),
-        onPrint: () => handleOpenPDFModal(selectedIds),
+        ...(canCreateMachine
+          ? {
+              onAdd: () => {
+                setEditingMachine(null);
+                setModalOpen(true);
+              },
+            }
+          : {}),
+        ...(canExport
+          ? {
+              onExportExcel: () => handleExportExcel(selectedIds),
+              onExportCSV: () => handleExportCSV(selectedIds),
+              onPrint: () => handleOpenPDFModal(selectedIds),
+            }
+          : {}),
         onRefresh: () => router.refresh(),
       }),
-      [handleExportExcel, handleExportCSV, handleOpenPDFModal, selectedIds, router]
+      [canCreateMachine, canExport, handleExportExcel, handleExportCSV, handleOpenPDFModal, selectedIds, router]
     )
   );
 
   const tableBulkActions = useMemo(
-    () => [
+    () => (canExport ? [
       {
         label: `Excel (${selectedIds.length})`,
         icon: FileSpreadsheet,
@@ -1559,8 +1606,8 @@ export function MachineListClient({
         icon: Printer,
         onClick: (ids: (string | number)[]) => handleOpenPDFModal(ids),
       },
-    ],
-    [selectedIds.length, handleExportExcel, handleExportCSV, handleOpenPDFModal]
+    ] : []),
+    [canExport, selectedIds.length, handleExportExcel, handleExportCSV, handleOpenPDFModal]
   );
 
   const statsSummary = useMemo(() => {
@@ -1757,6 +1804,8 @@ export function MachineListClient({
             canEdit={canEdit}
             isSupervisor={isSupervisor}
             isAdmin={isAdmin}
+            canAssignClient={canAssignClient}
+            canViewAudit={canViewAudit}
             onEditMachine={handleOpenEditMachine}
             onAssignSupervisor={handleOpenAssignSupervisor}
             onAssignOperator={handleOpenAssignOperator}
@@ -1773,7 +1822,119 @@ export function MachineListClient({
         ),
       },
     ],
-    [canEdit, isSupervisor, isAdmin, handleOpenEditMachine, handleOpenAssignSupervisor, handleOpenAssignOperator, handleOpenEditPersonnel, handleOpenEditClient, handleViewAudit, handleViewLogs, handleOpenDelete, handleOpenAssignments, handleOpenHistory, handleOpenDetail, localSearchTerm]
+    [canEdit, isSupervisor, isAdmin, canAssignClient, canViewAudit, handleOpenEditMachine, handleOpenAssignSupervisor, handleOpenAssignOperator, handleOpenEditPersonnel, handleOpenEditClient, handleViewAudit, handleViewLogs, handleOpenDelete, handleOpenAssignments, handleOpenHistory, handleOpenDetail, localSearchTerm]
+  );
+
+  // Operator assigned-machine table: only matrix-approved fields + Log Entry / History CTAs.
+  const operatorTableColumns = useMemo(
+    () => [
+      {
+        id: "machine_id",
+        header: "MACHINE ID",
+        accessorKey: "machine_id" as const,
+        cell: (row: Machine) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenDetail(row);
+            }}
+            className="font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors font-mono text-xs hover:underline whitespace-nowrap cursor-pointer text-left outline-none focus-visible:ring-1 focus-visible:ring-sky-500 rounded-sm"
+          >
+            {row.machine_id || row.machine_code || "—"}
+          </button>
+        ),
+      },
+      {
+        id: "model",
+        header: "MODEL",
+        accessorKey: "model" as const,
+        cell: (row: Machine) => (
+          <span className="font-semibold text-[var(--color-ink)] text-xs">{row.model || "—"}</span>
+        ),
+      },
+      {
+        id: "serial_number",
+        header: "SERIAL NO",
+        accessorKey: "serial_number" as const,
+        cell: (row: Machine) => (
+          <span className="font-mono text-[var(--color-mute)] text-xs">{row.serial_number || "—"}</span>
+        ),
+      },
+      {
+        id: "manufacturer",
+        header: "MANUFACTURER",
+        accessorKey: "manufacturer" as const,
+        cell: (row: Machine) => (
+          <span className="text-xs text-[var(--color-ink)]">{row.manufacturer || "—"}</span>
+        ),
+      },
+      {
+        id: "year_of_mfg",
+        header: "YEAR",
+        accessorKey: "year_of_mfg" as const,
+        cell: (row: Machine) => (
+          <span className="font-mono text-xs text-[var(--color-ink)]">{row.year_of_mfg || "—"}</span>
+        ),
+      },
+      {
+        id: "health_status",
+        header: "HEALTH",
+        accessorKey: "health_status" as const,
+        cell: (row: Machine) => (
+          <Badge variant={row.health_status === "breakdown" ? "overdue" : row.health_status === "under_maintenance" ? "warning" : "success"} dot className="whitespace-nowrap">
+            {row.health_status === "breakdown" ? "Breakdown" : row.health_status === "under_maintenance" ? "Maintenance" : row.health_status === "spare" ? "Spare" : "Active"}
+          </Badge>
+        ),
+      },
+      {
+        id: "hour_meter",
+        header: "HMR",
+        accessorKey: "hour_meter" as const,
+        cell: (row: Machine) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenHistory(row);
+            }}
+            title="View running history"
+            className="font-mono font-bold text-sky-600 dark:text-sky-400 hover:underline text-xs text-left cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-sky-500 rounded-sm"
+          >
+            {row.hour_meter ?? 0} hrs
+          </button>
+        ),
+      },
+      {
+        id: "worksite",
+        header: "WORKSITE",
+        cell: (row: Machine) => (
+          <span className="text-xs text-[var(--color-ink)]">{row.client?.company_name || "Unassigned"}</span>
+        ),
+      },
+      {
+        id: "supervisor",
+        header: "SITE SUPERVISOR",
+        cell: (row: Machine) => (
+          <PersonnelCell users={row.supervisors} fallbackUser={row.current_supervisor} badgeVariant="teal" />
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: (row: Machine) => (
+          <div className="flex items-center gap-1.5">
+            <Button variant="primary" size="sm" onClick={() => handleOpenLogEntry()} className="h-7 px-2.5 text-[11px] font-semibold whitespace-nowrap">
+              Log Entry
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleOpenHistory(row)} className="h-7 px-2.5 text-[11px] font-semibold whitespace-nowrap">
+              History
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [handleOpenDetail, handleOpenHistory, handleOpenLogEntry]
   );
 
   return (
@@ -1797,13 +1958,15 @@ export function MachineListClient({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <HeaderMoreMenu
-                isAdmin={isAdmin}
-                onOpenImport={() => setImportModalOpen(true)}
-                onExportExcel={() => handleExportExcel(selectedIds)}
-                onExportCSV={() => handleExportCSV(selectedIds)}
-                onExportPDF={() => handleOpenPDFModal(selectedIds)}
-              />
+              {canExport && (
+                <HeaderMoreMenu
+                  canImport={canImport}
+                  onOpenImport={() => setImportModalOpen(true)}
+                  onExportExcel={() => handleExportExcel(selectedIds)}
+                  onExportCSV={() => handleExportCSV(selectedIds)}
+                  onExportPDF={() => handleOpenPDFModal(selectedIds)}
+                />
+              )}
 
               {canCreateMachine && (
                 <Button
@@ -1824,21 +1987,24 @@ export function MachineListClient({
         }
       />
 
-      {/* Interactive KPI Cards Row */}
-      <MachineKPIStrip
-        stats={statsSummary}
-        currentStatus={currentStatus}
-        healthStatusFilter={healthStatusFilter}
-        userRole={userRole}
-        onSelectStatus={(status) => updateFilters({ status, page: 1 })}
-        onToggleBreakdown={() => {
-          const next = healthStatusFilter === "breakdown" ? "all" : "breakdown";
-          setHealthStatusFilter(next);
-          updateFilters({ health_status: next, page: 1 });
-        }}
-      />
+      {/* Interactive KPI Cards Row — fleet-only, never rendered in the operator assigned view. */}
+      {!isOperatorView && (
+        <MachineKPIStrip
+          stats={statsSummary}
+          currentStatus={currentStatus}
+          healthStatusFilter={healthStatusFilter}
+          userRole={userRole}
+          onSelectStatus={(status) => updateFilters({ status, page: 1 })}
+          onToggleBreakdown={() => {
+            const next = healthStatusFilter === "breakdown" ? "all" : "breakdown";
+            setHealthStatusFilter(next);
+            updateFilters({ health_status: next, page: 1 });
+          }}
+        />
+      )}
 
-      {/* Search Bar & Filter Toolbar */}
+      {/* Search Bar & Filter Toolbar — fleet-only */}
+      {!isOperatorView && (
       <FilterToolbar
         searchQuery={localSearchTerm}
         onSearchChange={handleSearchChange}
@@ -1894,7 +2060,8 @@ export function MachineListClient({
               />
             </div>
 
-            {/* 4. Supervisor Selector */}
+            {/* 4. Supervisor Selector — manager tier only (supervisors are self-scoped) */}
+            {canFilterBySupervisor && (
             <div className="w-full min-w-0" onMouseEnter={loadSupervisors} onFocus={loadSupervisors}>
               <CustomFilterSelector
                 label="Supervisor"
@@ -1909,6 +2076,7 @@ export function MachineListClient({
                 searchable
               />
             </div>
+            )}
 
             {/* 5. Sort By Selector */}
             <div className="w-full min-w-0">
@@ -2053,6 +2221,7 @@ export function MachineListClient({
           )}
         </div>
       </FilterToolbar>
+      )}
 
       {/* Search & Filter Results Count Bar for Mobile Cards View */}
       {effectiveView === "cards" && (
@@ -2088,13 +2257,13 @@ export function MachineListClient({
         /* Table Only View: mounts solely EnterpriseTable (Cards are completely unmounted) */
         <div className="w-full">
               <EnterpriseTable
-                columns={tableColumns}
+                columns={isOperatorView ? operatorTableColumns : tableColumns}
                 data={activeMachines}
                 loading={isPending || isSearchLoading}
-                selectable={true}
+                selectable={canExport && !isOperatorView}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
-                bulkActions={tableBulkActions}
+                bulkActions={canExport ? tableBulkActions : undefined}
                 toolbarLeft={
                   <div className="flex items-center gap-2 text-xs text-[var(--color-mute)]">
                     <span>
@@ -2197,19 +2366,25 @@ export function MachineListClient({
                         machine={m}
                         isAdmin={isAdmin}
                         isSupervisor={isSupervisor}
+                        isOperatorView={isOperatorView}
+                        canAssignSupervisor={canAssignSupervisor}
+                        canAssignOperator={canAssignOperator}
+                        canAssignClient={canAssignClient}
+                        canViewAudit={canViewAudit}
                         searchTerm={localSearchTerm}
-                        onEditMachine={handleOpenEditMachine}
-                        onAssignSupervisor={handleOpenAssignSupervisor}
-                        onAssignOperator={handleOpenAssignOperator}
-                        onEditPersonnel={handleOpenAssignOperator}
-                        onEditClient={handleOpenEditClient}
-                        onViewAudit={handleViewAudit}
+                        onEditMachine={canEdit ? handleOpenEditMachine : undefined}
+                        onAssignSupervisor={canAssignSupervisor ? handleOpenAssignSupervisor : undefined}
+                        onAssignOperator={canAssignOperator ? handleOpenAssignOperator : undefined}
+                        onEditPersonnel={canAssignOperator ? handleOpenAssignOperator : undefined}
+                        onEditClient={canAssignClient ? handleOpenEditClient : undefined}
+                        onViewAudit={canViewAudit ? handleViewAudit : undefined}
                         onViewLogs={handleViewLogs}
-                        onDelete={handleOpenDelete}
-                        onEdit={handleOpenEditMachine}
-                        onViewAssignments={handleOpenAssignments}
+                        onDelete={canDelete ? handleOpenDelete : undefined}
+                        onEdit={canEdit ? handleOpenEditMachine : undefined}
+                        onViewAssignments={canAssignOperator ? handleOpenAssignments : undefined}
                         onViewHistory={handleOpenHistory}
                         onViewDetails={handleOpenDetail}
+                        onLogEntry={isOperatorView ? handleOpenLogEntry : undefined}
                       />
                     ))}
                   </AnimatePresence>

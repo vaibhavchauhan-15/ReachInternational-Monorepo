@@ -12,6 +12,9 @@ export interface PageCustomAction {
 }
 
 export interface PageActions {
+  /** Custom Page Title override for mobile header */
+  pageTitle?: string;
+
   /** Primary Add (+) action */
   onAdd?: () => void | Promise<void>;
   addLabel?: string;

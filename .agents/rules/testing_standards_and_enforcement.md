@@ -9,7 +9,7 @@
 
 The single source of truth for all monorepo testing, verification, accessibility, security negative testing, and test reporting is:
 
-**[`rules/testing/`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/README.md)**
+**[`rules/testing/`](../../rules/testing/README.md)**
 
 ```text
 rules/testing/
@@ -24,7 +24,7 @@ rules/testing/
 ├── 07-accessibility-testing.md         ← WCAG 2.2 AA, keyboard, screen readers, ARIA
 ├── 08-security-testing.md              ← ASVS, negative authorization, RLS & secrets
 ├── 09-performance-testing.md           ← Web Vitals, bundles, query p95 & Hermes
-├── 10-native-mobile-testing.md         ← Expo SDK 57, iOS/Android, SecureStore & Touch
+├── 10-native-mobile-testing.md         ← Expo SDK 58, iOS/Android, SecureStore & Touch
 ├── 11-marketing-seo-testing.md         ← Public marketing SEO, Sitemap & Robots
 ├── 12-marketing-ai-crawler-llm.md      ← AI crawler policies & LLM discoverability
 ├── 13-regression-release-testing.md    ← Level 3 release acceptance battery
@@ -38,10 +38,10 @@ rules/testing/
 For EVERY task involving code, styling, API, database, or configuration changes, the AI agent MUST:
 
 1. **Consult `rules/testing/README.md`** before planning or executing code modifications.
-2. **Determine the Testing Level** (Level 1, Level 2, or Level 3) using [`01-test-selection.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/01-test-selection.md).
+2. **Determine the Testing Level** (Level 1, Level 2, or Level 3) using [`01-test-selection.md`](../../rules/testing/01-test-selection.md).
 3. **Execute Relevant Tests** against affected workspace packages after coding.
 4. **Fix Any Regressions** immediately before proceeding.
-5. **Report Test Outcomes** using the mandatory schema from [`14-test-reporting.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/14-test-reporting.md).
+5. **Report Test Outcomes** using the mandatory schema from [`14-test-reporting.md`](../../rules/testing/14-test-reporting.md).
 
 ---
 

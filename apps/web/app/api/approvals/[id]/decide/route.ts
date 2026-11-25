@@ -41,9 +41,13 @@ export async function POST(
     );
 
     if (!result.success) {
-      const status = result.isVersionConflict ? 409 : 400;
+      const status = result.isVersionConflict || result.isAlreadyDecided ? 409 : 400;
       return NextResponse.json(
-        { error: result.error, isVersionConflict: result.isVersionConflict },
+        {
+          error: result.error,
+          isVersionConflict: result.isVersionConflict,
+          isAlreadyDecided: result.isAlreadyDecided,
+        },
         { status, headers: NO_CACHE_HEADERS }
       );
     }

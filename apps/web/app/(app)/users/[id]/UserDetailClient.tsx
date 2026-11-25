@@ -51,6 +51,7 @@ import { Button, EmptyState, useToast, ConfirmationDialog } from "@/components/u
 import { DocumentViewerModal, type ViewerDocument } from "@/components/documents/DocumentViewerModal";
 import { UserEditModal } from "../UserEditModal";
 import { PasswordResetModal } from "../PasswordResetModal";
+import { MobileMachineCard } from "@/components/machines";
 import { AssignPersonnelModal } from "@/components/machines/AssignPersonnelModal";
 import {
   formatDate,
@@ -1605,7 +1606,7 @@ export function UserDetailClient({
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <Link
-                            href={`/machines/${m.id}`}
+                            href={`/machines/${m.machine_id || m.id}`}
                             className="inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-[11px] font-semibold text-[var(--color-link)] transition-colors hover:border-[var(--color-hairline)] hover:bg-[var(--color-canvas-elevated)]"
                           >
                             <span>Inspect</span>
@@ -1619,54 +1620,16 @@ export function UserDetailClient({
               </div>
 
               {/* Tablet & mobile cards */}
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:hidden">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:hidden">
                 {filteredMachines.map((m) => (
-                  <Link
+                  <MobileMachineCard
                     key={m.id}
-                    href={`/machines/${m.id}`}
-                    className="group flex flex-col gap-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 transition-colors hover:border-[var(--color-link)]/40"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-mono text-[11px] font-bold text-[var(--color-ink)]">{m.machine_id}</p>
-                        <p className="truncate text-xs font-semibold text-[var(--color-ink)]">
-                          {m.machine_name}
-                          <span className="font-normal text-[var(--color-mute)]"> · {m.model}</span>
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${
-                          m.status === "active"
-                            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                            : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)]"
-                        }`}
-                      >
-                        {m.status}
-                      </span>
-                    </div>
-
-                    {user.role === "supervisor" && (
-                      <p className="text-[11px] text-[var(--color-mute)]">
-                        Operator:{" "}
-                        <span className="font-semibold text-[var(--color-ink)]">
-                          {m.assigned_operator_name || "Unassigned"}
-                        </span>
-                        {m.assigned_operator_code && (
-                          <span className="ml-1 font-mono text-[10px]">({m.assigned_operator_code})</span>
-                        )}
-                      </p>
-                    )}
-
-                    <div className="mt-auto flex items-center justify-between border-t border-[var(--color-hairline)] pt-2 text-[10.5px] text-[var(--color-mute)]">
-                      <span className="font-mono">
-                        Meter {m.hour_meter != null ? `${Number(m.hour_meter).toLocaleString("en-IN")} h` : "—"}
-                      </span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-link)]">
-                        Inspect
-                        <ArrowUpRight className="h-3 w-3" />
-                      </span>
-                    </div>
-                  </Link>
+                    machine={m}
+                    isAdmin={isSuperAdmin || canManage}
+                    isSupervisor={user.role === "supervisor"}
+                    onAssignOperator={canManage && user.role === "operator" ? () => setIsAssignModalOpen(true) : undefined}
+                    onViewDetails={(item) => router.push(`/machines/${item.machine_id || item.id}`)}
+                  />
                 ))}
               </div>
             </>

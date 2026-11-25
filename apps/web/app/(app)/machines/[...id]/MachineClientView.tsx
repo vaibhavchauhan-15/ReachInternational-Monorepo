@@ -28,16 +28,8 @@ import {
   ExternalLink,
   Check,
   Copy,
-  ChevronDown,
-  Wrench,
-  Shield,
-  Building2,
-  Phone,
-  Mail,
-  Clock,
-  Users,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Badge,
   Button,
@@ -48,20 +40,41 @@ import {
   useToast,
   ConfirmationDialog,
   type ClientSelectItem,
-  KPICard,
-  KPIGrid,
 } from "@/components/ui";
+import { useRegisterPageActions } from "@/components/layout/PageActionContext";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User } from "@reachinternational/types";
+import {
+  MACHINE_CAPABILITIES,
+  hasMachineCapability,
+  isOperatorMachineView,
+  type MachineCapability,
+} from "@reachinternational/permissions";
 import { deleteMachine, getMachinePersonnelFreshAction } from "@/app/actions/machines";
 import { formatDate } from "@reachinternational/utils";
-import {
-  MachineInfoModal,
-  MachineSupervisorModal,
-  MachineOperatorModal,
-  MachinePersonnelModal,
-  MachineClientModal,
-} from "@/components/machines/MachineEditModals";
+import dynamic from "next/dynamic";
+
+// Detail modals are only downloaded when the capability exists AND the modal opens.
+const MachineInfoModal = dynamic(
+  () => import("@/components/machines/MachineEditModals").then((m) => m.MachineInfoModal),
+  { ssr: false }
+);
+const MachineSupervisorModal = dynamic(
+  () => import("@/components/machines/MachineEditModals").then((m) => m.MachineSupervisorModal),
+  { ssr: false }
+);
+const MachineOperatorModal = dynamic(
+  () => import("@/components/machines/MachineEditModals").then((m) => m.MachineOperatorModal),
+  { ssr: false }
+);
+const MachinePersonnelModal = dynamic(
+  () => import("@/components/machines/MachineEditModals").then((m) => m.MachinePersonnelModal),
+  { ssr: false }
+);
+const MachineClientModal = dynamic(
+  () => import("@/components/machines/MachineEditModals").then((m) => m.MachineClientModal),
+  { ssr: false }
+);
 
 // Heavy tabs — lazy loaded on demand
 const HMRTab = lazy(() => import("./tabs/HMRTab"));
@@ -81,10 +94,11 @@ interface MachineClientViewProps {
   supervisors?: User[];
   operators?: User[];
   clients?: ClientSelectItem[];
-  isAdmin: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   canAssignOperator?: boolean;
+  /** Server-computed capability set (single source of truth). */
+  capabilities?: readonly MachineCapability[];
   isAssignedEngineer: boolean;
   currentUserId: string;
   userRole?: string;
@@ -123,145 +137,6 @@ function AuditSkeleton() {
   );
 }
 
-/**
- * Mobile-optimized separate edit menu for the sticky Hero banner
- */
-function MachineHeroEditMenu({
-  onEditInfo,
-  onAssignSupervisor,
-  onAssignOperator,
-  onEditPersonnel,
-  onEditClient,
-  canEditSupervisor = true,
-  canEditOperator = true,
-}: {
-  onEditInfo: () => void;
-  onAssignSupervisor?: () => void;
-  onAssignOperator?: () => void;
-  onEditPersonnel?: () => void;
-  onEditClient: () => void;
-  canEditSupervisor?: boolean;
-  canEditOperator?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-    };
-  }, [open]);
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <Button
-        variant="secondary"
-        size="sm"
-        icon={<AnimatedEdit size={14} className="text-[var(--color-ink)]" />}
-        onClick={() => setOpen((prev) => !prev)}
-        title="Edit Machine Options"
-        aria-label="Edit Machine Options"
-        aria-expanded={open}
-        className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
-      >
-        <span>Edit</span>
-        <ChevronDown size={11} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-      </Button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 4 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute right-0 top-full mt-1.5 z-50 w-56 sm:w-64 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-xl text-xs space-y-1"
-          >
-            {/* 1. Edit Machine Info */}
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onEditInfo();
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
-            >
-              <Wrench size={15} className="text-amber-500 shrink-0" />
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-xs text-[var(--color-ink)]">Edit Machine Info</span>
-                <span className="text-[10px] text-[var(--color-mute)]">Specs, HMR & Health</span>
-              </div>
-            </button>
-
-            {/* 2. Assign Supervisor */}
-            {canEditSupervisor && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  if (onAssignSupervisor) onAssignSupervisor();
-                  else if (onEditPersonnel) onEditPersonnel();
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
-              >
-                <Shield size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                <div className="flex flex-col min-w-0">
-                  <span className="font-semibold text-xs text-[var(--color-ink)]">Assign Supervisor</span>
-                  <span className="text-[10px] text-[var(--color-mute)]">Site & Machinery Oversight</span>
-                </div>
-              </button>
-            )}
-
-            {/* 3. Assign Operator */}
-            {canEditOperator && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  if (onAssignOperator) onAssignOperator();
-                  else if (onEditPersonnel) onEditPersonnel();
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
-              >
-                <Users size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <div className="flex flex-col min-w-0">
-                  <span className="font-semibold text-xs text-[var(--color-ink)]">Assign Operator</span>
-                  <span className="text-[10px] text-[var(--color-mute)]">24h Shift Coverage (S1, S2, S3)</span>
-                </div>
-              </button>
-            )}
-
-            {/* 4. Edit Client Assignment */}
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onEditClient();
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
-            >
-              <Building2 size={15} className="text-sky-500 shrink-0" />
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-xs text-[var(--color-ink)]">Edit Client Assignment</span>
-                <span className="text-[10px] text-[var(--color-mute)]">Client & Rental Status</span>
-              </div>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════
 // MAIN COMPONENT — Single Scrollable Full-Screen Page
 // ═══════════════════════════════════════════════════════
@@ -271,10 +146,10 @@ export function MachineClientView({
   supervisors = [],
   operators = [],
   clients = [],
-  isAdmin,
   canEdit,
   canDelete,
   canAssignOperator,
+  capabilities,
   userRole = "admin",
 }: MachineClientViewProps) {
   const router = useRouter();
@@ -362,26 +237,48 @@ export function MachineClientView({
   const [personnelModalOpen, setPersonnelModalOpen] = useState(false);
   const [clientModalOpen, setClientModalOpen] = useState(false);
 
-  // Global mobile header action listener
+  // Register opened machine ID for mobile top header
+  useRegisterPageActions(
+    useMemo(
+      () => ({
+        pageTitle: machineData.machine_id,
+      }),
+      [machineData.machine_id]
+    )
+  );
+
+  // Global mobile header action listener — each event checks its capability or is not registered.
   useEffect(() => {
-    const handleEditInfo = () => setInfoModalOpen(true);
-    const handleEditSupervisor = () => setSupervisorModalOpen(true);
-    const handleEditOperator = () => setOperatorModalOpen(true);
-    const handleEditPersonnel = () => setOperatorModalOpen(true);
-    const handleEditClient = () => setClientModalOpen(true);
+    const handleEditInfo = () => {
+      if (can(MACHINE_CAPABILITIES.EDIT_SPECS)) setInfoModalOpen(true);
+    };
+    const handleEditSupervisor = () => {
+      if (can(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR)) setSupervisorModalOpen(true);
+    };
+    const handleEditOperator = () => {
+      if (can(MACHINE_CAPABILITIES.ASSIGN_OPERATOR)) setOperatorModalOpen(true);
+    };
+    const handleEditClient = () => {
+      if (can(MACHINE_CAPABILITIES.ASSIGN_CLIENT)) setClientModalOpen(true);
+    };
+    const handleDeleteMachine = () => {
+      if (can(MACHINE_CAPABILITIES.DELETE)) setDeleteConfirmOpen(true);
+    };
 
     window.addEventListener("reach:edit-machine-info", handleEditInfo);
     window.addEventListener("reach:edit-machine-supervisor", handleEditSupervisor);
     window.addEventListener("reach:edit-machine-operator", handleEditOperator);
-    window.addEventListener("reach:edit-machine-personnel", handleEditPersonnel);
+    window.addEventListener("reach:edit-machine-personnel", handleEditOperator);
     window.addEventListener("reach:edit-machine-client", handleEditClient);
+    window.addEventListener("reach:delete-machine", handleDeleteMachine);
 
     return () => {
       window.removeEventListener("reach:edit-machine-info", handleEditInfo);
       window.removeEventListener("reach:edit-machine-supervisor", handleEditSupervisor);
       window.removeEventListener("reach:edit-machine-operator", handleEditOperator);
-      window.removeEventListener("reach:edit-machine-personnel", handleEditPersonnel);
+      window.removeEventListener("reach:edit-machine-personnel", handleEditOperator);
       window.removeEventListener("reach:edit-machine-client", handleEditClient);
+      window.removeEventListener("reach:delete-machine", handleDeleteMachine);
     };
   }, []);
 
@@ -391,10 +288,19 @@ export function MachineClientView({
   const [copiedGstin, setCopiedGstin] = useState(false);
   const [copiedPan, setCopiedPan] = useState(false);
 
-  const isSupervisor = userRole === "supervisor";
-  const allowEdit = canEdit ?? isAdmin;
-  const allowDelete = canDelete ?? isAdmin;
-  const allowPersonnelEdit = allowEdit || isSupervisor || Boolean(canAssignOperator);
+  const can = (capability: string) =>
+    capabilities
+      ? capabilities.includes(capability as MachineCapability)
+      : hasMachineCapability(userRole, capability);
+
+  const allowEdit = canEdit ?? can(MACHINE_CAPABILITIES.EDIT_SPECS);
+  const allowDelete = canDelete ?? can(MACHINE_CAPABILITIES.DELETE);
+  const allowPersonnelEdit = can(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+  const allowSupervisorEdit = can(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+  const allowClientEdit = can(MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+  const allowAuditView = can(MACHINE_CAPABILITIES.AUDIT_VIEW);
+  const canViewRates = can(MACHINE_CAPABILITIES.RENTAL_RATES_VIEW);
+  const isOperatorView = isOperatorMachineView(userRole);
 
   // ─── Derived Data ───
   const machineTitle =
@@ -532,84 +438,22 @@ export function MachineClientView({
       <div className="relative w-full flex flex-col gap-2.5 sm:gap-3">
         {/* HERO MACHINE BANNER */}
         <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4 md:p-5 shadow-2xs transition-all">
-          {/* ── Mobile Layout (≤640px): Standard Mobile Hierarchy ── */}
+          {/* ── Mobile Layout (≤640px): Clean Mobile Hierarchy ── */}
           <div className="flex flex-col gap-2.5 sm:hidden">
-            {/* Row 1: Icon + Title & Machine ID + Right Actions */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <motion.div
-                  whileTap={{ scale: 0.95 }}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-2xs border border-neutral-800"
-                >
-                  <ScissorLiftLogoIcon size={20} className="text-sky-400" />
-                </motion.div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <h1
-                    className="text-[15px] font-extrabold text-[var(--color-ink)] tracking-tight truncate leading-tight"
-                    title={machineTitle}
-                  >
-                    {machineTitle}
-                  </h1>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[11px] font-mono font-semibold text-[var(--color-mute)] truncate">
-                      {machineData.machine_id}
-                    </span>
-                    {machineData.manufacturer && (
-                      <>
-                        <span className="text-[10px] text-[var(--color-mute)]">•</span>
-                        <span className="text-[11px] font-medium text-[var(--color-mute)] truncate">
-                          {machineData.manufacturer}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Separate Edit Menu + Delete on header (Touch-friendly 34-36px hit targets) */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                {allowEdit ? (
-                  <MachineHeroEditMenu
-                    onEditInfo={() => setInfoModalOpen(true)}
-                    onAssignSupervisor={() => setSupervisorModalOpen(true)}
-                    onAssignOperator={() => setOperatorModalOpen(true)}
-                    onEditPersonnel={() => setOperatorModalOpen(true)}
-                    onEditClient={() => setClientModalOpen(true)}
-                    canEditSupervisor={allowEdit}
-                    canEditOperator={allowPersonnelEdit}
-                  />
-                ) : isSupervisor ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    responsive
-                    mobileIconOnly
-                    icon={<AnimatedUserCheck size={14} className="text-teal-600 dark:text-teal-400" />}
-                    onClick={() => setOperatorModalOpen(true)}
-                    title="Assign Operator"
-                    aria-label="Assign Operator"
-                    className="h-8.5 w-8.5 min-h-[34px] min-w-[34px] p-0 flex items-center justify-center rounded-lg"
-                  >
-                    <span>Assign</span>
-                  </Button>
-                ) : null}
-                {allowDelete && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    responsive
-                    mobileIconOnly
-                    icon={<AnimatedTrash size={14} />}
-                    onClick={() => setDeleteConfirmOpen(true)}
-                    disabled={isDeleting}
-                    title="Delete Machine"
-                    aria-label="Delete Machine"
-                    className="h-8.5 w-8.5 min-h-[34px] min-w-[34px] p-0 flex items-center justify-center rounded-lg"
-                  >
-                    Delete
-                  </Button>
-                )}
-              </div>
+            {/* Row 1: Icon + Title */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <motion.div
+                whileTap={{ scale: 0.95 }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-2xs border border-neutral-800"
+              >
+                <ScissorLiftLogoIcon size={20} className="text-sky-400" />
+              </motion.div>
+              <h1
+                className="text-[15px] font-extrabold text-[var(--color-ink)] tracking-tight truncate leading-tight flex-1"
+                title={machineTitle}
+              >
+                {machineTitle}
+              </h1>
             </div>
 
             {/* Row 2: Status Badges (Full width, side-by-side, no cramped wrapping) */}
@@ -721,27 +565,8 @@ export function MachineClientView({
               </div>
             </div>
 
-            {/* Right: Separate Edit Menu + Delete on header (Optimized for Desktop) */}
+            {/* Right: Actions for Desktop */}
             <div className="flex items-center gap-2 shrink-0">
-              {allowEdit ? (
-                <MachineHeroEditMenu
-                  onEditInfo={() => setInfoModalOpen(true)}
-                  onEditPersonnel={() => setPersonnelModalOpen(true)}
-                  onEditClient={() => setClientModalOpen(true)}
-                />
-              ) : isSupervisor ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<AnimatedUserCheck size={14} className="text-teal-600 dark:text-teal-400" />}
-                  onClick={() => setPersonnelModalOpen(true)}
-                  title="Assign Machine Operator"
-                  aria-label="Assign Machine Operator"
-                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
-                >
-                  <span>Assign Operator</span>
-                </Button>
-              ) : null}
               {allowDelete && (
                 <Button
                   variant="destructive"
@@ -753,8 +578,9 @@ export function MachineClientView({
                   disabled={isDeleting}
                   title="Delete Machine"
                   aria-label="Delete Machine"
+                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
                 >
-                  Delete
+                  <span>Delete Machine</span>
                 </Button>
               )}
             </div>
@@ -767,7 +593,7 @@ export function MachineClientView({
             items={[
               { id: "overview", label: "Basic Info" },
               { id: "running_hours", label: "HMR" },
-              ...(userRole !== "operator" ? [{ id: "audit_trail" as const, label: "Audit" }] : []),
+              ...(allowAuditView ? [{ id: "audit_trail" as const, label: "Audit" }] : []),
             ]}
             value={activeTab}
             onChange={setActiveTab}
@@ -779,44 +605,6 @@ export function MachineClientView({
       {/* ═══════════ TAB 1: BASIC INFO & CLIENT (ALL LIGHT DATA ON SAME SCREEN) ═══════════ */}
       {activeTab === "overview" && (
         <div className="flex flex-col gap-4 sm:gap-5">
-          {/* Executive Machine KPIs */}
-          <KPIGrid columns={4}>
-            <KPICard
-              label="Hours Meter"
-              value={`${machineData.hour_meter ?? 0} hrs`}
-              icon="hours"
-              variant="default"
-              subtitle="Total logged runtime"
-            />
-            <KPICard
-              label="Health Status"
-              value={machineData.health_status?.replace(/_/g, " ").toUpperCase() || "ACTIVE"}
-              icon="maintenance"
-              variant={
-                machineData.health_status === "breakdown"
-                  ? "error"
-                  : machineData.health_status === "under_maintenance"
-                  ? "warning"
-                  : "success"
-              }
-              subtitle="Asset equipment condition"
-            />
-            <KPICard
-              label="Rental Status"
-              value={machineData.status?.replace(/_/g, " ").toUpperCase() || "AVAILABLE"}
-              icon="machines"
-              variant={machineData.status === "on_rent" || machineData.status === "rented" ? "info" : "default"}
-              subtitle={hasLinkedClient ? clientCompanyName : "Fleet Inventory"}
-            />
-            <KPICard
-              label="Assigned Crew"
-              value={assignedOperators.length + assignedSupervisors.length}
-              icon="users"
-              variant="purple"
-              subtitle={`${assignedOperators.length} op • ${assignedSupervisors.length} sup`}
-            />
-          </KPIGrid>
-
           {/* ═══════════ SECTION 1: BASIC INFO ═══════════ */}
           <FadeIn delay={0.1}>
         <Card padding="md" className="card-hover-system sm:p-6" data-hover-parent>
@@ -920,34 +708,6 @@ export function MachineClientView({
                 Assigned Shift Personnel
               </h3>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {allowEdit && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<AnimatedShield size={12} className="text-teal-600 dark:text-teal-400" />}
-                  onClick={() => setSupervisorModalOpen(true)}
-                  title="Assign Supervisor"
-                  aria-label="Assign Supervisor"
-                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
-                >
-                  <span>Assign Supervisor</span>
-                </Button>
-              )}
-              {allowPersonnelEdit && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<AnimatedWrench size={12} className="text-amber-600 dark:text-amber-400" />}
-                  onClick={() => setOperatorModalOpen(true)}
-                  title="Assign Operator"
-                  aria-label="Assign Operator"
-                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
-                >
-                  <span>Assign Operator</span>
-                </Button>
-              )}
-            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3.5">
@@ -963,15 +723,15 @@ export function MachineClientView({
                 </div>
                 {allowEdit && (
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
-                    icon={<AnimatedEdit size={11} className="text-teal-600 dark:text-teal-400" />}
+                    icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
                     onClick={() => setSupervisorModalOpen(true)}
-                    title="Assign or edit supervisors for this machine"
-                    aria-label="Assign Supervisor"
-                    className="h-6 px-2 text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 gap-1"
+                    title="Edit Supervisor Assignments"
+                    aria-label="Edit Supervisor Assignments"
+                    className="h-7 px-2.5 text-xs font-semibold gap-1"
                   >
-                    <span>Assign</span>
+                    <span>Edit</span>
                   </Button>
                 )}
               </div>
@@ -998,15 +758,15 @@ export function MachineClientView({
                 </div>
                 {allowPersonnelEdit && (
                   <Button
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
-                    icon={<AnimatedEdit size={11} className="text-amber-600 dark:text-amber-400" />}
+                    icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
                     onClick={() => setOperatorModalOpen(true)}
-                    title="Assign or edit operators for this machine"
-                    aria-label="Assign Operator"
-                    className="h-6 px-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 gap-1"
+                    title="Edit Operator Assignments"
+                    aria-label="Edit Operator Assignments"
+                    className="h-7 px-2.5 text-xs font-semibold gap-1"
                   >
-                    <span>Assign</span>
+                    <span>Edit</span>
                   </Button>
                 )}
               </div>
@@ -1043,17 +803,24 @@ export function MachineClientView({
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors text-xs font-semibold"
+                  className="inline-flex items-center justify-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] text-xs font-semibold transition-colors shadow-2xs"
                   title="Open in Google Maps"
                   aria-label="Map Location"
                 >
                   <MapPin size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span className="inline sm:hidden">Map</span>
                   <span className="hidden sm:inline">Map Location</span>
                 </a>
               )}
               {client?.id && (
-                <Link href="/clients" className="inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline font-medium mr-1">
-                  <span className="hidden sm:inline">Directory</span> <ExternalLink size={12} />
+                <Link
+                  href="/clients"
+                  className="inline-flex items-center justify-center gap-1.5 h-8 px-2.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] text-xs font-semibold transition-colors shadow-2xs"
+                  title="View in Clients Directory"
+                  aria-label="Clients Directory"
+                >
+                  <ExternalLink size={13} className="text-[var(--color-mute)] shrink-0" />
+                  <span>Directory</span>
                 </Link>
               )}
               {allowEdit && (
@@ -1136,12 +903,14 @@ export function MachineClientView({
                     <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental End</span>
                     <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.end_date)}</span>
                   </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Rate</span>
-                    <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
-                      ₹{(activeRental.monthly_rate || activeRental.rental_rate || 0).toLocaleString("en-IN")} / {activeRental.rate_unit || "month"}
-                    </span>
-                  </div>
+                  {canViewRates && (
+                    <div className="col-span-2 sm:col-span-1">
+                      <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Rate</span>
+                      <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
+                        ₹{(activeRental.monthly_rate || activeRental.rental_rate || 0).toLocaleString("en-IN")} / {activeRental.rate_unit || "month"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1186,16 +955,16 @@ export function MachineClientView({
       )}
 
       {/* ═══════════ TAB 3: AUDIT TRAIL (LAZY LOADED ON DEMAND) ═══════════ */}
-      {activeTab === "audit_trail" && (
+      {allowAuditView && activeTab === "audit_trail" && (
         <FadeIn delay={0.1}>
           <Suspense fallback={<AuditSkeleton />}>
-            <AuditTab machineId={machineData.id} isAdmin={isAdmin} machine={machineData} />
+            <AuditTab machineId={machineData.id} isAdmin={allowAuditView} machine={machineData} />
           </Suspense>
         </FadeIn>
       )}
 
-      {/* ═══════════ DEDICATED SEPARATE DIALOGS ═══════════ */}
-      {allowEdit && (
+      {/* ═══════════ DEDICATED SEPARATE DIALOGS (mounted only when open) ═══════════ */}
+      {allowEdit && infoModalOpen && (
         <MachineInfoModal
           isOpen={infoModalOpen}
           onClose={() => setInfoModalOpen(false)}
@@ -1203,7 +972,7 @@ export function MachineClientView({
           onMachineUpdated={handleMachineUpdated}
         />
       )}
-      {allowEdit && (
+      {allowSupervisorEdit && supervisorModalOpen && (
         <MachineSupervisorModal
           isOpen={supervisorModalOpen}
           onClose={() => setSupervisorModalOpen(false)}
@@ -1213,7 +982,7 @@ export function MachineClientView({
           onMachineUpdated={handleMachineUpdated}
         />
       )}
-      {allowPersonnelEdit && (
+      {allowPersonnelEdit && operatorModalOpen && (
         <MachineOperatorModal
           isOpen={operatorModalOpen}
           onClose={() => setOperatorModalOpen(false)}
@@ -1223,7 +992,7 @@ export function MachineClientView({
           onMachineUpdated={handleMachineUpdated}
         />
       )}
-      {allowPersonnelEdit && personnelModalOpen && (
+      {allowSupervisorEdit && personnelModalOpen && (
         <MachinePersonnelModal
           isOpen={personnelModalOpen}
           onClose={() => setPersonnelModalOpen(false)}
@@ -1234,7 +1003,7 @@ export function MachineClientView({
           onMachineUpdated={handleMachineUpdated}
         />
       )}
-      {allowEdit && (
+      {allowClientEdit && clientModalOpen && (
         <MachineClientModal
           isOpen={clientModalOpen}
           onClose={() => setClientModalOpen(false)}
@@ -1311,16 +1080,30 @@ function CopyableInfoCell({ label, value, mono, full, copied, onCopy }: { label:
   );
 }
 
+function getShortShiftLabel(person: PersonnelPick, fallbackIndex: number): string {
+  if (person.shift_code) {
+    const code = person.shift_code.trim();
+    return code.toLowerCase().startsWith("shift") ? code : `Shift ${code}`;
+  }
+  if (person.shift_name) {
+    const cleaned = person.shift_name.replace(/\s*\(.*?\)/g, "").trim();
+    if (cleaned) return cleaned;
+  }
+  return `Shift ${fallbackIndex}`;
+}
+
 function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; shiftIndex: number; color: "teal" | "amber" }) {
   const isTeal = color === "teal";
   const badgeClasses = isTeal
     ? "text-teal-700 dark:text-teal-300 bg-teal-500/10 border-teal-500/25"
     : "text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/25";
 
+  const shiftLabel = getShortShiftLabel(person, shiftIndex);
+
   return (
     <div
       data-hover-parent
-      className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] gap-2.5 transition-colors"
+      className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] gap-2 transition-colors"
     >
       {/* Left side: Name, Shift badge, Shift time */}
       <div className="min-w-0 flex-1">
@@ -1328,16 +1111,12 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
           <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)] truncate max-w-[170px] sm:max-w-none" title={person.full_name}>
             {person.full_name}
           </span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClasses} shrink-0 font-mono`}>
-            {person.shift_name
-              ? person.shift_name
-              : person.shift_code
-              ? `Shift ${person.shift_code}`
-              : `Shift ${shiftIndex}`}
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 leading-none rounded border ${badgeClasses} shrink-0 font-mono`}>
+            {shiftLabel}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-mute)] mt-1">
-          <AnimatedClock size={12} className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-[var(--color-mute)] mt-0.5">
+          <AnimatedClock size={11} className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span className="font-mono text-[var(--color-ink)] font-semibold">
             {person.shift_start_time && person.shift_end_time
               ? `${String(person.shift_start_time).slice(0, 5)} - ${String(person.shift_end_time).slice(0, 5)}`
@@ -1354,7 +1133,7 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
               href={`tel:${person.phone}`}
               title={`Call ${person.full_name} (${person.phone})`}
               aria-label={`Call ${person.full_name}`}
-              className="p-1.5 rounded-md text-[var(--color-mute)] hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+              className="p-1 rounded-md text-[var(--color-mute)] hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
             >
               <AnimatedPhone size={13} className="w-3.5 h-3.5" />
             </a>
@@ -1367,7 +1146,7 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
               href={`mailto:${person.email}`}
               title={`Email ${person.full_name} (${person.email})`}
               aria-label={`Email ${person.full_name}`}
-              className="p-1.5 rounded-md text-[var(--color-mute)] hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+              className="p-1 rounded-md text-[var(--color-mute)] hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
             >
               <AnimatedMail size={13} className="w-3.5 h-3.5" />
             </a>

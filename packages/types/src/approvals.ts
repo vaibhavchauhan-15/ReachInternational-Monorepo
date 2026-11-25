@@ -101,6 +101,8 @@ export interface ApprovalRequestListItem {
   email?: string | null;
   phone?: string | null;
   machine_category?: string | null;
+  supervisor_name?: string | null;
+  supervisor_id?: string | null;
   documents?: AttachedDocumentSummary[];
   bound_request_ids?: string[];
 }
@@ -207,6 +209,29 @@ export interface ShiftConflictPayload {
   adjusted_start_time?: string;
   adjusted_end_time?: string;
   remarks?: string;
+}
+
+export interface ApprovalCursor {
+  created_at: string;
+  id: string;
+}
+
+export interface ApprovalListResponse {
+  items: ApprovalRequestListItem[];
+  next_cursor: ApprovalCursor | null;
+  has_more: boolean;
+  pending_total: number;
+}
+
+export interface ApprovalDecideResult {
+  success: boolean;
+  request_id: string;
+  status: ApprovalStatus;
+  decision: ApprovalDecisionType;
+  version: number;
+  decided: boolean;
+  bound_request_ids?: string[];
+  idempotent?: boolean;
 }
 
 export interface ApprovalApproveAllResult {

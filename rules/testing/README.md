@@ -9,7 +9,7 @@
 
 ## 1. Rule Hierarchy & Monorepo Navigation
 
-Testing standards operate within the two-level repository rule hierarchy defined in [`AGENTS.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/AGENTS.md):
+Testing standards operate within the two-level repository rule hierarchy defined in [`AGENTS.md`](../../AGENTS.md):
 
 ```text
 AGENTS.md                                   ← Global Engineering Rules & Mandatory Testing Invariant
@@ -53,21 +53,21 @@ AGENTS.md                                   ← Global Engineering Rules & Manda
 
 | Document | Primary Domain | Applicability | Key Monorepo Verification Command |
 |---|---|---|---|
-| [**00-testing-policy.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/00-testing-policy.md) | Global Testing Policy | Monorepo-wide | Quality gate lifecycle (Understand → Plan → Test → Report) |
-| [**01-test-selection.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/01-test-selection.md) | Test Selection & Impact | All Tasks | Impact matrix (Level 1, Level 2, Level 3) |
-| [**02-code-quality-types.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/02-code-quality-types.md) | Types & Linting | Monorepo-wide | `pnpm typecheck` & `pnpm lint` |
-| [**03-unit-component-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/03-unit-component-testing.md) | Unit & Components | Packages, Web, Mobile | `pnpm --filter @reachinternational/permissions test` |
-| [**04-integration-api-database.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/04-integration-api-database.md) | API & Database | DAL, Actions, Supabase | `node supabase/verify_seed.mjs` |
-| [**05-web-e2e-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/05-web-e2e-testing.md) | Web End-to-End | `apps/web` | Playwright journey verification |
-| [**06-ui-ux-responsive-visual.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/06-ui-ux-responsive-visual.md) | UI/UX & Responsive | Web, Mobile | 3-tier viewport audit & token checks |
-| [**07-accessibility-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/07-accessibility-testing.md) | Accessibility | Web, Mobile | WCAG 2.2 AA audit (`axe-core`, keyboard) |
-| [**08-security-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/08-security-testing.md) | Security & RBAC | Server Actions, RLS | Negative authorization tests & `pnpm audit` |
-| [**09-performance-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/09-performance-testing.md) | Performance | Web, Database, Mobile | Web Vitals (LCP/INP/CLS) & Query p95 |
-| [**10-native-mobile-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/10-native-mobile-testing.md) | Native Mobile | `apps/mobile` | `node apps/mobile/test/run-tests.mjs` |
-| [**11-marketing-seo-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/11-marketing-seo-testing.md) | Public SEO | Public Marketing Only | Sitemap, Robots, Metadata & JSON-LD validation |
-| [**12-marketing-ai-crawler-llm.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/12-marketing-ai-crawler-llm.md) | AI Crawler & LLM | Public Marketing Only | AI crawler rules, SSR extraction, zero private leaks |
-| [**13-regression-release-testing.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/13-regression-release-testing.md) | Regression & Release | Full Monorepo | `pnpm build` & parity verification |
-| [**14-test-reporting.md**](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/14-test-reporting.md) | Test Reporting Format | All AI Tasks | Mandatory report schema (PASS / FAIL / BLOCKED) |
+| [**00-testing-policy.md**](./00-testing-policy.md) | Global Testing Policy | Monorepo-wide | Quality gate lifecycle (Understand → Plan → Test → Report) |
+| [**01-test-selection.md**](./01-test-selection.md) | Test Selection & Impact | All Tasks | Impact matrix (Level 1, Level 2, Level 3) |
+| [**02-code-quality-types.md**](./02-code-quality-types.md) | Types & Linting | Monorepo-wide | `pnpm typecheck` & `pnpm lint` |
+| [**03-unit-component-testing.md**](./03-unit-component-testing.md) | Unit & Components | Packages, Web, Mobile | `pnpm --filter @reachinternational/permissions test` |
+| [**04-integration-api-database.md**](./04-integration-api-database.md) | API & Database | DAL, Actions, Supabase | `node supabase/verify_seed.mjs` |
+| [**05-web-e2e-testing.md**](./05-web-e2e-testing.md) | Web End-to-End | `apps/web` | Playwright journey verification |
+| [**06-ui-ux-responsive-visual.md**](./06-ui-ux-responsive-visual.md) | UI/UX & Responsive | Web, Mobile | 3-tier viewport audit & token checks |
+| [**07-accessibility-testing.md**](./07-accessibility-testing.md) | Accessibility | Web, Mobile | WCAG 2.2 AA audit (`axe-core`, keyboard) |
+| [**08-security-testing.md**](./08-security-testing.md) | Security & RBAC | Server Actions, RLS | Negative authorization tests & `pnpm audit` |
+| [**09-performance-testing.md**](./09-performance-testing.md) | Performance | Web, Database, Mobile | Web Vitals (LCP/INP/CLS) & Query p95 |
+| [**10-native-mobile-testing.md**](./10-native-mobile-testing.md) | Native Mobile | `apps/mobile` | `node apps/mobile/test/run-tests.mjs` |
+| [**11-marketing-seo-testing.md**](./11-marketing-seo-testing.md) | Public SEO | Public Marketing Only | Sitemap, Robots, Metadata & JSON-LD validation |
+| [**12-marketing-ai-crawler-llm.md**](./12-marketing-ai-crawler-llm.md) | AI Crawler & LLM | Public Marketing Only | AI crawler rules, SSR extraction, zero private leaks |
+| [**13-regression-release-testing.md**](./13-regression-release-testing.md) | Regression & Release | Full Monorepo | `pnpm build` & parity verification |
+| [**14-test-reporting.md**](./14-test-reporting.md) | Test Reporting Format | All AI Tasks | Mandatory report schema (PASS / FAIL / BLOCKED) |
 
 ---
 

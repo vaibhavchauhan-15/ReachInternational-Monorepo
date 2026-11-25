@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 import {
   useTheme,
   MobileHeader,
@@ -19,13 +19,11 @@ import {
   useToast,
   EmptyState,
   ErrorState,
-  PermissionDeniedView,
   SlowNetworkBanner,
 } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { Pressable } from '../../components/ui/touch/Pressable';
-import { MachineModal } from '../../components/machines/MachineModal';
 import { MachineDetailView } from '../../components/machines/MachineDetailView';
 import {
   MachineImportModal,
@@ -38,16 +36,22 @@ import {
   MachineFilterSidebar,
   type FilterOption,
 } from '../../components/machines';
-
+import { MachineModal } from '../../components/machines/MachineModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
-import { useQueryClient } from '@tanstack/react-query';
 import { useScreenSync } from '../../lib/offline';
 import { haptics } from '../../lib/haptics';
-import { notifyMachineDeleted } from '../../lib/notifications';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { sanitizeDatabaseError } from '@reachinternational/utils';
+import {
+  MACHINE_CAPABILITIES,
+  canAccessMachinesRoute,
+  getMachineScope,
+  getMobileRoleHomeRoute,
+  hasMachineCapability,
+  isOperatorMachineView,
+} from '@reachinternational/permissions';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   Plus,
   RotateCcw,
@@ -98,23 +102,28 @@ const DEFAULT_MACHINE_FILTERS = {
 };
 
 export default function MachinesScreen() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
   const { toast } = useToast();
 
-  const isHr = (role || '').toLowerCase() === 'hr';
-
-  // Role permissions
-  const normalizedRole = (role || '').toLowerCase();
-  const isAdminOrManager =
-    normalizedRole === 'admin' ||
-    normalizedRole === 'super_admin' ||
-    normalizedRole === 'manager';
-  const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
-  const canCreate = isAdminOrManager;
+  // ── Single source of truth: @reachinternational/permissions machine capabilities ──
+  const operatorView = isOperatorMachineView(role);
+  const canAccessRoute = canAccessMachinesRoute(role);
+  const machineScope = getMachineScope(role);
+  const canViewFleet = hasMachineCapability(role, MACHINE_CAPABILITIES.FLEET_VIEW);
+  const canCreate = hasMachineCapability(role, MACHINE_CAPABILITIES.CREATE);
+  const canEditSpecs = hasMachineCapability(role, MACHINE_CAPABILITIES.EDIT_SPECS);
+  const canUpdateStatus = hasMachineCapability(role, MACHINE_CAPABILITIES.STATUS_UPDATE);
+  const canImport = hasMachineCapability(role, MACHINE_CAPABILITIES.IMPORT);
+  const canExport = hasMachineCapability(role, MACHINE_CAPABILITIES.EXPORT);
+  const canDelete = hasMachineCapability(role, MACHINE_CAPABILITIES.DELETE);
+  const canAssignOperator = hasMachineCapability(role, MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+  const canAssignClient = hasMachineCapability(role, MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+  const canOpenMachineEditor = canCreate || canEditSpecs || canUpdateStatus || canAssignClient;
+  const canManagePersonnel = canAssignOperator || hasMachineCapability(role, MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+  // Operator view CTAs: Log Entry + History. Editors get the Assign-Operator CTA instead.
+  const canLogEntry = operatorView;
 
   // Filter & Search states backed by persistent AsyncStorage
   const {
@@ -125,6 +134,7 @@ export default function MachinesScreen() {
     setFilter,
     resetFilters: resetListFilters,
     isDebouncing: isSearching,
+    isHydrated: areFiltersHydrated,
   } = usePersistentListState<{
     rentalFilter: RentalFilterType;
     healthFilter: HealthFilterType;
@@ -169,23 +179,35 @@ export default function MachinesScreen() {
   );
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  // Filter drawer + modals mount on first authorised open (never in the initial tree).
+  const [filterDrawerMounted, setFilterDrawerMounted] = useState(false);
 
-  const handleSearchSubmit = () => {
+  const handleSearchSubmit = useCallback(() => {
     setSearch(search, true);
-  };
+  }, [setSearch, search]);
 
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSearch('', true);
-  };
+  }, [setSearch]);
+
+  const handleOpenFilterPanel = useCallback(
+    (open: boolean | ((prev: boolean) => boolean)) => {
+      const next = typeof open === 'function' ? open(filterPanelOpen) : open;
+      if (next) setFilterDrawerMounted(true);
+      setFilterPanelOpen(next);
+    },
+    [filterPanelOpen]
+  );
 
   // Telemetry & Mutex Refs
   const [isSlowNetwork, setIsSlowNetwork] = useState(false);
   const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDeletingRef = useRef(false);
+  const detailNavigationLockRef = useRef(0);
 
-  // Production Server-State Data Hook (TanStack Query v5 Infinite Scroll + Fast KPI RPC)
+  // Production Server-State Data Hook (role-capability scoped: fleet tier, supervised tier or operator RPC)
   const {
-    machines: queryMachines,
+    machines,
     totalCount,
     kpis,
     isKPIsLoading,
@@ -199,29 +221,23 @@ export default function MachinesScreen() {
     supervisorsList,
     clientsList,
     isLoadingOptions,
+    deleteMachine,
+    patchMachine,
+    removeMachineFromCache,
+    invalidateMachineKPIs,
+    resyncMachines,
   } = useMachinesData({
     userRole: role,
     userId: user?.id,
-    searchQuery: debouncedSearch,
-    rentalFilter,
-    healthFilter,
-    supervisorFilter,
-    clientFilter,
-    sortBy,
-    enabled: Boolean(user?.id) && !isHr,
+    searchQuery: canViewFleet ? debouncedSearch : '',
+    rentalFilter: canViewFleet ? rentalFilter : 'all',
+    healthFilter: canViewFleet ? healthFilter : 'all',
+    supervisorFilter: canViewFleet ? supervisorFilter : 'all',
+    clientFilter: canViewFleet ? clientFilter : 'all',
+    sortBy: canViewFleet ? sortBy : 'machine_id_asc',
+    // Wait for the persisted filter restore so the first request is the final one.
+    enabled: Boolean(user?.id) && canAccessRoute && (operatorView || areFiltersHydrated),
   });
-
-  // Local optimistic machine state for zero-latency deletion and instant updates
-  const [localMachines, setLocalMachines] = useState<any[]>([]);
-
-  // Synchronize local machines with query results
-  useEffect(() => {
-    setLocalMachines(queryMachines);
-  }, [queryMachines]);
-
-  // Use localMachines as the active machine array
-  const machines = localMachines;
-  const setMachines = setLocalMachines;
 
   // Slow network detection timer
   useEffect(() => {
@@ -259,22 +275,37 @@ export default function MachinesScreen() {
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [detailInitialTab, setDetailInitialTab] = useState<'overview' | 'running_hours' | 'audit_trail'>('overview');
 
-  // Action Modals
+  // Action Modals — each one mounts lazily on first authorised use.
   const [machineModalOpen, setMachineModalOpen] = useState(false);
+  const [machineModalMounted, setMachineModalMounted] = useState(false);
   const [machineToEdit, setMachineToEdit] = useState<any | null>(null);
-  const [deleteMachine, setDeleteMachine] = useState<any | null>(null);
+  const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
+  const [deleteMachineTarget, setDeleteMachineTarget] = useState<any | null>(null);
+  const [deleteDialogMounted, setDeleteDialogMounted] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importModalMounted, setImportModalMounted] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportModalMounted, setExportModalMounted] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoryModalMounted, setCategoryModalMounted] = useState(false);
   const [meterMachine, setMeterMachine] = useState<any | null>(null);
+
+  const anyOverlayOpen =
+    filterPanelOpen ||
+    machineModalOpen ||
+    Boolean(deleteMachineTarget) ||
+    importModalOpen ||
+    exportModalOpen ||
+    categoryModalOpen ||
+    Boolean(meterMachine);
 
   // Dynamic Supervisor Options for Filter Sidebar
   const supervisorFilterOptions = useMemo<FilterOption[]>(() => {
     const map = new Map<string, string>();
-    supervisorsList.forEach((s) => {
+    supervisorsList.forEach((s: any) => {
       if (s.id && s.full_name) map.set(s.id, s.full_name);
     });
-    machines.forEach((m) => {
+    machines.forEach((m: any) => {
       if (m.current_supervisor?.id && m.current_supervisor?.full_name) {
         map.set(m.current_supervisor.id, m.current_supervisor.full_name);
       }
@@ -283,17 +314,20 @@ export default function MachinesScreen() {
       id,
       label: name,
     }));
+    // Supervisors are pinned to their supervised scope server-side, so a supervisor
+    // picker would be a no-op control. Only the full-fleet tier gets the filter.
+    if (machineScope !== 'all') return [{ id: 'all', label: 'All Supervisors' }];
     return [{ id: 'all', label: 'All Supervisors' }, ...items];
-  }, [supervisorsList, machines]);
+  }, [supervisorsList, machines, machineScope]);
 
   // Dynamic Client Options for Filter Sidebar
   const clientFilterOptions = useMemo<FilterOption[]>(() => {
     const map = new Map<string, string>();
-    clientsList.forEach((c) => {
+    clientsList.forEach((c: any) => {
       const name = c.company_name || c.code;
       if (c.id && name) map.set(c.id, name);
     });
-    machines.forEach((m) => {
+    machines.forEach((m: any) => {
       if (m.client_id && m.client?.company_name) {
         map.set(m.client_id, m.client.company_name);
       }
@@ -306,8 +340,9 @@ export default function MachinesScreen() {
     return [{ id: 'all', label: 'All Clients' }, ...items];
   }, [clientsList, machines]);
 
-  // Active filter count
+  // Active filter count (fleet-tier roles only)
   const activeFilterCount = useMemo(() => {
+    if (!canViewFleet) return 0;
     let count = 0;
     if (rentalFilter !== 'all') count++;
     if (healthFilter !== 'all') count++;
@@ -316,40 +351,51 @@ export default function MachinesScreen() {
     if (debouncedSearch.trim() !== '') count++;
     if (sortBy !== 'machine_id_asc') count++;
     return count;
-  }, [rentalFilter, healthFilter, clientFilter, supervisorFilter, debouncedSearch, sortBy]);
+  }, [canViewFleet, rentalFilter, healthFilter, clientFilter, supervisorFilter, debouncedSearch, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
     resetListFilters();
   }, [resetListFilters]);
 
-  // Hardware Back Button handling on Android
+  // Hardware Back Button handling on Android (yields to any open overlay)
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (Platform.OS !== 'android' || !selectedMachine) return;
     const onBackPress = () => {
-      if (selectedMachine) {
-        setSelectedMachine(null);
-        return true;
-      }
-      return false;
+      // Overlays own the back gesture while open (drawer, modals, sheets, dialogs)
+      if (anyOverlayOpen) return false;
+      setSelectedMachine(null);
+      setDetailInitialTab('overview');
+      return true;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => backHandler.remove();
-  }, [selectedMachine]);
+  }, [selectedMachine, anyOverlayOpen]);
 
-  // Deep Link Parameter resolution with Role-Based Scoping
+  // Deep Link Parameter resolution with role-scoped lookups
   const handledDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     const targetId = params.id || params.machineId;
     if (!targetId || handledDeepLinkRef.current === targetId) return;
+    if (isLoading) return;
 
-    const found = machines.find((m) => m.id === targetId || m.machine_id === targetId);
+    // 1. Already-loaded list (operator list is complete; fleet list is authoritative for loaded pages)
+    const found = machines.find((m: any) => m.id === targetId || m.machine_id === targetId);
     if (found) {
       handledDeepLinkRef.current = targetId;
       setSelectedMachine(found);
       return;
     }
+
+    // 2. Operator: the assigned-machine RPC result is complete, so a miss is an access denial
+    if (operatorView) {
+      handledDeepLinkRef.current = targetId;
+      toast('warning', 'Access Restricted', 'This machine is not assigned to your account.');
+      return;
+    }
+
+    if (!canAccessRoute || machineScope === 'none') return;
 
     let isCancelled = false;
     (async () => {
@@ -359,23 +405,25 @@ export default function MachinesScreen() {
           .select(MACHINE_SELECT_COLUMNS)
           .or(`id.eq.${targetId},machine_id.eq.${targetId}`);
 
-        if (normalizedRole === 'operator' && user?.id) {
-          const { data: omaList } = await supabase
-            .from('operator_machine_assignments')
-            .select('machine_id')
-            .eq('operator_id', user.id)
-            .eq('is_active', true);
+        // Supervised tier: RLS is authoritative; this keeps the plan narrow and the
+        // deep link denied even if a policy regresses.
+        if (machineScope === 'supervised' && user?.id) {
+          const { data: clientSupervisors } = await supabase
+            .from('client_supervisors')
+            .select('client_id')
+            .eq('supervisor_id', user.id);
 
-          const assignedMachineIds = (omaList || []).map((r: any) => r.machine_id).filter(Boolean);
-          if (assignedMachineIds.length > 0) {
+          const supervisedClientIds = (clientSupervisors || [])
+            .map((cs: any) => cs.client_id)
+            .filter(Boolean);
+
+          if (supervisedClientIds.length > 0) {
             query = query.or(
-              `current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}},id.in.(${assignedMachineIds.join(',')})`
+              `current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}},client_id.in.(${supervisedClientIds.join(',')})`
             );
           } else {
-            query = query.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+            query = query.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
           }
-        } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && user?.id) {
-          query = query.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
         }
 
         const { data, error } = await query.maybeSingle();
@@ -388,8 +436,9 @@ export default function MachinesScreen() {
             supervisors: data.current_supervisor ? [data.current_supervisor] : [],
             operators: data.current_operator ? [data.current_operator] : [],
           });
-        } else if (!error && user?.id) {
-          toast('warning', 'Access Restricted', 'Machine is not assigned to your account or does not exist.');
+        } else if (!error) {
+          handledDeepLinkRef.current = targetId;
+          toast('warning', 'Access Restricted', 'Machine is not within your authorized scope or does not exist.');
         }
       } catch {
         // non-blocking
@@ -399,21 +448,10 @@ export default function MachinesScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [params.id, params.machineId, machines, normalizedRole, user?.id, toast]);
+  }, [params.id, params.machineId, machines, isLoading, operatorView, canAccessRoute, machineScope, user?.id, toast]);
 
-  // Header Actions
+  // Header Actions — every entry is capability-gated (not mounted when unauthorized)
   const headerActions = useMemo((): HeaderActionItem[] => {
-    if (normalizedRole === 'operator') {
-      return [
-        {
-          id: 'refresh-assigned',
-          label: 'Refresh Machine',
-          icon: <RefreshCw size={16} color={theme.colors.ink} />,
-          onPress: () => fetchMachines(),
-        },
-      ];
-    }
-
     const list: HeaderActionItem[] = [];
 
     if (canCreate) {
@@ -423,79 +461,137 @@ export default function MachinesScreen() {
         icon: <Plus size={16} color={theme.colors.ink} />,
         onPress: () => {
           setMachineToEdit(null);
+          setEditSection('all');
+          setMachineModalMounted(true);
           setMachineModalOpen(true);
         },
       });
+    }
 
+    if (canEditSpecs) {
       list.push({
         id: 'manage-categories',
         label: 'Manage Categories',
         icon: <FolderTree size={16} color={theme.colors.ink} />,
-        onPress: () => setCategoryModalOpen(true),
+        onPress: () => {
+          setCategoryModalMounted(true);
+          setCategoryModalOpen(true);
+        },
       });
     }
 
     list.push({
       id: 'refresh-fleet',
-      label: 'Refresh Fleet',
+      label: operatorView ? 'Refresh Machine' : 'Refresh Fleet',
       icon: <RefreshCw size={16} color={theme.colors.ink} />,
       onPress: () => fetchMachines(),
     });
 
-    list.push({
-      id: 'export-fleet',
-      label: 'Export Fleet Directory',
-      icon: <Printer size={16} color={theme.colors.ink} />,
-      onPress: () => setExportModalOpen(true),
-    });
+    if (canExport) {
+      list.push({
+        id: 'export-fleet',
+        label: 'Export Fleet Directory',
+        icon: <Printer size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setExportModalMounted(true);
+          setExportModalOpen(true);
+        },
+      });
+    }
 
-    list.push({
-      id: 'import-excel',
-      label: 'Bulk Excel Import Guide',
-      icon: <FileSpreadsheet size={16} color={theme.colors.ink} />,
-      onPress: () => setImportModalOpen(true),
-    });
+    if (canImport) {
+      list.push({
+        id: 'import-excel',
+        label: 'Bulk Excel Import Guide',
+        icon: <FileSpreadsheet size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setImportModalMounted(true);
+          setImportModalOpen(true);
+        },
+      });
+    }
 
-    list.push({
-      id: 'reset-filters',
-      label: 'Reset Active Filters',
-      icon: <RotateCcw size={16} color={theme.colors.ink} />,
-      onPress: () => handleResetAllFilters(),
-    });
+    if (canViewFleet) {
+      list.push({
+        id: 'reset-filters',
+        label: 'Reset Active Filters',
+        icon: <RotateCcw size={16} color={theme.colors.ink} />,
+        onPress: () => handleResetAllFilters(),
+      });
+    }
 
     return list;
-  }, [canCreate, theme.colors.ink, handleResetAllFilters, fetchMachines, normalizedRole]);
+  }, [
+    canCreate,
+    canEditSpecs,
+    canExport,
+    canImport,
+    canViewFleet,
+    operatorView,
+    theme.colors.ink,
+    handleResetAllFilters,
+    fetchMachines,
+  ]);
 
-  // Infinite Scroll Trigger
+  // Infinite Scroll Trigger (fleet/supervised tiers only)
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage && !isLoading) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, isLoading, fetchNextPage]);
 
+  const openDetail = useCallback((m: any, tab: 'overview' | 'running_hours' = 'overview') => {
+    // Debounce duplicate taps / double navigation
+    const now = Date.now();
+    if (now - detailNavigationLockRef.current < 350) return;
+    detailNavigationLockRef.current = now;
+    haptics.select();
+    setSelectedMachine(m);
+    setDetailInitialTab(tab);
+  }, []);
+
   // Memoized Machine Action Handlers to prevent card re-renders
-  const handleViewDetails = useCallback((m: any) => {
-    setSelectedMachine(m);
-    setDetailInitialTab('overview');
-  }, []);
+  const handleViewDetails = useCallback((m: any) => openDetail(m, 'overview'), [openDetail]);
+  const handleViewHistory = useCallback((m: any) => openDetail(m, 'running_hours'), [openDetail]);
 
-  const handleViewHistory = useCallback((m: any) => {
-    setSelectedMachine(m);
-    setDetailInitialTab('running_hours');
-  }, []);
+  const handleEdit = useCallback(
+    (m: any) => {
+      if (!canOpenMachineEditor) return;
+      setMachineToEdit(m);
+      setEditSection('all');
+      setMachineModalMounted(true);
+      setMachineModalOpen(true);
+    },
+    [canOpenMachineEditor]
+  );
 
-  const handleEdit = useCallback((m: any) => {
-    setMachineToEdit(m);
-    setMachineModalOpen(true);
-  }, []);
+  const handleDelete = useCallback(
+    (m: any) => {
+      if (!canDelete) return;
+      setDeleteDialogMounted(true);
+      setDeleteMachineTarget(m);
+    },
+    [canDelete]
+  );
 
-  const handleDelete = useCallback((m: any) => {
-    setDeleteMachine(m);
-  }, []);
+  const handleLogMeter = useCallback(
+    (m: any) => {
+      if (!canLogEntry) return;
+      setMeterMachine(m);
+    },
+    [canLogEntry]
+  );
 
-  const handleLogMeter = useCallback((m: any) => {
-    setMeterMachine(m);
-  }, []);
+  const handleAssignOperator = useCallback(
+    (m: any) => {
+      if (!canAssignOperator && !canManagePersonnel) return;
+      setMachineToEdit(m);
+      setEditSection('personnel');
+      setMachineModalMounted(true);
+      setMachineModalOpen(true);
+    },
+    [canAssignOperator, canManagePersonnel]
+  );
 
   // Render machine card in virtualized list
   const renderMachineItem = useCallback(
@@ -503,21 +599,36 @@ export default function MachinesScreen() {
       <View style={styles.cardItemWrapper}>
         <MobileMachineCard
           machine={item}
-          isAdmin={isAdminOrManager}
-          isSupervisor={isSupervisor}
-          searchTerm={debouncedSearch}
+          operatorView={operatorView}
+          canAssignOperator={operatorView ? false : (canAssignOperator || canManagePersonnel)}
+          canLogEntry={canLogEntry}
+          searchTerm={canViewFleet ? debouncedSearch : undefined}
           onViewDetails={handleViewDetails}
           onViewHistory={handleViewHistory}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onLogMeter={handleLogMeter}
+          onAssignOperator={canManagePersonnel ? handleAssignOperator : undefined}
         />
       </View>
     ),
-    [isAdminOrManager, isSupervisor, debouncedSearch, handleViewDetails, handleViewHistory, handleEdit, handleDelete, handleLogMeter]
+    [
+      operatorView,
+      canAssignOperator,
+      canManagePersonnel,
+      canLogEntry,
+      canViewFleet,
+      debouncedSearch,
+      handleViewDetails,
+      handleViewHistory,
+      handleEdit,
+      handleDelete,
+      handleLogMeter,
+      handleAssignOperator,
+    ]
   );
 
-  // Static FlatList Header: Renders at 0ms with instantaneous KPI strip & filter panel
+  // Static FlatList Header: KPI strip + filter panel render only for fleet-capable roles
   const renderListHeader = useCallback(() => {
     return (
       <View style={styles.listHeaderContainer}>
@@ -548,7 +659,9 @@ export default function MachinesScreen() {
               style={[styles.cachedErrorBannerText, { color: isDark ? '#f87171' : '#dc2626' }]}
               numberOfLines={2}
             >
-              Unable to refresh fleet ({fetchError}). Showing cached equipment.
+              {operatorView
+                ? 'Unable to refresh your assigned machine. Showing cached equipment.'
+                : `Unable to refresh fleet (${fetchError}). Showing cached equipment.`}
             </Text>
             <Pressable
               variant="chip"
@@ -571,42 +684,48 @@ export default function MachinesScreen() {
           </View>
         )}
 
-        {/* 4-Card KPI Metric Grid: Renders instantly at 0ms with progressive value skeletons */}
-        <MachineKPIStrip stats={kpis} isLoading={isKPIsLoading} />
+        {/* 4-Card KPI Metric Grid: fleet aggregate counts are never fetched/rendered for operators */}
+        {canViewFleet && kpis && <MachineKPIStrip stats={kpis} isLoading={isKPIsLoading} />}
 
-        {/* Modular Filter & Search Panel */}
-        <MachineFilterPanel
-          search={search}
-          setSearch={setSearch}
-          debouncedSearch={debouncedSearch}
-          handleClearSearch={handleClearSearch}
-          handleSearchSubmit={handleSearchSubmit}
-          isSearching={isSearching}
-          filterPanelOpen={filterPanelOpen}
-          setFilterPanelOpen={setFilterPanelOpen}
-          activeFilterCount={activeFilterCount}
-          handleResetAllFilters={handleResetAllFilters}
-          rentalFilter={rentalFilter}
-          setRentalFilter={setRentalFilter}
-          healthFilter={healthFilter}
-          setHealthFilter={setHealthFilter}
-          supervisorFilter={supervisorFilter}
-          setSupervisorFilter={setSupervisorFilter}
-          clientFilter={clientFilter}
-          setClientFilter={setClientFilter}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          rentalFilterOptions={RENTAL_FILTER_OPTIONS}
-          healthFilterOptions={HEALTH_FILTER_OPTIONS}
-          supervisorFilterOptions={supervisorFilterOptions}
-          clientFilterOptions={clientFilterOptions}
-          sortOptions={SORT_OPTIONS}
-        />
+        {/* Modular Filter & Search Panel (FLEET_VIEW capability only) */}
+        {canViewFleet && (
+          <MachineFilterPanel
+            search={search}
+            setSearch={setSearch}
+            debouncedSearch={debouncedSearch}
+            handleClearSearch={handleClearSearch}
+            handleSearchSubmit={handleSearchSubmit}
+            isSearching={isSearching}
+            filterPanelOpen={filterPanelOpen}
+            setFilterPanelOpen={handleOpenFilterPanel}
+            activeFilterCount={activeFilterCount}
+            handleResetAllFilters={handleResetAllFilters}
+            rentalFilter={rentalFilter}
+            setRentalFilter={setRentalFilter}
+            healthFilter={healthFilter}
+            setHealthFilter={setHealthFilter}
+            supervisorFilter={supervisorFilter}
+            setSupervisorFilter={setSupervisorFilter}
+            clientFilter={clientFilter}
+            setClientFilter={setClientFilter}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            rentalFilterOptions={RENTAL_FILTER_OPTIONS}
+            healthFilterOptions={HEALTH_FILTER_OPTIONS}
+            supervisorFilterOptions={supervisorFilterOptions}
+            clientFilterOptions={clientFilterOptions}
+            sortOptions={SORT_OPTIONS}
+          />
+        )}
 
         {/* Results Count Line */}
         <View style={styles.resultsCountRow}>
           {isLoading && machines.length === 0 ? (
             <Skeleton width={160} height={14} borderRadius={radiusNumeric.sm} style={{ marginVertical: 0 }} />
+          ) : operatorView ? (
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              {machines.length === 1 ? '1 machine assigned to you' : `${machines.length} machines assigned to you`}
+            </Text>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text variant="caption" style={{ color: theme.colors.mute }}>
@@ -641,19 +760,21 @@ export default function MachinesScreen() {
     fetchError,
     machines.length,
     isDark,
+    canViewFleet,
     kpis,
     isKPIsLoading,
     rentalFilter,
     healthFilter,
-    role,
     setRentalFilter,
     setHealthFilter,
     search,
     setSearch,
     debouncedSearch,
     handleClearSearch,
+    handleSearchSubmit,
     isSearching,
     filterPanelOpen,
+    handleOpenFilterPanel,
     activeFilterCount,
     handleResetAllFilters,
     supervisorFilter,
@@ -667,6 +788,7 @@ export default function MachinesScreen() {
     theme.colors.mute,
     theme.colors.ink,
     totalCount,
+    operatorView,
   ]);
 
   // List Empty / Initial Loading Component
@@ -698,7 +820,7 @@ export default function MachinesScreen() {
       );
     }
 
-    if (debouncedSearch.trim()) {
+    if (canViewFleet && debouncedSearch.trim()) {
       return (
         <EmptyState
           variant="no-results"
@@ -710,7 +832,7 @@ export default function MachinesScreen() {
       );
     }
 
-    if (activeFilterCount > 0) {
+    if (canViewFleet && activeFilterCount > 0) {
       return (
         <EmptyState
           variant="filtered"
@@ -722,17 +844,17 @@ export default function MachinesScreen() {
       );
     }
 
-    if (normalizedRole === 'operator') {
+    if (operatorView) {
       return (
         <EmptyState
           variant="empty"
           title="No Assigned Machinery"
-          description=""
+          description="Your supervisor has not assigned a machine to your shift yet."
         />
       );
     }
 
-    if (isSupervisor) {
+    if (machineScope === 'supervised') {
       return (
         <EmptyState
           variant="empty"
@@ -742,18 +864,24 @@ export default function MachinesScreen() {
       );
     }
 
-    return (
-      <EmptyState
-        variant="empty"
-        title="Fleet Directory Empty"
-        description=""
-        actionLabel="+ Add New Machine"
-        onAction={() => {
-          setMachineToEdit(null);
-          setMachineModalOpen(true);
-        }}
-      />
-    );
+    if (canCreate) {
+      return (
+        <EmptyState
+          variant="empty"
+          title="Fleet Directory Empty"
+          description=""
+          actionLabel="+ Add New Machine"
+          onAction={() => {
+            setMachineToEdit(null);
+            setEditSection('all');
+            setMachineModalMounted(true);
+            setMachineModalOpen(true);
+          }}
+        />
+      );
+    }
+
+    return <EmptyState variant="empty" title="Fleet Directory Empty" description="" />;
   }, [
     filterPanelOpen,
     isLoading,
@@ -762,16 +890,18 @@ export default function MachinesScreen() {
     machines.length,
     debouncedSearch,
     activeFilterCount,
-    normalizedRole,
-    isSupervisor,
+    canViewFleet,
+    operatorView,
+    machineScope,
+    canCreate,
     fetchMachines,
     handleResetAllFilters,
     handleClearSearch,
   ]);
 
-  // List Footer: Chunk loading spinner or end-of-list row
+  // List Footer: chunk loading spinner or end-of-list row
   const renderListFooter = useCallback(() => {
-    if (isLoading || machines.length === 0) return null;
+    if (operatorView || isLoading || machines.length === 0) return null;
 
     return (
       <View style={styles.scrollFooterContainer}>
@@ -791,7 +921,7 @@ export default function MachinesScreen() {
         ) : (
           <View style={styles.endOfListRow}>
             <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
-            <Text variant="caption" weight="medium" style={[styles.endOfListText, { color: theme.colors.mute }]}>
+            <Text variant="caption" weight="medium" style={{ color: theme.colors.mute }}>
               All {totalCount} machines loaded
             </Text>
             <View style={[styles.endOfListLine, { backgroundColor: theme.colors.hairline }]} />
@@ -800,6 +930,7 @@ export default function MachinesScreen() {
       </View>
     );
   }, [
+    operatorView,
     isLoading,
     machines.length,
     isFetchingNextPage,
@@ -809,21 +940,9 @@ export default function MachinesScreen() {
     theme.colors.hairline,
   ]);
 
-  if (role && isHr) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-        <MobileHeader
-          title="Fleet Machines"
-          showBack={true}
-          backRoute="/dashboard"
-        />
-        <PermissionDeniedView
-          featureName="Fleet Management"
-          currentRole={role}
-          requiredRoles={['super_admin', 'admin', 'manager', 'supervisor', 'operator']}
-        />
-      </View>
-    );
+  // Route guard: unauthorized roles are redirected (deep links + stale navigation state included)
+  if (role && !canAccessRoute) {
+    return <Redirect href={getMobileRoleHomeRoute(role) as any} />;
   }
 
   return (
@@ -843,32 +962,12 @@ export default function MachinesScreen() {
               setDetailInitialTab('overview');
             }}
             onMachineUpdated={(updatedMachine?: any) => {
-              if (updatedMachine) {
+              if (updatedMachine?.id) {
                 setSelectedMachine((prev: any) => ({ ...prev, ...updatedMachine }));
-                setMachines((prev) =>
-                  prev.map((m) => (m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m))
-                );
-                queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-                  if (old && Array.isArray(old.pages)) {
-                    return {
-                      ...old,
-                      pages: old.pages.map((page: any) => ({
-                        ...page,
-                        machines: page.machines.map((m: any) =>
-                          m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
-                        ),
-                      })),
-                    };
-                  }
-                  if (Array.isArray(old)) {
-                    return old.map((m: any) =>
-                      m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m
-                    );
-                  }
-                  return old;
-                });
+                patchMachine(updatedMachine);
+                invalidateMachineKPIs();
               } else {
-                fetchMachines();
+                resyncMachines();
               }
             }}
             onMachineDeleted={(deletedId?: string) => {
@@ -876,25 +975,10 @@ export default function MachinesScreen() {
               setSelectedMachine(null);
               setDetailInitialTab('overview');
               if (idToRemove) {
-                setMachines((prev) => prev.filter((m) => m.id !== idToRemove));
-                queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-                  if (old && Array.isArray(old.pages)) {
-                    return {
-                      ...old,
-                      pages: old.pages.map((page: any) => ({
-                        ...page,
-                        machines: page.machines.filter((m: any) => m.id !== idToRemove),
-                        totalCount: Math.max(0, (page.totalCount || 0) - 1),
-                      })),
-                    };
-                  }
-                  if (Array.isArray(old)) {
-                    return old.filter((m: any) => m.id !== idToRemove);
-                  }
-                  return old;
-                });
+                removeMachineFromCache(idToRemove);
+                invalidateMachineKPIs();
               } else {
-                fetchMachines();
+                resyncMachines();
               }
             }}
             userRole={role}
@@ -910,7 +994,7 @@ export default function MachinesScreen() {
             actions={headerActions}
           />
 
-          {/* Virtualized Production FlatList with 0ms Static Header & Infinite Scroll */}
+          {/* Virtualized FlatList: 10-row progressive chunks with a static header */}
           <FlatList
             data={isLoading && machines.length === 0 ? [] : machines}
             renderItem={renderMachineItem}
@@ -919,11 +1003,13 @@ export default function MachinesScreen() {
             ListEmptyComponent={renderListEmpty}
             ListFooterComponent={renderListFooter}
             onEndReached={handleEndReached}
-            onEndReachedThreshold={0.4}
-            initialNumToRender={6}
-            maxToRenderPerBatch={8}
-            windowSize={7}
+            onEndReachedThreshold={0.5}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            windowSize={5}
             removeClippedSubviews={Platform.OS === 'android'}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={true}
             indicatorStyle={isDark ? 'white' : 'black'}
@@ -938,151 +1024,90 @@ export default function MachinesScreen() {
         </>
       )}
 
-      {/* Add / Edit Machine Modal */}
-      <MachineModal
-        visible={machineModalOpen}
-        onClose={() => setMachineModalOpen(false)}
-        onSuccess={(savedMachine?: any) => {
-          setMachineModalOpen(false);
-          if (savedMachine) {
-            const isEdit = Boolean(machineToEdit);
-            toast(
-              'success',
-              isEdit ? 'Machine Updated' : 'Machine Added',
-              `Asset ${savedMachine.model || 'record'} (${savedMachine.serial_number || savedMachine.machine_id || ''}) saved successfully.`
-            );
-            if (isEdit) {
-              setMachines((prev) =>
-                prev.map((m) => (m.id === savedMachine.id ? { ...m, ...savedMachine } : m))
+      {/* Add / Edit / Status Machine Modal — mounted on first authorised open only */}
+      {machineModalMounted && canOpenMachineEditor && (
+        <MachineModal
+          visible={machineModalOpen}
+          onClose={() => setMachineModalOpen(false)}
+          initialSection={editSection}
+          onSuccess={(savedMachine?: any) => {
+            setMachineModalOpen(false);
+            if (savedMachine) {
+              const isEdit = Boolean(machineToEdit);
+              toast(
+                'success',
+                isEdit ? 'Machine Updated' : 'Machine Added',
+                `Asset ${savedMachine.model || 'record'} (${savedMachine.serial_number || savedMachine.machine_id || ''}) saved successfully.`
               );
-              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-                if (old && Array.isArray(old.pages)) {
-                  return {
-                    ...old,
-                    pages: old.pages.map((page: any) => ({
-                      ...page,
-                      machines: page.machines.map((m: any) =>
-                        m.id === savedMachine.id ? { ...m, ...savedMachine } : m
-                      ),
-                    })),
-                  };
+              if (isEdit && savedMachine.id) {
+                patchMachine(savedMachine);
+                if (selectedMachine?.id === savedMachine.id) {
+                  setSelectedMachine((prev: any) => ({ ...prev, ...savedMachine }));
                 }
-                if (Array.isArray(old)) {
-                  return old.map((m: any) =>
-                    m.id === savedMachine.id ? { ...m, ...savedMachine } : m
-                  );
-                }
-                return old;
-              });
-              if (selectedMachine?.id === savedMachine.id) {
-                setSelectedMachine((prev: any) => ({ ...prev, ...savedMachine }));
+                invalidateMachineKPIs();
+              } else {
+                resyncMachines();
               }
-            } else {
-              fetchMachines();
             }
-          }
-        }}
-        machineToEdit={machineToEdit}
-        userRole={role}
-      />
+          }}
+          machineToEdit={machineToEdit}
+          userRole={role}
+        />
+      )}
 
-      {/* Delete Machine Dialog with Optimistic UI & Mutex Lock */}
-      <DeleteMachineDialog
-        visible={Boolean(deleteMachine)}
-        machine={deleteMachine}
-        onClose={() => setDeleteMachine(null)}
-        onConfirm={async () => {
-          if (!deleteMachine?.id || isDeletingRef.current) return;
-          isDeletingRef.current = true;
-          const target = deleteMachine;
-          const prevMachines = machines;
+      {/* Delete Machine Dialog with optimistic removal + authoritative rollback */}
+      {deleteDialogMounted && canDelete && (
+        <DeleteMachineDialog
+          visible={Boolean(deleteMachineTarget)}
+          machine={deleteMachineTarget}
+          onClose={() => setDeleteMachineTarget(null)}
+          onConfirm={async () => {
+            const target = deleteMachineTarget;
+            if (!target?.id || isDeletingRef.current) return;
+            isDeletingRef.current = true;
+            setDeleteMachineTarget(null);
 
-          // Optimistically remove immediately from local state and query cache
-          setMachines((prev) => prev.filter((m) => m.id !== target.id));
-          queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-            if (old && Array.isArray(old.pages)) {
-              return {
-                ...old,
-                pages: old.pages.map((page: any) => ({
-                  ...page,
-                  machines: page.machines.filter((m: any) => m.id !== target.id),
-                  totalCount: Math.max(0, page.totalCount - 1),
-                })),
-              };
-            }
-            return prevMachines.filter((m: any) => m.id !== target.id);
-          });
-          setDeleteMachine(null);
-
-          try {
-            const { error } = await supabase.from('machines').delete().eq('id', target.id);
-            if (error) {
-              // Rollback
-              setMachines(prevMachines);
-              queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-                if (old && Array.isArray(old.pages)) {
-                  return {
-                    ...old,
-                    pages: old.pages.map((page: any) => ({
-                      ...page,
-                      machines: prevMachines,
-                      totalCount: prevMachines.length,
-                    })),
-                  };
-                }
-                return prevMachines;
-              });
+            try {
+              await deleteMachine(target);
+              haptics.confirm();
+              toast('success', 'Machine Deleted', `Machine asset ${target.machine_id || 'record'} removed from active fleet.`);
+            } catch (err: any) {
               haptics.reject();
-              toast('error', 'Delete Failed', sanitizeDatabaseError(error, 'Failed to delete machine.').message);
-              return;
+              toast('error', 'Delete Failed', sanitizeDatabaseError(err, 'Failed to delete machine.').message);
+            } finally {
+              isDeletingRef.current = false;
             }
-            haptics.confirm();
-            toast('success', 'Machine Deleted', `Machine asset ${target.machine_id || 'record'} removed from active fleet.`);
-            notifyMachineDeleted(target.machine_id || 'Machine');
-          } catch (err: any) {
-            setMachines(prevMachines);
-            queryClient.setQueriesData({ queryKey: ['machines'] }, (old: any) => {
-              if (old && Array.isArray(old.pages)) {
-                return {
-                  ...old,
-                  pages: old.pages.map((page: any) => ({
-                    ...page,
-                    machines: prevMachines,
-                    totalCount: prevMachines.length,
-                  })),
-                };
-              }
-              return prevMachines;
-            });
-            haptics.reject();
-            toast('error', 'Delete Failed', sanitizeDatabaseError(err, 'Failed to delete machine.').message);
-          } finally {
-            isDeletingRef.current = false;
-          }
-        }}
-      />
+          }}
+        />
+      )}
 
-      {/* Machine Categories Management Modal */}
-      <MachineCategoryModal
-        visible={categoryModalOpen}
-        onClose={() => setCategoryModalOpen(false)}
-      />
+      {/* Machine Categories Management Modal (EDIT_SPECS capability) */}
+      {categoryModalMounted && canEditSpecs && (
+        <MachineCategoryModal
+          visible={categoryModalOpen}
+          onClose={() => setCategoryModalOpen(false)}
+        />
+      )}
 
-      {/* Bulk Excel Import Info Modal */}
-      <MachineImportModal
-        visible={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-      />
+      {/* Bulk Excel Import Info Modal (IMPORT capability) */}
+      {importModalMounted && canImport && (
+        <MachineImportModal
+          visible={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
+        />
+      )}
 
-      {/* Export Fleet Directory Modal (PDF & CSV) */}
-      <MachineExportModal
-        visible={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        machines={machines}
-      />
+      {/* Export Fleet Directory Modal (EXPORT capability, native export libs loaded on demand) */}
+      {exportModalMounted && canExport && (
+        <MachineExportModal
+          visible={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+          machines={machines}
+        />
+      )}
 
-      {/* Log Meter Modal */}
-      {meterMachine && (
+      {/* Log Meter Modal (operator shift entry / authorised editors) */}
+      {meterMachine && canLogEntry && (
         <MeterLogModal
           visible={Boolean(meterMachine)}
           onClose={() => setMeterMachine(null)}
@@ -1092,37 +1117,38 @@ export default function MachinesScreen() {
           serialNumber={meterMachine.serial_number}
           onSubmit={() => {
             setMeterMachine(null);
-            fetchMachines();
-            queryClient.invalidateQueries({ queryKey: ['machines'] });
+            resyncMachines();
           }}
         />
       )}
 
-      {/* Category-Wise Filter Sidebar Drawer */}
-      <MachineFilterSidebar
-        visible={filterPanelOpen}
-        onClose={() => setFilterPanelOpen(false)}
-        activeFilterCount={activeFilterCount}
-        totalFilteredCount={totalCount}
-        totalFleetCount={totalCount}
-        rentalFilter={rentalFilter}
-        setRentalFilter={setRentalFilter}
-        healthFilter={healthFilter}
-        setHealthFilter={setHealthFilter}
-        supervisorFilter={supervisorFilter}
-        setSupervisorFilter={setSupervisorFilter}
-        clientFilter={clientFilter}
-        setClientFilter={setClientFilter}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        rentalFilterOptions={RENTAL_FILTER_OPTIONS}
-        healthFilterOptions={HEALTH_FILTER_OPTIONS}
-        supervisorFilterOptions={supervisorFilterOptions}
-        clientFilterOptions={clientFilterOptions}
-        sortOptions={SORT_OPTIONS}
-        isLoadingOptions={isLoadingOptions}
-        onResetAllFilters={handleResetAllFilters}
-      />
+      {/* Category-Wise Filter Sidebar Drawer (FLEET_VIEW capability, mounted on first open) */}
+      {filterDrawerMounted && canViewFleet && (
+        <MachineFilterSidebar
+          visible={filterPanelOpen}
+          onClose={() => setFilterPanelOpen(false)}
+          activeFilterCount={activeFilterCount}
+          totalFilteredCount={totalCount}
+          totalFleetCount={totalCount}
+          rentalFilter={rentalFilter}
+          setRentalFilter={setRentalFilter}
+          healthFilter={healthFilter}
+          setHealthFilter={setHealthFilter}
+          supervisorFilter={supervisorFilter}
+          setSupervisorFilter={setSupervisorFilter}
+          clientFilter={clientFilter}
+          setClientFilter={setClientFilter}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          rentalFilterOptions={RENTAL_FILTER_OPTIONS}
+          healthFilterOptions={HEALTH_FILTER_OPTIONS}
+          supervisorFilterOptions={supervisorFilterOptions}
+          clientFilterOptions={clientFilterOptions}
+          sortOptions={SORT_OPTIONS}
+          isLoadingOptions={isLoadingOptions}
+          onResetAllFilters={handleResetAllFilters}
+        />
+      )}
     </View>
   );
 }
@@ -1169,8 +1195,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     marginTop: -4,
   },
-  resultsCountText: {
-  },
   cardItemWrapper: {
     marginBottom: spacingNumeric.md,
   },
@@ -1199,8 +1223,6 @@ const styles = StyleSheet.create({
   endOfListLine: {
     flex: 1,
     height: 1,
-  },
-  endOfListText: {
   },
   detailViewWrapper: {
     flex: 1,

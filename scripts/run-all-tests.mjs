@@ -135,6 +135,12 @@ const SUITES = [
     domain: 'Machine/Client Hierarchy & Multi-Site Auto Assignment',
   },
   {
+    name: 'Web Machines RBAC Guard Suite',
+    cmd: 'node',
+    args: ['apps/web/scripts/test-machines-web-rbac.mjs'],
+    domain: 'Capability Matrix, Route/Action 403, UI Mounting & Migration Guards',
+  },
+  {
     name: 'Web Contact & SEO Discoverability Suite',
     cmd: 'node',
     args: ['apps/web/scripts/test-contact-page.mjs'],

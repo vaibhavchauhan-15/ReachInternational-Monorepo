@@ -35,15 +35,33 @@ import {
   DropdownFilterSelector,
   Badge,
 } from '../ui';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import * as Print from 'expo-print';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { OperationLogListSkeleton } from './OperationsSkeleton';
 import { SyncStatusBadge } from '../offline/SyncStatusBadge';
 import { MobileOperatorHistoryCard } from './MobileOperatorHistoryCard';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
+
+/**
+ * Export-only native modules are resolved lazily on first CSV export so browsing the
+ * operations history never registers expo-file-system / expo-sharing native modules.
+ */
+type HistoryExportModules = {
+  Sharing: typeof import('expo-sharing');
+  FileSystem: typeof import('expo-file-system/legacy');
+};
+
+let cachedHistoryExportModules: HistoryExportModules | null = null;
+
+function loadHistoryExportModules(): HistoryExportModules {
+  if (!cachedHistoryExportModules) {
+    cachedHistoryExportModules = {
+      Sharing: require('expo-sharing') as HistoryExportModules['Sharing'],
+      FileSystem: require('expo-file-system/legacy') as HistoryExportModules['FileSystem'],
+    };
+  }
+  return cachedHistoryExportModules;
+}
 import {
   FileSpreadsheet,
   Printer,
@@ -425,6 +443,7 @@ export const MobileOperatorHistoryTab: React.FC<MobileOperatorHistoryTabProps> =
         if (Platform.OS === 'web') {
           downloadFileOnWeb(csvContent, filename, 'text/csv;charset=utf-8;');
         } else {
+          const { Sharing, FileSystem } = loadHistoryExportModules();
           const fileUri = `${FileSystem.documentDirectory}${filename}`;
           await FileSystem.writeAsStringAsync(fileUri, csvContent, {
             encoding: FileSystem.EncodingType.UTF8,

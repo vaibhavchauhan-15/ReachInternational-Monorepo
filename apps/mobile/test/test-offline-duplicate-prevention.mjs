@@ -172,8 +172,16 @@ check('MobileOperatorEntryCard integrates checkDuplicateShiftLog before submissi
   assert(operatorEntrySource.includes('checkDuplicateShiftLog'), 'MobileOperatorEntryCard must call checkDuplicateShiftLog');
   assert(operatorEntrySource.includes('submittingRef.current'), 'MobileOperatorEntryCard must use submittingRef mutex against rapid taps');
   assert(operatorEntrySource.includes('idempotencyKey'), 'MobileOperatorEntryCard must compute deterministic idempotency key');
-  assert(operatorEntrySource.includes('p_assignment_id: entryContext?.assignment_id'), 'MobileOperatorEntryCard must pass assignment_id in rpcParams');
-  assert(operatorEntrySource.includes('assignment_id: entryContext?.assignment_id'), 'MobileOperatorEntryCard must pass assignment_id in logPayload');
+  assert(
+    operatorEntrySource.includes('p_assignment_id: effectiveAssignmentId') &&
+      operatorEntrySource.includes('entryContext?.assignment_id'),
+    'MobileOperatorEntryCard must pass assignment_id in rpcParams'
+  );
+  assert(
+    operatorEntrySource.includes('assignment_id: effectiveAssignmentId') &&
+      operatorEntrySource.includes('entryContext?.assignment_id'),
+    'MobileOperatorEntryCard must pass assignment_id in logPayload'
+  );
   assert(!operatorEntrySource.includes('Alert.alert'), 'MobileOperatorEntryCard must not use raw Alert.alert');
 });
 

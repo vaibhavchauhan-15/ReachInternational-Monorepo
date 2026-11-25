@@ -72,6 +72,13 @@ export const SUITES = [
     description: 'Fleet inventory, category filters, machine detail modals, deletion dialogs',
   },
   {
+    id: 'machines-rbac',
+    file: 'test-machines-rbac.mjs',
+    name: 'Machines RBAC (5 enforcement layers)',
+    category: 'auth',
+    description: 'Shared capability matrix, route redirect, role projection, lazy mounting, live RLS/RPC 42501 checks',
+  },
+  {
     id: 'machine-detail-mobile-opt',
     file: 'test-machine-detail-mobile-opt.mjs',
     name: 'Machine Detail Mobile Optimization',

@@ -156,3 +156,28 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 | **PostgreSQL RLS Policies** | Database Engine | **Authoritative Persistence Enforcement** | Protects data even if server code has a flaw |
 
 **Mandate**: Never rely on frontend route guards or hidden buttons to secure an action. Every mutation MUST be protected by Server Actions and PostgreSQL RLS.
+
+---
+
+## 7. Machines Module Capability Matrix (canonical)
+
+Machine authorization is declared exactly once in `@reachinternational/permissions`
+(`packages/permissions/src/machines.ts`) and consumed by every layer. Never compare role strings
+locally in a Machine module component, Server Action, API route or RPC comment.
+
+| Layer | Enforcement |
+|---|---|
+| `ROLE_PERMISSIONS` / `MACHINE_ROLE_CAPABILITIES` | Role → capability map. `super_admin` inherits every machine capability; `hr`, `sales`, `marketing` inherit none |
+| Route | `canAccessMachinesRoute(role)` → redirect to the role home route (`/machines` deep links included) |
+| Data layer | `hasMachineCapability(role, FLEET_VIEW)` gates the fleet list, KPI RPC and filter-option queries. Operators read `get_operator_assigned_machines()` (slim server projection) and never fetch fleet aggregate, rental-rate or audit data |
+| Server Actions / API | `requireMachineCapability(...)` + `requireMachineRecordAccess(...)` → `403` (`MACHINE_FORBIDDEN`); routes use `requireMachinesPageAccess()` |
+| Database | RLS on `public.machines`, update triggers (`enforce_supervisor_machine_update_restrictions`, `enforce_machine_supervisor_change_role`) and `SECURITY DEFINER` functions raising SQLSTATE `42501` (`get_machines_directory_summary`, `get_operator_assigned_machines`). Migration 233 makes the supervisor SELECT/UPDATE predicate set-based (manager rows skip the helper) |
+
+Confirmed matrix decisions (all five layers): supervisor fleet/KPI/search are **supervised scope only** (client allocation OR direct supervisor assignment, migration 234);
+supervisor may update HMR/health/rental status, client assignment, operators and shifts, view the audit
+tab and export within scope; supervisor may **not** create/delete machines, edit master specs, assign
+supervisors or read commercial rental rates. Operators get the assigned-machine view only.
+
+Regression coverage: `apps/mobile/test/test-machines-rbac.mjs` (live Dev RLS/RPC negative tests per role),
+`apps/web/scripts/test-machines-web-rbac.mjs` (82 static guards over actions/routes/UI/migrations), and
+`packages/permissions/src/machines.test.ts` (36 capability-matrix tests).

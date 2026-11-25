@@ -1,24 +1,20 @@
 "use client";
 
 import React, { useCallback } from "react";
-import dynamic from "next/dynamic";
 import type { User, Machine } from "@/lib/types/database";
 import { OperationsHeader } from "./OperationsHeader";
+import { TodayShiftMonitorTab } from "./TodayShiftMonitorTab";
 
 /**
  * Supervisors, managers, HR and admins land here. Operators are rendered by
- * `OperatorEntryClient` directly from the server page, so the previous
- * `ssr: false` dynamic import of `OperatorDashboard` (dead branch) has been removed —
- * it pulled an unused code-split bundle into this route.
+ * `OperatorEntryClient` directly from the server page.
+ *
+ * `TodayShiftMonitorTab` used to be a `ssr: false` dynamic import, which threw away the
+ * roster that the RSC page had already streamed (`initialRows`) and forced the whole
+ * page body to wait for the client bundle before painting anything. It is now a static
+ * import so the server-rendered roster is the first paint; the heavy modals inside the
+ * tab stay code-split.
  */
-const TodayShiftMonitorTab = dynamic(
-  () =>
-    import("./TodayShiftMonitorTab").then(
-      (mod) => mod.TodayShiftMonitorTab
-    ),
-  { ssr: false }
-);
-
 export interface OperationsClientProps {
   userRole?: string;
   user: User;

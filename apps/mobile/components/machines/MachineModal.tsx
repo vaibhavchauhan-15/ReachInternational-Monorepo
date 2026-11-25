@@ -763,7 +763,11 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
       const numericHmr = parseFloat(hourMeter) || 0;
 
-      const effectiveStatus = selectedClient?.id ? 'rented' : 'available';
+      const effectiveStatus = selectedClient?.id
+        ? 'rented'
+        : machineToEdit?.status === 'inactive'
+        ? 'inactive'
+        : 'available';
       const effectiveClientId = selectedClient?.id || null;
 
       // Date-based roster sync for TODAY (canonical dated RPC — never writes date-less rows)
@@ -1016,7 +1020,11 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   };
 
   const modalTitle = isSupervisor
-    ? `Assign Operator (${machineToEdit?.machine_id || ''})`
+    ? initialSection === 'info'
+      ? `Update Machine Status (${machineToEdit?.machine_id || ''})`
+      : initialSection === 'client'
+      ? `Edit Client Assignment (${machineToEdit?.machine_id || ''})`
+      : `Assign Operator (${machineToEdit?.machine_id || ''})`
     : initialSection === 'info'
     ? `Edit Machine Info (${machineToEdit?.machine_id || ''})`
     : initialSection === 'personnel'
@@ -1171,6 +1179,44 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                 </View>
               </View>
             )}
+
+            {/* SUPERVISOR OPERATIONAL STATUS (HMR + health) — supervisors cannot edit static specs */}
+            {isSupervisor && machineToEdit?.id &&
+              (initialSection === 'all' || initialSection === 'info' || initialSection === 'client') && (
+                <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                  <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
+                    <Text variant="caption" weight="semibold" style={[styles.sectionHeaderTitle, { color: theme.colors.mute }]}>
+                      OPERATIONAL STATUS
+                    </Text>
+                  </View>
+
+                  <View style={styles.sectionFields}>
+                    <Input
+                      label="Hour Meter Reading (HMR)"
+                      placeholder="0"
+                      value={hourMeter}
+                      onChangeText={setHourMeter}
+                      keyboardType="numeric"
+                      editable={!isSaving}
+                    />
+
+                    <View style={styles.fieldGroup}>
+                      <SearchableSelect
+                        label="Health Status"
+                        options={HEALTH_OPTIONS}
+                        value={healthStatus}
+                        onChange={setHealthStatus}
+                        placeholder="Select health status..."
+                        modalTitle="Select Health Status"
+                      />
+                    </View>
+
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>
+                      Rental status is derived automatically from the client assignment.
+                    </Text>
+                  </View>
+                </View>
+              )}
 
             {/* SECTION 1: PERSONNEL ASSIGNMENT (SUPERVISORS & OPERATORS) */}
             {(initialSection === 'all' || initialSection === 'personnel') && (

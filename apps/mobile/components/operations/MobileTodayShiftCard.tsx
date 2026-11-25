@@ -39,13 +39,19 @@ export interface MobileTodayShiftCardProps {
 
 function formatTime(t: string | null | undefined): string {
   if (!t) return '—';
+  const str = t.trim();
+  if (str === '—' || str === '-' || str === '') return '—';
+  if (str.includes('AM') || str.includes('PM')) return str;
   try {
-    const [h, m] = t.split(':').map(Number);
+    const [hStr, mStr] = str.split(':');
+    const h = parseInt(hStr, 10);
+    const m = parseInt(mStr, 10) || 0;
+    if (isNaN(h)) return str;
     const ampm = h >= 12 ? 'PM' : 'AM';
     const h12 = h % 12 || 12;
     return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
   } catch {
-    return t;
+    return str;
   }
 }
 
@@ -138,18 +144,22 @@ export const MobileTodayShiftCard: React.FC<MobileTodayShiftCardProps> = React.m
         styles.card,
         {
           backgroundColor: isEntered
-            ? (isDark ? '#082f49' : '#f0f9ff')
+            ? (isDark ? 'rgba(8, 47, 73, 0.25)' : 'rgba(14, 165, 233, 0.03)')
             : isBreakdown
-            ? (isDark ? '#4c0519' : '#fff1f2')
-            : isMaintenance || isUnassigned
-            ? (isDark ? '#451a03' : '#fffbeb')
+            ? (isDark ? 'rgba(76, 5, 25, 0.25)' : 'rgba(244, 63, 94, 0.03)')
+            : isMaintenance
+            ? (isDark ? 'rgba(69, 26, 3, 0.25)' : 'rgba(245, 158, 11, 0.03)')
+            : isUnassigned
+            ? (isDark ? 'rgba(69, 26, 3, 0.20)' : 'rgba(245, 158, 11, 0.02)')
             : theme.colors.canvasElevated,
           borderColor: isEntered
-            ? (isDark ? '#0284c7' : '#7dd3fc')
+            ? 'rgba(14, 165, 233, 0.30)'
             : isBreakdown
-            ? (isDark ? '#fda4af' : '#fecdd3')
-            : isMaintenance || isUnassigned
-            ? (isDark ? '#fde68a' : '#fef3c7')
+            ? 'rgba(244, 63, 94, 0.30)'
+            : isMaintenance
+            ? 'rgba(245, 158, 11, 0.30)'
+            : isUnassigned
+            ? 'rgba(245, 158, 11, 0.30)'
             : theme.colors.hairline,
         },
       ]}

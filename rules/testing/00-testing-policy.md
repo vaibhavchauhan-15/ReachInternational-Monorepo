@@ -149,4 +149,4 @@ FAIL → READ COMPLETE ERROR → IDENTIFY ROOT CAUSE → APPLY FIX → RE-RUN SU
 
 ## 9. Evidence & Reporting Requirements
 
-Every task completion message MUST include an explicit Test Execution Report following [`14-test-reporting.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/rules/testing/14-test-reporting.md). Claims such as "tested and verified" without concrete command outputs are rejected.
+Every task completion message MUST include an explicit Test Execution Report following [`14-test-reporting.md`](./14-test-reporting.md). Claims such as "tested and verified" without concrete command outputs are rejected.

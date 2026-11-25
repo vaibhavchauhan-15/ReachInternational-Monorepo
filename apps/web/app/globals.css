@@ -1093,6 +1093,47 @@ html {
 }
 
 /* ==========================================================================
+   PRESS FEEDBACK PRIMITIVES (single source for Button / IconButton / interactive
+   Card / tab + dropdown triggers).
+
+   Contract: press compression is 90–120 ms and compositor-only (transform +
+   opacity). Colours keep their normal 150 ms transition so hover states stay
+   identical to before — only `transition-all` (which also animated layout
+   properties such as width/height) was removed.
+   ========================================================================== */
+.motion-press {
+  transition-property: transform, opacity, background-color, border-color, color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out-cubic);
+}
+
+.motion-press:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.98);
+  transition-duration: 110ms;
+}
+
+/* Tighter compression for icon-only hit areas. */
+.motion-press-tight:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.97);
+  transition-duration: 100ms;
+}
+
+/* Interactive cards keep their hover lift but compress on press instead of
+   translating, so click feedback reads as "pressed in", not "moved up". */
+.card-hover-system:active:not([aria-disabled="true"]) {
+  transform: scale(0.98);
+  transition-duration: 110ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-press:active,
+  .motion-press-tight:active,
+  .card-hover-system:active {
+    transform: none !important;
+  }
+}
+
+/* ==========================================================================
    TACTILE ACTIVE / PRESSED STATES (Click Compression & Physical Feedback)
    ========================================================================== */
 :is(

@@ -143,11 +143,34 @@ const getCachedMachineExportData = unstable_cache(
       }
     }
 
-    // Role boundaries
+    // Role boundaries (must match machines RLS + check_user_can_access_machine)
     if (role === "operator" && scopedUserId !== "all") {
-      query = query.or(`current_operator_id.eq.${scopedUserId},operator_ids.cs.{${scopedUserId}}`);
+      const todayDate = (new Date()).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      const { data: omaList } = await supabase
+        .from("operator_machine_assignments")
+        .select("machine_id")
+        .eq("operator_id", scopedUserId)
+        .lte("valid_from", todayDate)
+        .or(`valid_to.is.null,valid_to.gte.${todayDate}`);
+      const assignedMachineIds = (omaList || []).map((r: any) => r.machine_id).filter(Boolean);
+      const directClause = `current_operator_id.eq.${scopedUserId},operator_ids.cs.{${scopedUserId}}`;
+      query = query.or(
+        assignedMachineIds.length > 0
+          ? `${directClause},id.in.(${assignedMachineIds.join(",")})`
+          : directClause
+      );
     } else if (role === "supervisor" && scopedUserId !== "all") {
-      query = query.or(`current_supervisor_id.eq.${scopedUserId},supervisor_ids.cs.{${scopedUserId}}`);
+      const { data: clientLinks } = await supabase
+        .from("client_supervisors")
+        .select("client_id")
+        .eq("supervisor_id", scopedUserId);
+      const supervisedClientIds = (clientLinks || []).map((r: any) => r.client_id).filter(Boolean);
+      const directClause = `current_supervisor_id.eq.${scopedUserId},supervisor_ids.cs.{${scopedUserId}}`;
+      query = query.or(
+        supervisedClientIds.length > 0
+          ? `${directClause},client_id.in.(${supervisedClientIds.join(",")})`
+          : directClause
+      );
     }
 
     // Search

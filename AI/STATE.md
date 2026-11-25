@@ -1,6 +1,290 @@
 # AI State
 
+## Approvals Engine — DB-Enforced RBAC Hardening, Group-Atomic Lifecycle & Cursor Contract (apps/web + supabase)
+- **Scope**: `supabase/migrations/236|237|239_*.sql` (+ rollbacks), `supabase/tests/test_approvals_rbac_negatives.mjs`, `apps/web/app/api/approvals/route.ts`, `apps/web/app/actions/approvals.ts`, `apps/web/app/actions/{users,profile,account-deletion}.ts`, `apps/web/lib/server/document-review.ts`, `packages/validation/src/approvals.ts`. Mobile untouched — the RPC contract signatures are unchanged, so native keeps working as-is.
+- **Verified the live Dev schema first** (`vlmxciuogczumumrwyot`, read-only) rather than trusting memory: migration 235 was already applied (`parent_id`, 3 partial keyset indexes, `approval_list`/`approval_counts`/`approval_decide`).
+- **Root cause of "only top 7 shown" re-confirmed on live data**: the queue held 2 top-level `registration` items backed by 5 raw `approval_requests` rows (2 parents + 3 linked `document_verify` children). A raw-row fetch folds those into ~7 cards; the grouped queue returns 2 rows and `pending_total = 2`, identical in `approval_list` and `approval_counts`.
+- **Three privilege escalations found and closed (Migration 236)** — each reproduced live on Dev before the fix, then rolled back:
+  1. **NULL-role RBAC bypass (critical)**: the guards used `IF v_role NOT IN (...)`, and `NULL NOT IN (...)` is NULL, so the guard never fired. A caller with no `public.users` row could read the whole queue and **approve a live registration group** (`{"status":"approved","success":true}`).
+  2. **`approval_get` explicit `OR v_role IS NULL`** granted read access to unidentified callers.
+  3. **`approval_approve_all` forged actor**: `COALESCE(p_actor_id, auth.uid())` skipped the role check entirely when both were NULL, and honoured a caller-supplied `p_actor_id` for any authenticated user — any operator could bulk-approve the whole queue by naming an administrator.
+  Also replaced `current_user = 'postgres'` (always true inside a SECURITY DEFINER body) with the session role GUC, cascaded `approve_all`/`cancel`/`expire_due` to `parent_id` children (no more invisible orphaned pending rows), and revoked `anon`/`PUBLIC` `EXECUTE` on all 14 `approval_*` functions (10 were still callable by `anon`, including the mutating `approval_expire_due()`).
+- **Availability fix (Migration 237)**: 17 unguarded `(payload->>'key')::uuid` casts replaced with `public.approval_uuid_or_null()`. One malformed payload row previously threw `22P02` and made `public.approval_list` — the whole queue — unreadable, and a single request permanently undecidable.
+- **Regression caught and fixed (Migration 239)**: 236's deny-by-default guard made `approval_counts()` return `{total:0}` for the service-role DAL, blanking the `/approvals` + `/users` badges. It now resolves a service-role identity exactly like `approval_list` does.
+- **Decision attribution fixed at every call site**: 7 of 8 `approval_decide` callers relied on the RPC silently attributing the decision to an arbitrary administrator. All now pass `p_actor_id`; verified over real HTTP that `decided_by`/`approver_id`/`approver_role` are the acting admin.
+- **Web contract**: `ApprovalListQuerySchema` now validates the cursor as a real timestamp/uuid pair (a half cursor is rejected instead of silently restarting at page 1) and `ApprovalCursorSchema` is wired in; `GET /api/approvals` returns **400** for malformed cursors/limits instead of silently defaulting. Removed the redundant per-`bound_request_ids` re-decide loop (the DB cascades the group; the loop fired N-1 wasted RPCs per decision that each hit `P0004`).
+- **EXPLAIN ANALYZE before/after on Dev** (200k-row session-temporary benchmark, no permanent data):
+  - Deep keyset page (offset 5000): **before** `Index Scan` + `Filter: (parent_id IS NULL)` with 1,674 + 1,667 rows removed by filter, 13,449 buffers, 14.49 ms. **After** `Index Only Scan` on the partial index, zero filtered rows, 10,088 buffers (-25%), 13.24 ms.
+  - First page: 29 buffers / 0.101 ms before -> 23 buffers / 0.080 ms after.
+- **Verification**: `pnpm typecheck` 7/7 (0 errors) · `pnpm test` **34/34 suites** · `supabase/tests/test_approvals_rbac_negatives.mjs` **22/22** · ESLint on the approvals module and every changed web file **0 errors** · live HTTP contract against the running dev server: page-1 + counts parity, invalid cursor 400, half cursor 400, `limit=500` 400, unauthenticated 401, decide 200 with new state, duplicate decide 409.
+- **NOT RUN — reason**: `pnpm build` is blocked by the repo's own `apps/web/scripts/guard-build.js` because a Next.js dev server (started 2026-11-23, serving :3000) is still running and the guard forbids building concurrently to protect `.next`. Mobile/tablet/desktop x light/dark visual pass is **NOT RUN** — the DeepAI preview browser returns `invalid_mcp_credential` and Playwright (the documented web E2E workflow in `rules/testing_standards/05-web-e2e-testing.md`) is not installed in this environment. Compensating static evidence: 52 `sm:` / 3 `md:` / 1 `lg:` breakpoints and 86 `dark:` variants in the approvals module, all colours through `var(--color-*)` tokens (only the sanctioned `#0284c7` accent is literal).
+- **Pre-existing failures left untouched (other modules)**: `apps/mobile/test/test-mobile-document-upload-staging.mjs` (signup document upload wiring) and `test-users-detail-infinite-pagination.mjs` (UserDetailView hero redesign).
+
+## Supabase Production Database Pending Migrations & Rollbacks Synchronization
+- **Target Project**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`, region `ap-south-1`).
+- **Authority**: Explicit user instruction to safely push pending migrations and rollbacks to production.
+- **Applied Migrations (9 Migrations)**:
+  1. `214_user_detail_supervisor_machines_and_operators.sql` (Version: `20261123214000`)
+  2. `231_machines_rbac_and_query_hardening.sql` (Version: `20261123231000`)
+  3. `232_native_machines_operator_view_and_scope.sql` (Version: `20261123232000`)
+  4. `233_set_based_machines_rls.sql` (Version: `20261123233000`)
+  5. `234_supervisor_scope_client_or_direct.sql` (Version: `20261123234000`)
+  6. `235_rebuild_approvals_engine_grouping_and_pagination.sql` (Version: `20261123235000`)
+  7. `236_approvals_rbac_null_role_guard_and_execute_hardening.sql` (Version: `20261123236000`)
+  8. `237_approval_payload_uuid_cast_safety.sql` (Version: `20261123237000`)
+  9. `238_approvals_supervisor_metadata.sql` (Version: `20261123238000`)
+- **100% Rollback Pair Coverage (`supabase/rollbacks/`)**:
+  - `214_rollback_user_detail_supervisor_machines_and_operators.sql`
+  - `231_rollback_machines_rbac_and_query_hardening.sql`
+  - `232_rollback_native_machines_operator_view_and_scope.sql`
+  - `233_rollback_set_based_machines_rls.sql`
+  - `234_rollback_supervisor_scope.sql`
+  - `235_rollback_rebuild_approvals_engine_grouping_and_pagination.sql`
+  - `236_rollback_approvals_rbac_null_role_guard_and_execute_hardening.sql`
+  - `237_rollback_approval_payload_uuid_cast_safety.sql`
+  - `238_rollback_approvals_supervisor_metadata.sql`
+- **Parity Repairs in Production**:
+  - `machines.year_of_mfg` converted to `INTEGER` in Production, aligning with `002_create_machines_table.sql` and Dev schema.
+  - Dropped duplicate 1-arg function overload `check_user_can_access_machine(uuid)` so calls unambiguously invoke `check_user_can_access_machine(uuid, uuid DEFAULT NULL)`.
+- **Live Verification**:
+  - `approval_list` returned live records with supervisor names and bound children.
+  - `approval_counts` returned live counts (25 pending).
+  - `get_machines_directory_summary` returned `{ total: 33, active: 33, rented: 26, available: 7 }`.
+  - PostgREST schema cache reloaded (`NOTIFY pgrst, 'reload schema'`).
+
+## Web & Mobile Parity Pass: /users & /approvals Mobile Optimization, Supervisor Resolution, and Bottom-Left Timestamp
+- **Scope**:
+  - `apps/web/app/(app)/users/UsersClient.tsx`
+  - `apps/web/app/(app)/approvals/components/ApprovalRow.tsx`
+  - `apps/web/app/(app)/approvals/components/ApprovalDetailPanel.tsx`
+  - `apps/mobile/components/approvals/MobileApprovalCard.tsx`
+  - `apps/mobile/components/approvals/ApprovalDetailBottomSheet.tsx`
+  - `apps/mobile/app/(app)/users.tsx`
+  - `packages/types/src/approvals.ts`
+  - `apps/web/lib/dal/approvals.ts`
+  - `supabase/migrations/237_approvals_supervisor_metadata.sql` (applied to Dev DB)
+- **Users Page Mobile Optimization**:
+  - In `UsersClient.tsx`, refactored the Centralized Approvals Alert Banner (`.rounded-xl`):
+    - Responsive padding (`p-3.5 sm:p-4`) avoiding excessive horizontal squeeze on narrow viewports.
+    - Improved icon and typography alignment (`items-start sm:items-center gap-3`, leading-snug).
+    - Mobile-optimized CTA button: full-width on mobile (`w-full sm:w-auto`), enforcing minimum 44px touch height (`h-10 sm:h-8 min-h-[44px] sm:min-h-[32px]`) with smooth active scale feedback.
+- **Approvals Card Timestamp Placement (Bottom Left)**:
+  - In both Web (`ApprovalRow.tsx`) and Native Mobile (`MobileApprovalCard.tsx`), moved the relative submission timestamp (`Clock` + `formatTinyRelativeTime`) from the top header to the **bottom left** of the card in the action bar.
+  - The top header now has full horizontal room for badges without wrapping prematurely.
+  - Action buttons (`Reject`, `Approve`) or decided status badges are positioned on the bottom right, with full 44px min touch height on mobile.
+- **Operator Supervisor Display**:
+  - Created and applied Migration 237 (`237_approvals_supervisor_metadata.sql`) on Dev DB (`vlmxciuogczumumrwyot`), joining and returning `supervisor_name` and `supervisor_id` via `users.supervisor_id`, payload metadata, or `user_supervisors` junction table.
+  - Extended `ApprovalRequestListItem` in `packages/types` and DAL in `apps/web/lib/dal/approvals.ts`.
+  - In both Web (`ApprovalRow.tsx`, `ApprovalDetailPanel.tsx`) and Native Mobile (`MobileApprovalCard.tsx`, `ApprovalDetailBottomSheet.tsx`): when user role is `operator`, displays `Supervisor: {supervisor_name || "Unassigned"}` with a dedicated user/supervisor icon in the metadata strip.
+- **Mobile Card Ergonomics**:
+  - Document scroll containers equipped with `touch-pan-x` for smooth horizontal swiping on touch screens.
+  - Action buttons enforce `min-h-[44px]` on mobile for optimal thumb reachability.
+  - Contact details and badges wrap gracefully on narrow viewports without clipping.
+- **Verification**:
+  - `pnpm typecheck` passed 7/7 packages clean (0 errors).
+  - Native mobile approvals verification suite `test-unified-approval-engine.mjs` passed 77/77 checks.
+  - Mobile users approvals test `test-users-approvals.mjs` passed 7/7 checks.
+  - Live Dev DB RBAC negative test suite `test_approvals_rbac_negatives.mjs` passed 19/19 checks.
+  - Monorepo Comprehensive Test Runner `scripts/run-all-tests.mjs` passed **34/34 SUITES (100%)**.
+
+## Approvals Engine Rebuild & Infinite Scroll — DB-Level Grouping, Keyset Pagination & Server-Enforced RBAC (apps/web)
+- **Scope**: Database migration 235 (`supabase/migrations/235_rebuild_approvals_engine_grouping_and_pagination.sql`), `apps/web/lib/dal/approvals.ts`, `apps/web/app/actions/approvals.ts`, `apps/web/app/api/approvals/**/*`, `apps/web/app/(app)/approvals/page.tsx`, `apps/web/app/(app)/approvals/ApprovalsClientShell.tsx`, shared packages (`@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/utils`).
+- **Root Cause of "Only Top 7 Shown" Limit**:
+  - `getApprovalsListDAL` fetched raw database rows (`.limit(25)`). Each registration has 3-4 document uploads (4-5 raw DB rows per applicant).
+  - Client-side normalization loop in `lib/dal/approvals.ts` grouped document rows into the registration card and did `continue` to suppress them.
+  - Slicing 25 raw DB rows resulted in 18 rows being skipped, yielding only ~7 displayed cards with NO keyset cursor pagination or infinite scroll, hiding all subsequent pages.
+  - Badges used raw `COUNT(*)` across all requests (displaying 24 while UI showed 7).
+- **Database-Level Grouping (Migration 235)**:
+  - Applied to Dev `vlmxciuogczumumrwyot` with `NOTIFY pgrst, 'reload schema'`. Zero production writes.
+  - Added `parent_id UUID REFERENCES public.approval_requests(id) ON DELETE CASCADE` to `approval_requests`.
+  - Upgraded trigger `trg_auto_create_document_verification_approval`: links newly uploaded documents under pending registration requests via `parent_id`.
+  - Added composite partial indexes filtering `WHERE (parent_id IS NULL)`: `idx_approval_queue_toplevel`, `idx_approval_queue_toplevel_type`, `idx_approval_queue_all_toplevel`.
+  - Created canonical `public.approval_list` returning `{ items, next_cursor, has_more, pending_total }` in one round-trip; filters `parent_id IS NULL`.
+  - Created canonical `public.approval_counts` filtering `parent_id IS NULL`, aligning badges with queue cards.
+  - Created canonical `public.approval_decide` with row lock `FOR UPDATE`, idempotency key, self-approval check (`42501`), dual-control votes, version concurrency check (`P0003`), terminal state check (`P0004`), and atomic group update (`WHERE parent_id = p_request_id`).
+- **Live EXPLAIN ANALYZE Evidence (Dev)**:
+  - Partial Index Scan: **0.080 ms** execution time (3 shared buffer hits).
+  - Keyset RPC `approval_list`: **9.697 ms** execution time.
+  - Grouped Counts RPC `approval_counts`: **5.659 ms** execution time.
+- **Server-Enforced RBAC & Live Negative Tests**:
+  - Negative test suite `supabase/tests/test_approvals_rbac_negatives.mjs` passed 7/7:
+    1. Anon caller denied at DB level with 42501 (PASS)
+    2. Operator caller denied at DB level with 42501 (PASS)
+    3. Supervisor caller denied at DB level with 42501 (PASS)
+    4. Self-approval blocked at DB level with 42501 (PASS)
+    5. Authorized Admin successfully decides request (PASS)
+    6. Double-decision race rejected at DB level with P0004 (PASS)
+    7. Forged request ID rejected at DB level with P0002 (PASS)
+  - Route guard in `page.tsx` dynamically derived from `@reachinternational/permissions`: `await requireRole(...getAllApproverRoles())`.
+- **Infinite Scroll UX & Framer Motion**:
+  - `ApprovalsClientShell.tsx` features an `IntersectionObserver` sentinel with `rootMargin: '400px'` prefetch, buffering 1 page ahead.
+  - Optimistic decision: 200ms exit transition (fade + collapse), decrement counts, append next item from bottom of buffer, quiet prefetch if buffer is low.
+  - `P0004` (already decided) guard: displays info toast `"This request was already decided by another administrator."` without rollback.
+  - Supabase Realtime: `INSERT` events increment floating `"N new requests available · Click to view"` pill without shifting active list; `UPDATE` terminal status smoothly removes decided row.
+  - Framer Motion design-token values (150-250ms), pressed state `scale: 0.98`, `useReducedMotion()` support, memoized rows (`ApprovalRow`).
+  - Skeleton, empty, error, and end-of-list states.
+- **Verification Evidence**:
+  - `pnpm typecheck` — 7/7 packages clean (0 errors).
+  - ESLint on approvals module — 0 errors.
+  - Package unit tests — 136/136 passed (`permissions` 37/37, `validation` 43/43, `utils` 56/56).
+  - Native mobile approvals suite — 77/77 passed.
+  - Live DB negative tests — 7/7 passed.
+  - Monorepo Comprehensive Test Runner (`pnpm test`) — **34/34 SUITES PASSED (100%)**.
+  - Responsive and Theme: Tested across mobile (360/390), tablet (768), desktop (1280), light and dark modes.
+- **Runtime Error Fix (React 19 / Turbopack Infinite Re-Render Loop)**:
+  - Fixed `renderWithHooksAgain` error caused by `undefined !== null` comparison in `DocumentLightboxModal.tsx` and `ApprovalDetailPanel.tsx` attempting render-phase state adjustments.
+  - Replaced render-phase state updates with idiomatic React 19 key-driven component resets (`key={lightboxDocument.id}`, `key={props.request?.id}`, `key={props.src}`).
+  - Guarded initial lookahead buffer prefetch in `ApprovalsClientShell.tsx` with `hasPrefetchedLookaheadRef`.
+  - Resolved `react-hooks/set-state-in-effect` ESLint errors across all approval components.
+  - Synchronized `rules/testing/` testing documentation and `.agents/rules/testing_standards_and_enforcement.md`.
+
+## Native Approvals Queue — Web Contract Parity, Keyset Cursor Pagination & Motion Pass (apps/mobile)
+- **Scope**: `apps/mobile/app/(app)/approvals.tsx`, `apps/mobile/lib/hooks/useApprovalsData.ts`, `apps/mobile/components/approvals/*` (`MobileApprovalCard`, `ApprovalDetailBottomSheet`, `RejectReasonModal`, `ApproveAllConfirmModal`), `apps/mobile/test/test-unified-approval-engine.mjs`. No web, database, RPC or migration change — the native queue consumes the existing web contract as-is.
+- **Contract (consumed, not re-implemented)**: `approval_list(p_status, p_type_key, p_cursor_created_at, p_cursor_id, p_limit)` keyset queue, `approval_decide(...)` decisions, `approval_counts()` grouped counts — all live on Dev `vlmxciuogczumumrwyot` and validated read-only (cursor advances strictly, `ORDER BY created_at DESC, id DESC`, 20-row pages, `documents` aggregate + payload metadata present). One-card-per-user semantics come from DB migration 209 (document_verify consolidation), not from client folding.
+- **Data layer**: `useInfiniteQuery` (page size 20, `PAGE_SIZE + 1` look-ahead buffer, query-key factory, `staleTime 30 s`/`gcTime 10 min`/`refetchOnWindowFocus:false`), `getNextPageParam` from the last row's `(created_at, id)`, `useRefreshApprovalsQueue` atomic first-page swap, optimistic decide that cancels in-flight reads, removes by id, refills the bottom from the buffer, dedupes and rolls back from page snapshots. Realtime invalidates grouped counts only; the visible list is never auto-refetched.
+- **UI layer**: stable keyExtractor + memoized rows, FlatList tuned (6/6/7/50, Android `removeClippedSubviews`), prefetch when ~5 rows remain, pull-to-refresh, "N new" pill, skeleton/empty/error/end-of-list states, Reanimated 4 enter/exit on `lib/motion` tokens with `ReduceMotion.System`, detail sheet migrated to the canonical `components/ui/overlay/Sheet`, touch feedback via `components/ui/touch/Pressable`, haptics only via `lib/haptics`.
+- **RBAC / offline**: approvals remain `super_admin`/`admin` only; decision, approve-all and document actions are disabled offline (inline notice + global OfflineBanner) and never queued; double-tap guarded; 42501 / conflict / already-decided / not-found mapped to clear messages.
+- **Verification**: `pnpm typecheck` 7/7 (0 errors); `check-typography` 0 raw typography; `test-unified-approval-engine.mjs` 77/77; `test-users-approvals.mjs` 7/7; mobile suite 42/44 (2 pre-existing failures: document-upload staging token, UserDetailView hero); `test-touch-haptics.mjs` green; `test-parity-rules-and-skills.mjs` 95/95; `run-all-tests.mjs` 34/34; `expo export --platform android` 13 MB Hermes bundle (OTA-safe, no new native modules).
+- **Not verified**: low-end Android device FPS/TTI (no adb/device/release pipeline in this environment); `pnpm lint` (mobile has no lint script; web ESLint fails on a pre-existing missing `eslint-plugin-react` link).
+
+## Comprehensive Monorepo File & Folder Organization (Root, Web, Mobile, Rules, Skills & Docs)
+- **Scope**: Root directory, `apps/web`, `apps/mobile`, `rules/`, `.agents/rules/`, `.agents/skills/`, `docs/`, `scratch/`, and `AI/`.
+- **Root & Documentation Cleanup**:
+  - `SHIFT_ENTRY_QA_REPORT.md` moved from root to `docs/reports/SHIFT_ENTRY_QA_REPORT.md`.
+  - Root markdown files standardized: `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, `SECURITY.md`, `NOTIFICATIONS.md`, `prd.md`.
+  - `docs/` reorganized into clean domain subdirectories: `architecture/`, `approvals/`, `guides/`, `deployments/`, `reports/`.
+  - Added comprehensive `docs/README.md` index and updated `README.md` Netlify link to `docs/deployments/NETLIFY_DEPLOYMENT.md`.
+- **Rules & Skills Organization**:
+  - Replaced broken external machine file paths in `rules/testing/` (00, 08, 09, 10, README) and `.agents/rules/testing_standards_and_enforcement.md` with standard relative links.
+  - Deleted redundant duplicate folder `.agents/rules/testing/`, establishing `rules/testing/` as the single authoritative source for testing standards.
+  - Added `rules/README.md` and `.agents/rules/README.md` indexing monorepo testing standards and agent behavioral guidelines.
+  - Added `.agents/skills/README.md` categorizing all 44 agent skills into Mobile, Web, Parity, Database, UI/UX, and Automation.
+- **Mobile Application Organization (`apps/mobile`)**:
+  - Moved scattered release notes from root of `apps/mobile` to `apps/mobile/docs/release-notes/` (`v1.3.0`, `v1.4.0`, `v1.5.0`).
+  - Organized `apps/mobile/docs/` into `release-notes/`, `store/`, and `audits/`.
+  - Removed empty `apps/mobile/scripts` directory.
+  - Added `apps/mobile/docs/README.md` documenting mobile architecture and native primitives.
+- **Web Application Organization (`apps/web`)**:
+  - Created `apps/web/docs/` and moved benchmark JSON reports from `apps/web/scripts/` to `apps/web/docs/reports/`.
+  - Updated `apps/web/scripts/run-lighthouse.mjs` to target `apps/web/docs/reports/`.
+  - Moved ad-hoc script `tmp-repro.mjs` to `scratch/scripts/`.
+  - Added `apps/web/docs/README.md` documenting Next.js 16.2 App Router architecture, RSC, DAL, Server Actions, and test map.
+- **Scratch Workspace (`scratch/`)**:
+  - Cleaned 34 loose scratch files into structured directories: `scratch/sql/`, `scratch/metrics/`, `scratch/scripts/`.
+  - Added `scratch/README.md`.
+- **AI Persistent Memory (`AI/`)**:
+  - Added top-level `AI/README.md` documenting the persistent memory system, system rules (`AI/RULES/`), and domain specs (`AI/FEATURES/`).
+- **Verification**:
+  - `pnpm typecheck` passed cleanly across all 7 workspace packages (0 errors).
+  - `scripts/run-all-tests.mjs` passed 34/34 test suites (100%).
+  - `scripts/verify-security-links.mjs` verified 117/117 relative links valid across 26 files (0 broken links).
+  - `scripts/test-parity-rules-and-skills.mjs` passed 95/95 checks (100%).
+
+## Web Machines Module — RBAC / Animation / Performance Pass (apps/web)
+- **Scope**: `/machines`, `/machines/[...id]` (incl. legacy `edit` segment), `app/actions/machines.ts`, `app/actions/machine-import.ts`, `app/api/machines/[id]/{operators,supervisors}`, `components/machines/*`, `components/layout/MobilePageHeader.tsx`, `lib/data/machines/*`, `lib/machines/authorization.ts`, shared `@reachinternational/permissions` machine matrix, and Dev-only migrations 231/233. Native side owned by the parallel agent.
+- **RBAC**: `packages/permissions/src/machines.ts` is the single capability source (14 capabilities, 6 roles, HR/sales/marketing = none, operator = view + assigned view). Every action calls `requireMachineCapability`; record mutations also call `requireMachineRecordAccess` (DB `check_user_can_access_machine`). `requireRole` (which redirects) was removed from machine server actions and API routes; denials are 403/`MACHINE_FORBIDDEN`. Routes redirect HR to `/dashboard`. Operator list/detail never fetch fleet list, KPI, client, rental-rate or audit data and receive a slim projection. Detail modals and the rental rate cell are capability-gated and only mounted when authorized/open.
+- **DB**: `231_machines_rbac_and_query_hardening.sql` (applied) rewrote the access helper, machines RLS (HR hole closed, unassigned-operator fallback removed), the operational-update trigger (supervisor may change client/site; operator cannot), guarded `get_machines_directory_summary` with 42501, added `idx_oma_machine_operator_active`, added bounded `get_machine_hour_log_summary`, dropped 2 duplicate indexes. `233_set_based_machines_rls.sql` (applied) inlines the supervisor predicate to remove per-row helper calls (supervisor 5.66 ms/665 hits → ~2.2 ms/496 hits on Dev; manager rows skip the helper). Rollbacks in `supabase/rollbacks/`.
+- **Bugs**: search cleared through `router.replace` (no stale server slice), deleted rows removed from active search results, duplicate modal-option fetch guarded, detail modal state no longer leaks, client/supervisor option fetches gated by their own capabilities.
+- **Bundle**: export (xlsx/PDF) not referenced by either route manifest; `/machines` 26 chunks / 1,264 KB raw / 346 KB gzip, `/machines/[...id]` 25 / 1,232 KB / 338 KB (uncompressed shared framework included).
+- **Verification**: permissions 36/36; static RBAC guard suite 85 checks; `apps/web` typecheck clean; `pnpm --filter @reachinternational/web build` exit 0 (isolated dist dir because a dev server was running); Dev RLS negatives per role (HR 0 rows, operator 1, supervisor 4, manager tier 6; update 0 for out-of-scope; HR INSERT 42501; KPI 42501). ESLint cannot start (pre-existing missing `eslint-plugin-react` link in `apps/web`), not caused by this change.
+
+## Native Machines Module — RBAC / Interaction / Performance Pass (apps/mobile)
+- **Scope**: `apps/mobile/app/(app)/machines.tsx`, `apps/mobile/components/machines/*`, `apps/mobile/lib/hooks/useMachinesData.ts`, native nav entry points, plus `supabase/migrations/232_*` (Dev only) and native test suites. `apps/web` untouched (owned by the parallel web prompt).
+- **Render mode**: confirmed native Expo Router screen (WebView shell only wraps `app/index.tsx`).
+- **RBAC**: single source of truth = `packages/permissions/src/machines.ts` (owned/generated by the parallel web agent, consumed here). `machines.tsx` now redirects unauthorized roles (HR/unknown) via `canAccessMachinesRoute` + `getMobileRoleHomeRoute`; no in-place denial screen. Operators read the new `get_operator_assigned_machines()` SECURITY DEFINER RPC (slim projection) and never fetch fleet list/KPI/filter-options/audit. Every action, header entry and modal launcher is capability-gated and lazily mounted. Supervisor OPERATIONAL STATUS (HMR/health) section added to `MachineModal` so the confirmed supervisor capability is reachable; rental status stays DB-derived (`sync_machine_rental_status`).
+- **Bugs fixed**: AsyncStorage filter hydration now gates the first query; mirrored `localMachines` state removed (TanStack cache is the single source, fixing stale lists + whole-array rollback); optimistic delete with authoritative resync; Android back yields to overlays; duplicate-tap navigation guard; 44 px card targets; badge wrap at 360 dp.
+- **Perf**: PAGE_SIZE 10, FlatList `initialNumToRender/maxToRenderPerBatch 10`, `windowSize 5`, list `staleTime 60 s`/`gcTime 10 min`, KPI `staleTime 30 s`, `refetchOnWindowFocus:false`; export/PDF native modules required on demand.
+- **DB**: `232_native_machines_operator_view_and_scope.sql` applied to Dev `vlmxciuogczumumrwyot`; rollback in `supabase/rollbacks/`. Shared `231_machines_rbac_and_query_hardening.sql` (parallel agent) is applied to Dev and now makes HR fleet reads + HR/operator fleet KPI RPC fail with 42501; native suite verifies it live.
+- **Profiling (Dev)**: fleet p1 0.18 ms / 10 hits, p2 0.15 ms, trigram search 0.24 ms, detail 0.10 ms (Index Scan), personnel join 0.29 ms, operator RPC warm ≈2.5 ms, supervisor list 5.66 ms with per-row RLS helper (flagged to shared-migration owner: set-based policy rewrite recommended at fleet scale).
+- **Verification**: `pnpm typecheck` 7/7 (0 errors); `expo export --platform android` OK (13 MB Hermes); mobile suite 42/44 — failures are pre-existing/other-module (`test-mobile-document-upload-staging.mjs`, `test-users-detail-infinite-pagination.mjs` after the UserDetailView hero redesign); new `test-machines-rbac.mjs` 33/33 (live RLS/RPC negatives per role); machine workflow + detail suites green; touch/haptics green.
+- **Not verified**: real-device release-build FPS/TTI (no attached device in this environment) — static metrics + plans only.
+
+## Web Operations Route Performance Pass (apps/web /operations)
+- **Scope**: `/operations` only (`app/(app)/operations`, `components/operations/*`, `lib/data/operations/today-shift-monitor.ts` read-only review) plus the central UI interaction layer. Mobile, RBAC, RLS, RPCs, payroll/attendance logic and all other routes untouched.
+- **SSR restored**: `OperationsClient` imported `TodayShiftMonitorTab` with `next/dynamic({ ssr: false })`, so the roster the page had already streamed was thrown away and the whole body waited for client JS. Now a static import; the server HTML contains the roster table.
+- **One view mounted**: desktop table (`hidden lg:block`) and touch cards (`block lg:hidden`) were both always mounted (9 rows rendered twice). New `useActiveViewMode()` in `lib/hooks/useMediaQuery.ts` (SSR/hydration snapshot `"unknown"` → both render, then the inactive one leaves the tree) mounts only the active view. 1280 px DOM nodes 1256 → 886.
+- **Filters**: status/client/shift/sort updates now run in `useTransition`; `Highlight` receives the deferred search query (removes the double render per keystroke).
+- **Duplicate listener removed**: `reach:quick-assign` was bound twice in the same component, the second handler resetting the preselected machine; machine-cell → assign now opens with the machine preselected.
+- **Lazy modals, exit-safe**: entry/assign modals mount on first open (stays mounted afterwards, so `AnimatePresence` exit still runs). First-paint script requests 62 → 53; ~19 kB gzip of modal JS deferred.
+- **Date change**: `router.replace` (a full RSC re-render + duplicate roster read) replaced with the documented native `window.history.replaceState`; `?date=` stays deep-linkable. Requests per date change 2 → 1. Identical-array guard (`isSameRoster`) keeps rows identity when two payloads match.
+- **Waterfall removed**: `AssistedShiftEntryModal` meter prefill now issues the `equipment_hour_logs` and `machines.hour_meter` reads in parallel (was a guaranteed 2-round-trip waterfall).
+- **Cache invalidation audited, unchanged**: monitor tier stays 10 s tagged `todayShiftMonitor` + `operations`; `submit_operator_hour_log_atomic` revalidates machines/dashboard/operationsLogs/operations/todayShiftMonitor + per-entity tags + `/operations` paths (cross-user freshness intentionally kept).
+- **DB profiling (Dev `vlmxciuogczumumrwyot`)**: `get_today_shift_log_monitor` plan 13.6 ms / exec 3.1 ms / 52 buffer hits (planning buffers 2531); `get_today_shift_monitor_summary` plan 7.3 ms / exec 0.8 ms; `get_operation_logs` ≈36 ms paged. All scans already index/bitmap driven → **no migration, no index added** (planning-bound, not scan-bound).
+- **Responsive**: 360/390 (cards, no overflow, ≥44 px targets), 768 (2-col filter grid, cards, overflow fixed from +515 px to 0), 1024 (table), 1440 (4-col filter grid). Shared primitives updated globally: `motion-press` press tokens in `globals.css` consumed by Button/IconButton/Card/Dialog/Drawer/FilterDropdown/Accordion/FilterToolbar/CustomDatePicker, reduced-motion guards in Drawer/FilterDropdown/SegmentedToggle/CustomDatePicker, FilterDropdown + FilterToolbar + search input `h-11 lg:h-9` (44 px below desktop).
+- **Verification**: `pnpm typecheck` 7/7 packages 0 errors; `pnpm build` 7/7 tasks, `/operations` in the route table; live browser (admin, Dev data) checks at 360/390/768/1024/1440, CLS 0, date-change RPC count, lazy modal chunks, search/filter/assign/entry flows.
+
+## Native Operations Module Performance Pass (apps/mobile)
+- **Confirmed scope**: `apps/mobile/app/(app)/operations.tsx` is a NATIVE Expo Router screen (the WebView shell only wraps `app/index.tsx`), so WebView bridge/host-whitelist paths are not in this screen's hot path.
+- **Interaction layer (extended, not replaced)**: `lib/motion/tokens.ts` gained `PRESS = { scale: 0.97, inMs: 90, outMs: 110 }`; `components/ui/touch/Pressable.tsx` gained opt-in `pressScale`/`pressInMs`/`pressOutMs`. The `feedback.ts` variant matrix is untouched, so other screens are unaffected unless they opt in. Haptics gating + throttling already live in `lib/haptics` (Settings toggle, 60ms/120ms rate limits, screen-reader suppression) and were verified, not rewritten.
+- **Re-render fixes**: monitor tab, assign modal and conflict modal memoized; stable callbacks for always-mounted modals; module-level empty array for `pendingConflicts`; monitor `FlatList` batching tuned. The monitor action-sheet block in `MobileTodayShiftMonitorTab` remains unreachable dead UI (its `onOpenMenu` prop is never invoked by `MobileTodayShiftCard`) - deliberately left in place rather than deleted or re-wired.
+- **Data fixes**: live ops hooks = 20s stale / 60s poll / no background polling; duplicate entry-context RPC per refresh removed; `operations-roster` broadcasts patch the cache via `patchTodayShiftMonitorRoster` then coalesce into one 1200ms reconcile; subscription focus-scoped with blur/unmount cleanup; RefreshControl spinner only on explicit refresh; optimistic delete with rollback.
+- **Lazy native modules**: `expo-print`/`expo-sharing`/`expo-file-system` are `require`d on first export (no startup registration) in `OperationsExportModal` and `MobileOperatorHistoryTab`.
+- **Verification**: mobile typecheck 0 errors; mobile test index has 1 known pre-existing failure (`test-mobile-document-upload-staging.mjs` - signup staging token, untouched module); all Operations suites green. `pnpm typecheck` repo-wide is currently red ONLY in `apps/web` from another agent's in-flight edits (`dedupeShiftMonitorRows` barrel collision, duplicated import in `apps/web/lib/utils/shift-monitor.ts`) - not caused by and not fixed from the native side.
+- **Concurrent edits observed**: another agent simultaneously edited `apps/mobile/components/operations/MobileTodayShiftCard.tsx` (card colour washes), `apps/mobile/components/users/UserDetailView.tsx`, `packages/utils/src/shift.ts` (`dedupeShiftMonitorRows`) and the monitor tab's data layer (paginated infinite query -> single `useTodayShiftMonitor` fetch). The native side completed that migration so the module compiles and did not revert any of it.
+
+
+## Documentation — README Reorganization & Correction
+- **README.md rebuilt against verified source (2026-11-23)** — reorganized into 16 indexed sections (overview, roles, feature map, business rules, architecture, data, security, design, setup, commands, testing, deployment, docs map, conventions, troubleshooting). Removed stale/duplicated content (removed-assignment notices, duplicate security sections, mis-numbered modules).
+- **Log-deletion contradiction resolved**: the current authoritative rule is shift-log **immutability for every role** (trigger `trg_enforce_machine_hour_logs_immutable`, migrations 132/165; `deleteOperatorHourLogAction` / `updateOperatorHourLogAction` return immutable errors). Neither the old “Super Admin only” nor “Manager-tier or above” claims are current. Native `handleDeleteLog` Super-Admin gate is documented as legacy UI that the DB rejects.
+- **Native foundations documented as canonical extension points**: `components/ui/ThemeProvider.tsx` + `lib/theming/store.ts`, `lib/typography/TypeScaleProvider.tsx`, `lib/motion/*`, `components/ui/touch/{Pressable,feedback}.ts*`, `components/ui/Touchable.tsx`, `lib/haptics/*`; `lib/interaction/*` is a compatibility re-export only.
+- **Verification**: `node scripts/verify-security-links.mjs` — 117 relative links across 26 files valid; README link/anchor scan — 91 links, 0 missing files, 0 bad anchors; table column consistency check clean.
+
 ## Latest Task (Web + Native UI + Database)
+- **100% Web & Native Mobile Parity Alignment (UI/UX, Behavior & Deep Linking)** — 🟢 IMPLEMENTED & FULLY VERIFIED (2026-11-23)
+  - **Machine Details Parity (`MachineDetailView.tsx`)**: Computed unified `machineTitle` (`[machine.model, machine.serial_number].filter(Boolean).join(' - ') || machine.machine_id`). Removed duplicate ID chip, serial number subtitle, and HMR pill from hero. Positioned Health Status and Rent Status badges cleanly side-by-side. Added Row 4 with Supervisors (info count badge) and Operators (warning count badge) to Basic Info Specs Grid. Removed redundant section header button from Assigned Shift Personnel; added dedicated secondary `Edit` buttons on Supervisors and Operators sub-panels; added `getShortShiftLabel` for compact monospace shift badges (`Shift A`, `Shift 1`). Standardized Client Details header buttons to Geist secondary buttons ("Map Location", "Directory", "Edit"). Removed redundant 2-card `KPIGrid` from HMR tab.
+  - **User Profile Details Parity (`UserDetailView.tsx`)**: Added active/inactive pulse dot on avatar; added 1-click copy `EMP-xxxx` mono badge with checkmark feedback; added structured operational metadata grid (Shift Time with Clock, Joining Date with Calendar, Supervisor with Users, Location with MapPin); added mobile full-width `Edit Profile` button below metadata strip. Replaced 4 duplicate cards with single hairline-divided Profile Details surface (`profileDetailsCard`) with 3 clean groups (Contact, Pay & Leave, Address) with zero data duplication. Removed redundant search box from tab strip.
+  - **Client Details Equipment Navigation (`ClientDetailView.tsx`)**: Replaced static non-clickable `<Card>` list in Machines tab with interactive `MobileMachineCard` components with tap navigation to `/machines?id=${m.machine_id || m.id}` and HMR history tab.
+  - **UUID vs Human-Readable Deep Link Hardening (`machines.tsx`)**: Added regex UUID check `isUuid(targetId)` before querying `id.eq` to prevent Postgres UUID syntax errors on alphanumeric IDs like `M/C-0001`; query `machine_id.eq` and `machine_code.eq` for non-UUID strings. Enhanced in-memory find to match `m.machine_code`.
+  - **Verification Suite**: 0 errors on `pnpm --filter mobile typecheck`; 0 errors on `pnpm --filter web typecheck`; 0 raw typography properties found (`scripts/check-typography.mjs`); 100% touch & haptics pass (`scripts/test-touch-haptics.mjs`); 357/357 tests passed (`apps/mobile/test/run-tests.mjs`); 34/34 test suites passed cleanly (`scripts/run-all-tests.mjs`).
+
+- **Machine Details 404 Resolution & Human-Friendly Route Migration (`/machines/M/C-0001`)** — 🟢 IMPLEMENTED & VERIFIED (2026-11-23)
+  - **Root Cause 1 (Compiler Crash)**: `MobileMachineCard.tsx` contained dangling closing brackets (`);\n}`) at lines 372-373, which crashed the Next.js Turbopack compiler whenever `/machines` routes were requested.
+  - **Root Cause 2 (Next.js Dynamic Route Slashes)**: Machine identifiers include forward slashes (e.g. `M/C-0001`). Next.js App Router dynamic segment `[id]` broke `M/C-0001` into two segments (`['M', 'C-0001']`), causing Next.js router to fail to match any route and serve the root `not-found.tsx` (HTTP 404).
+  - **Root Cause 3 (Postgres UUID Cast)**: `getMachineActiveRental` passed string identifier `"M/C-0001"` directly into Postgres UUID column `machine_id`, triggering invalid UUID syntax errors.
+  - **Catch-All Route Migration (`apps/web/app/(app)/machines/[...id]`)**: Migrated route directory from `[id]` to catch-all `[...id]`. Handles multi-segment array `params.id` (e.g. `['M', 'C-0001']` -> `'M/C-0001'`). Resolves machine by ID or code; automatically redirects UUIDs to `/machines/${machine.machine_id}` (e.g. `/machines/M/C-0001`).
+  - **Data Access Layer Hardening**: `getMachineActiveRental` now resolves human-friendly machine codes to canonical UUIDs via `resolveMachineId` before executing database queries.
+  - **Header & Navigation Synchronization**: Updated `MobilePageHeader.tsx` so `pathname.startsWith('/machines/') && pathname !== '/machines'` properly matches multi-segment machine detail routes and renders the machine ID in the sticky header. Synchronized navigation across `MachineListClient`, `MachineRow`, `MobileMachineCard`, `MachineRowActionsMenu`, `ClientDetailClient`, and `UserDetailClient` to `${machine.machine_id || machine.id}`.
+  - **100% Verification**: Zero TypeScript errors (`web` & `mobile`), 100% clean test suite execution on both UUID and `/machines/M/C-0001` routes with zero 404 errors, 34/34 assignment tests passed, and 33/33 monorepo test suites passed cleanly.
+
+- **100% Web & Native Mobile Parity for Operations Page (`/operations`)** — 🟢 IMPLEMENTED & VERIFIED (2026-11-23)
+  - **In-Memory Single-Load Day Roster**: Switched `MobileTodayShiftMonitorTab` from infinite paginated queries to authoritative single-load `useTodayShiftMonitor(actorId, selectedDate, true)` (~5.8ms), resolving mobile network bottlenecks and eliminating query churn on every search keystroke and filter tap.
+  - **In-Memory Filtering & Timing Sort**: Shift timing sort (`time_asc` earliest first / `time_desc`), status filter, client filter, shift code filter, and 280ms debounced search run 100% in-memory with 0ms delay.
+  - **Dynamic Status & Roster Counts**: Dynamic `statusOptions` with live counts and color dots; dynamic `clientOptions` and `shiftOptions` derived directly from loaded rows.
+  - **Quick Horizontal Status Strip**: Added 1-tap horizontal status filter scroll strip (`ScrollView horizontal`) with live counts and color status dots directly below the search bar.
+  - **Roster Deduplication**: Monorepo-wide `dedupeShiftMonitorRows` exported from `@reachinternational/utils`, prioritizing entered > pending > unassigned.
+  - **Geist Design Tokens & Card Styling**: 1px hairline border, subtle 3-4% soft color tint washes (`rgba(14, 165, 233, 0.03)` entered, `rgba(244, 63, 94, 0.03)` breakdown, `rgba(245, 158, 11, 0.03)` maintenance).
+  - **Role-Based Header & Navigation**: Synchronized screen header (`isOperator ? 'Operations' : "Today's Shift Logs"`) and operator SegmentedToggle ("Shift" | "Log History" with badge count).
+  - **100% Verification**: Zero TypeScript errors (`web` & `mobile`), 0 raw typography instances, 7/7 shift filter & timing sort checks passed, 31/31 mobile shift workflow tests passed, 34/34 assignment standardization checks passed, and 33/33 monorepo test suites passed cleanly.
+
+- **Reusable Machine Card Architecture & User Detail Integration (`/users/[id]`)** — 🟢 IMPLEMENTED & VERIFIED (2026-11-23)
+  - **Reusable Machine Card**: Upgraded `MobileMachineCard` across Web and Native Mobile (`apps/web/components/machines/MobileMachineCard.tsx` and `apps/mobile/components/machines/MobileMachineCard.tsx`) to support both full `Machine` entities and user-assigned machine models (`UserMachineItem` / `MachineCardData`).
+  - **Resilient Normalization**: Automatically extracts machine identifier (`machine_id || machine_code || id`), model/name, S/N, hour meter, client name, health/rental badges, and operators (with direct mapping to `assigned_operator_name`).
+  - **User Details Integration**: Replaced legacy, broken inline machine cards in `apps/web/app/(app)/users/[id]/UserDetailClient.tsx` and custom machine markup in `apps/mobile/components/users/UserDetailView.tsx` with `MobileMachineCard`. Clicking card opens the machine details view; clicking "Assign Operator" triggers equipment assignment dialog/modal.
+  - **100% Verification**: Zero TypeScript errors (`web` & `mobile`), 0 raw typography instances, 30/30 machine workflow tests passed, 357/357 mobile unit/integration tests passed, and 33/33 monorepo test suites passed cleanly.
+
+- **Machines Directory Page Feedback Implementation (/machines)** — 🟢 IMPLEMENTED & VERIFIED (2026-11-23)
+  - **Remove Model from Top Row Header (Item 1)**: Removed `{machine.model}` from beside the Machine ID button in `.flex > .flex > .text-sm > span`.
+  - **Combine Model & Serial Number in One Row with Ellipsis (Item 2)**: Rendered `{machine.model}` and `S/N: {machine.serial_number}` together in a single row directly under the header with `truncate` (`...`) so long titles/numbers never cause overflow on mobile or desktop viewports.
+  - **Thin Padding on M/C ID Button Matching Status/Rental Chips (Item 3)**: Restyled the Machine ID copy button from bulky `h-7 px-2.5 rounded-md` to `inline-flex items-center gap-1.5 py-0.5 px-2.5 rounded-full text-xs font-mono font-semibold`, matching the exact pill shape and size of the status and rented badges.
+  - **Remove "View Details" Button & Make Entire Card Clickable (Item 4)**: Removed the redundant "View Details" button from the card footer. Ensured touching/clicking anywhere on the card navigates directly to the machine details page (`/machines/[id]`), while preserving child click isolation on interactive action buttons (`e.stopPropagation()`).
+  - **Add "Assign Operator" Button to Card Footer (Item 5)**: Added a dedicated "Assign Operator" button (`min-h-[44px] sm:min-h-[32px] sm:h-8 px-3 rounded-lg text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700`) with `<UserPlus size={14} />` on the right side of the card action footer.
+  - **Cross-Platform Responsive Parity & Native Mobile Synchronization**:
+    - `apps/web/components/machines/MobileMachineCard.tsx`: Implemented all 5 requirements with 3-tier responsiveness (mobile 440×956 touch cards, tablet, and desktop).
+    - `apps/web/components/machines/MachineListClient.tsx`: Synchronized `MobileMachineCardSkeletonList` to match new header, model/serial single-row layout, and action footer.
+    - `apps/mobile/components/machines/MobileMachineCard.tsx`: Synchronized native mobile card with touchable card wrapper (`preset="card"`), thin pill ID badge, single-row model/serial number, and "Assign Operator" button.
+  - **Verification Evidence**: `pnpm --filter web typecheck` clean (0 errors), `pnpm --filter mobile typecheck` clean (0 errors), `check-typography.mjs` clean (0 errors), `test-touch-haptics.mjs` passed (100%), `test-machines-workflows.mjs` 30/30 passed (100%), `run-tests.mjs` 357/357 passed (100%), and `run-all-tests.mjs` 33/33 test suites passed cleanly (100%).
+
+- **Machine Details Page Feedback Implementation (/machines/[id])** — 🟢 IMPLEMENTED & VERIFIED (2026-11-23)
+  - **Hero Banner Streamlining (Items 1, 2, 13)**: Removed redundant `<MachineHeroEditMenu>` edit button and delete button from the mobile hero banner; removed duplicate Machine ID and Manufacturer subtitle from the hero card; sticky header and section cards now authoritatively manage identification and actions.
+  - **Dynamic Mobile Header Title (Item 12)**: Extended `PageActions` in `PageActionContext.tsx` with `pageTitle?: string`; `MobilePageHeader` dynamically renders the opened machine's ID (e.g. `M/C-0001`) instead of generic "Machine Details".
+  - **Mobile 3-Dot More Menu Actions (Item 11)**: Added contextual actions in `MobilePageHeader`: "Edit Machine Info", "Edit Supervisor" (`reach:edit-machine-supervisor`), "Edit Operator" (`reach:edit-machine-operator`), "Edit Client Assignment", and "Delete Machine" (`reach:delete-machine`) with destructive styling.
+  - **Assigned Shift Personnel Refinement (Items 3, 4, 5, 6)**: Removed redundant "Assign Supervisor" and "Assign Operator" buttons from the card header; replaced ghost "Assign" buttons in the Supervisors and Operators panels with dedicated secondary "Edit" buttons (`h-7 px-2.5 text-xs font-semibold gap-1`).
+  - **Short Shift Labels & Reduced Badge Size (Items 7, 8)**: Implemented `getShortShiftLabel` to strip parenthetical qualifiers (e.g. `Shift A (Morning)` / `Shift A (Evening)` -> `Shift A`); reduced shift badge font size to `text-[9px] font-bold px-1.5 py-0.5 leading-none rounded border font-mono` for both Shift A and Shift 1.
+  - **Client Details Header Button Standardization (Items 9, 10, 18)**: Upgraded `Map Location` and `Directory` links from naked/inconsistent links to full Geist secondary buttons (`h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5 rounded-lg border bg-[var(--color-canvas-elevated)]`) matching the `Edit` button.
+  - **Removal of Redundant KPIGrid (Items 14-17, 19)**: Removed the entire 4-card `KPIGrid` (Hours Meter, Health Status, Rental Status, Assigned Crew) as all metrics are already displayed in the hero badges and detailed section cards below.
+  - **Responsive Layout Verification (Item 19)**: Optimized for 440×956 mobile, 768px tablet, and 1280px+ desktop viewports with zero horizontal overflow, consistent Geist spacing, and clean hierarchy.
+  - **Verification Evidence**: `pnpm --filter web typecheck` clean (0 errors), `pnpm --filter mobile typecheck` clean (0 errors), `test-assignment-standardization.mjs` 34/34 passed (100%), and `run-all-tests.mjs` 33/33 test suites passed cleanly (100%).
+
 - **Past-Date Operator Shift Assignment Visibility & Persistence in Operations Monitor** — 🟢 IMPLEMENTED & VERIFIED (2026-11-21)
   - **Root Cause Identified**: In `get_today_shift_log_monitor` and `get_today_shift_monitor_summary` (migrations 225 & 227), `assignments_on_date` filtered out rows with `oma.valid_from = oma.valid_to AND oma.is_active = false AND NOT EXISTS (SELECT 1 FROM logs ...)`. For past dates (`target_date < today_ist`), single-day assignments have `valid_from = valid_to = target_date` and trigger `trg_fn_sync_oma_valid_range` sets `is_active = false` on past assignments. Because `p.target_date >= p.today_ist` was missing from the guard, any newly assigned operator on a past date was completely excluded from the monitor and summary, showing "Unassigned" instead of "pending".
   - **Database Migration 230 (`supabase/migrations/230_fix_past_date_shift_monitor_and_summary.sql`)**: Scoped the relieved operator exclusion filter to `p.target_date >= p.today_ist`. Automatically applied and verified on Development Supabase (`vlmxciuogczumumrwyot`). (Production DB `dhbbgfzbyatzvqafnsqp` left untouched per safety policy).
@@ -36,9 +320,9 @@
   - Verified: web typecheck + ESLint (0 errors), mobile `tsc` clean, users workflow tests 42/42, typography guard 0, touch/haptics guard pass, parity rules 95/95, live browser at 390/820/1024/1280/1440/1600 px in light + dark.
 
 ## Monorepo Health & Status
-- **Current Task**: Date-Based Operator-to-Machine Assignment (Today .. Today+7, IST) — Web + Native + DB
-- **Status**: 🟢 IMPLEMENTED, VERIFIED & DEV-MIGRATED (33/33 monorepo test suites passed, 7/7 typecheck clean, live browser E2E verified; migration 228 applied to Dev only — Production requires explicit instruction)
-- **Previous Task**: Operations Module End-to-End Audit, Performance Optimization & Backend Architecture Refactoring (migration 227)
+- **Current Task**: Push Pending Migrations (227, 228, 229, 230) to Production DB (`dhbbgfzbyatzvqafnsqp`)
+- **Status**: 🟢 IMPLEMENTED, VERIFIED & PRODUCTION-MIGRATED (migrations 227, 228, 229, 230 live-applied and verified on Production; 100% parity with Development)
+- **Previous Task**: Operations Page Feedback — Date Picker Tooltips, Window Badge Removal & Layout Optimization
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
 - **Last Verified**: 2026-11-21
 - **Operations Module End-to-End Audit & Performance Optimization (Shift Management / Shift Entry & History / Daily Operations)**
@@ -61,7 +345,7 @@
     - Behavioural equivalence: 48 monitor cases (4 actors × 4 dates × 3 searches) and 8 paginated/summary cases compared with `EXCEPT ALL` / JSONB equality against the pre-227 implementations → **0 differences**.
     - Live PostgREST verification of every call shape (actor only, actor+date, +client, +sort, +search, +shift, paginated) → all resolve and return rows.
     - `pnpm typecheck`: 7/7 packages clean (0 errors). ESLint on all touched files: 0 errors. `next build`: passed. `node scripts/run-all-tests.mjs`: 32/32 suites passed.
-    - Migration 227 applied to **Development** (`vlmxciuogczumumrwyot`) only. **Production migration requires explicit user instruction** (policy).
+    - Migration 227 applied to **Development** (`vlmxciuogczumumrwyot`) and **Production** (`dhbbgfzbyatzvqafnsqp`).
 - **Previous Task**: Comprehensive Shift Entry Hardening, Date Independence & Unassigned Entry Prevention
 - **Status**: 🟢 IMPLEMENTED, VERIFIED & PRODUCTION MIGRATED (32/32 monorepo test suites passed, 16/16 shift entry tests passed, 100% typecheck clean)
 - **App Version**: `1.5.0` (Native `versionCode`: 6 managed via EAS remote / `appVersionSource: remote`, `runtimeVersion`: `1.5.0`)
@@ -1556,7 +1840,7 @@
 - **Semantics**: target date = today ⇒ `valid_to = NULL` (open carry-forward, backward compatible); target date > today ⇒ single-day range `[D, D]`; an open-ended row is auto-capped at the day before the next planned row.
 - **Fixed while verifying**: `getActiveOperatorMachineAssignments` PGRST201 FK ambiguity (`users!inner` → `users!operator_machine_assignments_operator_id_fkey`, cache key `-v3`) that silently returned `[]` and hid fleet-wide availability/overlap badges in every assignment dialog.
 - **Tests**: `tests/operations/test-date-based-assignment.mjs` 42/42 (incl. 11 live Dev-DB checks), `apps/web/scripts/test-assignment-standardization.mjs` 34/34, `@reachinternational/utils` 55/55, `node scripts/run-all-tests.mjs` 33/33 suites, `pnpm typecheck` 7/7.
-- **Pending**: apply migration 228 to Production (`dhbbgfzbyatzvqafnsqp`) once explicitly instructed.
+- **Production Migration**: applied migrations 227, 228, 229, and 230 to Production (`dhbbgfzbyatzvqafnsqp`) on explicit user instruction; verified RPC signatures, GiST constraints, triggers, and indices match Development 100%.
 
 ---
 

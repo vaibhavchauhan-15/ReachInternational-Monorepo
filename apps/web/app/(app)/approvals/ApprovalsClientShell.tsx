@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useTransition, useMemo, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useTransition,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import type {
   ApprovalCounts,
-  ApprovalRequest,
   ApprovalRequestListItem,
   ApprovalStatus,
   AttachedDocumentSummary,
+  ApprovalCursor,
 } from "@reachinternational/types";
 import type { User } from "@/lib/types/database";
 import { ApprovalRow } from "./components/ApprovalRow";
@@ -14,14 +21,20 @@ import { ApprovalDetailPanel } from "./components/ApprovalDetailPanel";
 import { DocumentLightboxModal } from "./components/DocumentLightboxModal";
 import { ApprovalRejectModal } from "./components/ApprovalRejectModal";
 import { ApproveAllConfirmModal } from "./components/ApproveAllConfirmModal";
-import { decideApprovalAction, approveAllAction } from "@/app/actions/approvals";
+import {
+  decideApprovalAction,
+  approveAllAction,
+  getApprovalsListPageAction,
+} from "@/app/actions/approvals";
 import {
   verifyUserDocumentAction,
   rejectUserDocumentAction,
 } from "@/app/actions/documents";
 import { canDecideApproval } from "@reachinternational/permissions";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { sanitizeUserErrorMessage } from "@reachinternational/utils";
 import {
   CheckCircle2,
   CheckCheck,
@@ -39,13 +52,18 @@ import {
   UserCog,
   ShieldAlert,
   AlertTriangle,
+  ArrowUp,
+  Sparkles,
 } from "lucide-react";
 
 export interface ApprovalsClientShellProps {
   currentUser: User;
   initialItems: ApprovalRequestListItem[];
+  initialCursor?: ApprovalCursor | null;
+  initialHasMore?: boolean;
+  initialPendingTotal?: number;
   initialCounts: ApprovalCounts;
-  initialStatus?: ApprovalStatus;
+  initialStatus?: ApprovalStatus | "all";
   initialType?: string;
   selectedRequestId?: string | null;
 }
@@ -91,33 +109,79 @@ const TYPE_FILTER_OPTIONS: Array<{
   { id: "shift_conflict", label: "Shift Conflicts", icon: AlertTriangle },
 ];
 
+/** Keyset page size for infinite scroll */
+const PAGE_SIZE = 20;
+/** Maximum rows rendered in the DOM before virtual windowing */
+const VIRTUALIZATION_THRESHOLD = 200;
+
 export function ApprovalsClientShell({
   currentUser,
   initialItems,
+  initialCursor = null,
+  initialHasMore = false,
+  initialPendingTotal,
   initialCounts,
   initialStatus = "pending",
   initialType,
   selectedRequestId = null,
 }: ApprovalsClientShellProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   // Navigation / Filter State
   const [status, setStatus] = useState<ApprovalStatus | "all">(initialStatus);
   const [typeFilter, setTypeFilter] = useState<string>(initialType || "all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Data State
+  // Data & Infinite Scroll State
   const [items, setItems] = useState<ApprovalRequestListItem[]>(initialItems);
+  const [bufferItems, setBufferItems] = useState<ApprovalRequestListItem[]>([]);
+  const [cursor, setCursor] = useState<ApprovalCursor | null>(initialCursor);
+  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+  const [pendingTotal, setPendingTotal] = useState<number>(
+    initialPendingTotal ?? initialItems.length
+  );
   const [counts, setCounts] = useState<ApprovalCounts>(initialCounts);
+
+  // Loading & Async Flags
   const [isPendingTransition, startTransition] = useTransition();
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Stable refs for actions to avoid breaking callback memoization
+  // Realtime "N new" pill state (never shifts active list)
+  const [newIncomingCount, setNewIncomingCount] = useState<number>(0);
+
+  // Sentinel ref for infinite scroll IntersectionObserver
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Stable refs for actions to avoid stale closures in callbacks
   const itemsRef = useRef(items);
-  itemsRef.current = items;
+  const bufferItemsRef = useRef(bufferItems);
+  const cursorRef = useRef(cursor);
+  const hasMoreRef = useRef(hasMore);
   const statusRef = useRef(status);
-  statusRef.current = status;
   const typeFilterRef = useRef(typeFilter);
-  typeFilterRef.current = typeFilter;
+  const isLoadingMoreRef = useRef(isLoadingMore);
 
-  // ⚡ Debounced silent counts refresh — deduplicates multiple calls from rapid approvals
+  useEffect(() => {
+    itemsRef.current = items;
+    bufferItemsRef.current = bufferItems;
+    cursorRef.current = cursor;
+    hasMoreRef.current = hasMore;
+    statusRef.current = status;
+    typeFilterRef.current = typeFilter;
+    isLoadingMoreRef.current = isLoadingMore;
+  }, [items, bufferItems, cursor, hasMore, status, typeFilter, isLoadingMore]);
+
+  // Deep-link auto-scroll when selectedRequestId is provided in searchParams
+  useEffect(() => {
+    if (!selectedRequestId) return;
+    const el = document.getElementById(`approval-row-${selectedRequestId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [selectedRequestId]);
+
+  // ⚡ Debounced silent counts refresh
   const countsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshCountsDebounced = useCallback(() => {
     if (countsRefreshTimerRef.current) {
@@ -150,6 +214,9 @@ export function ApprovalsClientShell({
   const [lightboxUserName, setLightboxUserName] = useState<string | undefined>(undefined);
   const [lightboxUserId, setLightboxUserId] = useState<string | undefined>(undefined);
 
+  // Detail Inspection Modal State
+  const [detailModalRequest, setDetailModalRequest] = useState<ApprovalRequestListItem | null>(null);
+
   // Rejection Modal State
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<
@@ -158,19 +225,19 @@ export function ApprovalsClientShell({
     | null
   >(null);
 
-  // Per-request independent action loading states (Feedback 1)
+  // Per-request action loading states
   const [processingRequestIds, setProcessingRequestIds] = useState<
     Record<string, "approving" | "rejecting">
   >({});
-  // Per-request exit animation transition state (Feedback 2)
+  // Per-request exit animation transition state (150-250ms fade + collapse)
   const [exitStates, setExitStates] = useState<Record<string, "approved" | "rejected">>({});
-  // Modal-only submitting state (does not block grid cards)
   const [isModalSubmitting, setIsModalSubmitting] = useState(false);
-  // Bulk Approve All modal and submitting state
+
+  // Bulk Approve All state
   const [approveAllModalOpen, setApproveAllModalOpen] = useState(false);
   const [isApprovingAll, setIsApprovingAll] = useState(false);
 
-  // Custom Dropdown Popover States (Feedback 4 & 5)
+  // Custom Dropdown Popover States
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
@@ -206,12 +273,12 @@ export function ApprovalsClientShell({
     };
   }, []);
 
+  // Toast Notification State
   const [toastMessage, setToastMessage] = useState<{
-    type: "success" | "error";
+    type: "success" | "error" | "info";
     text: string;
   } | null>(null);
 
-  // Auto-dismiss toast after 5 seconds (Feedback 3)
   useEffect(() => {
     if (!toastMessage) return;
     const timer = setTimeout(() => {
@@ -229,31 +296,50 @@ export function ApprovalsClientShell({
     return count;
   }, [status, typeFilter, searchQuery]);
 
-  // Refetch list and counts in parallel when status or typeFilter changes
-  const fetchList = useCallback(
-    async (currentStatus: ApprovalStatus | "all", currentType: string) => {
+  // ─── Fetch Helper: Reset & Load Page 1 on Filter Change ─────────────────
+  const fetchListReset = useCallback(
+    async (newStatus: ApprovalStatus | "all", newType: string) => {
       startTransition(async () => {
-        const q = new URLSearchParams();
-        if (currentStatus !== "all") q.set("status", currentStatus);
-        if (currentType !== "all") q.set("type_key", currentType);
-        q.set("limit", "50");
-
+        setLoadError(null);
+        setNewIncomingCount(0);
         try {
+          const q = new URLSearchParams();
+          if (newStatus !== "all") q.set("status", newStatus);
+          if (newType !== "all") q.set("type_key", newType);
+          q.set("limit", String(PAGE_SIZE));
+
           const [listRes, countRes] = await Promise.all([
             fetch(`/api/approvals?${q.toString()}`),
             fetch("/api/approvals/counts"),
           ]);
 
           if (listRes.ok) {
-            const data: ApprovalRequestListItem[] = await listRes.json();
-            setItems(data);
+            const json = await listRes.json();
+            const fetchedItems: ApprovalRequestListItem[] = Array.isArray(json)
+              ? json
+              : Array.isArray(json.items)
+              ? json.items
+              : [];
+            setItems(fetchedItems);
+            setBufferItems([]);
+            setCursor(json.next_cursor || null);
+            setHasMore(Boolean(json.has_more));
+            setPendingTotal(
+              typeof json.pending_total === "number"
+                ? json.pending_total
+                : fetchedItems.length
+            );
+          } else {
+            const errJson = await listRes.json().catch(() => ({}));
+            setLoadError(errJson.error || "Failed to load approval requests.");
           }
+
           if (countRes.ok) {
             const countData = (await countRes.json()) as ApprovalCounts;
-            setCounts(countData);
+            if (countData) setCounts(countData);
           }
-        } catch {
-          // Handled via offline notification
+        } catch (err) {
+          setLoadError(sanitizeUserErrorMessage(err));
         }
       });
     },
@@ -262,22 +348,229 @@ export function ApprovalsClientShell({
 
   const handleStatusChange = (newStatus: ApprovalStatus | "all") => {
     setStatus(newStatus);
-    fetchList(newStatus, typeFilter);
+    fetchListReset(newStatus, typeFilter);
   };
 
   const handleTypeChange = (newType: string) => {
     setTypeFilter(newType);
-    fetchList(status, newType);
+    fetchListReset(status, newType);
   };
 
   const handleResetFilters = () => {
     setStatus("pending");
     setTypeFilter("all");
     setSearchQuery("");
-    fetchList("pending", "all");
+    fetchListReset("pending", "all");
   };
 
-  // Filter items in memory by search query
+  // ─── Infinite Scroll & Buffer Manager ──────────────────────────────────
+  /**
+   * Fetches the next page of rows from server into bufferItems or visibleItems.
+   * If quiet=true, errors do not show full banners.
+   */
+  const fetchNextBatch = useCallback(async (quiet = false) => {
+    if (isLoadingMoreRef.current || !hasMoreRef.current || !cursorRef.current) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    try {
+      const q = new URLSearchParams();
+      if (statusRef.current !== "all") q.set("status", statusRef.current);
+      if (typeFilterRef.current !== "all") q.set("type_key", typeFilterRef.current);
+      q.set("cursor_created_at", cursorRef.current.created_at);
+      q.set("cursor_id", cursorRef.current.id);
+      q.set("limit", String(PAGE_SIZE));
+
+      const res = await fetch(`/api/approvals?${q.toString()}`);
+      if (!res.ok) {
+        // Fallback to Server Action
+        const saResult = await getApprovalsListPageAction({
+          status: statusRef.current,
+          type_key: typeFilterRef.current !== "all" ? typeFilterRef.current : undefined,
+          cursor_created_at: cursorRef.current.created_at,
+          cursor_id: cursorRef.current.id,
+          limit: PAGE_SIZE,
+        });
+
+        if (saResult.success && saResult.data) {
+          const newRows = saResult.data.items || [];
+          setCursor(saResult.data.next_cursor || null);
+          setHasMore(Boolean(saResult.data.has_more));
+          if (typeof saResult.data.pending_total === "number") {
+            setPendingTotal(saResult.data.pending_total);
+          }
+
+          // Dedupe against visible items
+          const existingIds = new Set(itemsRef.current.map((i) => i.id));
+          const uniqueNew = newRows.filter((row) => !existingIds.has(row.id));
+
+          setBufferItems((prev) => {
+            const bufIds = new Set(prev.map((i) => i.id));
+            const uniqueForBuffer = uniqueNew.filter((row) => !bufIds.has(row.id));
+            return [...prev, ...uniqueForBuffer];
+          });
+          return;
+        }
+
+        if (!quiet) {
+          setToastMessage({
+            type: "error",
+            text: "Could not load additional requests.",
+          });
+        }
+        return;
+      }
+
+      const json = await res.json();
+      const newRows: ApprovalRequestListItem[] = Array.isArray(json)
+        ? json
+        : Array.isArray(json.items)
+        ? json.items
+        : [];
+
+      setCursor(json.next_cursor || null);
+      setHasMore(Boolean(json.has_more));
+      if (typeof json.pending_total === "number") {
+        setPendingTotal(json.pending_total);
+      }
+
+      // Dedupe against currently visible items
+      const existingIds = new Set(itemsRef.current.map((i) => i.id));
+      const uniqueNew = newRows.filter((row) => !existingIds.has(row.id));
+
+      setBufferItems((prev) => {
+        const bufIds = new Set(prev.map((i) => i.id));
+        const uniqueForBuffer = uniqueNew.filter((row) => !bufIds.has(row.id));
+        return [...prev, ...uniqueForBuffer];
+      });
+    } catch {
+      if (!quiet) {
+        setToastMessage({
+          type: "error",
+          text: "Network error loading more requests.",
+        });
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, []);
+
+  // Pre-fetch lookahead buffer on mount if initial page is full and has more (once only)
+  const hasPrefetchedLookaheadRef = useRef(false);
+  useEffect(() => {
+    if (initialHasMore && initialCursor && !hasPrefetchedLookaheadRef.current) {
+      hasPrefetchedLookaheadRef.current = true;
+      fetchNextBatch(true);
+    }
+  }, [initialHasMore, initialCursor, fetchNextBatch]);
+
+  // ─── IntersectionObserver Sentinel with rootMargin Prefetch ────────────
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+
+        // If buffer has items, immediately shift up to PAGE_SIZE items into visible list
+        if (bufferItemsRef.current.length > 0) {
+          const sliceSize = Math.min(PAGE_SIZE, bufferItemsRef.current.length);
+          const toAdd = bufferItemsRef.current.slice(0, sliceSize);
+          const remainingBuffer = bufferItemsRef.current.slice(sliceSize);
+
+          setItems((prev) => {
+            const seen = new Set(prev.map((i) => i.id));
+            const unique = toAdd.filter((item) => !seen.has(item.id));
+            return [...prev, ...unique];
+          });
+          setBufferItems(remainingBuffer);
+
+          // If remaining buffer is low, quietly prefetch next page
+          if (remainingBuffer.length < 5 && hasMoreRef.current) {
+            fetchNextBatch(true);
+          }
+        } else if (hasMoreRef.current && !isLoadingMoreRef.current) {
+          // Buffer is empty: fetch next batch directly
+          fetchNextBatch(false);
+        }
+      },
+      { rootMargin: "400px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchNextBatch]);
+
+  // ─── Realtime Subscription (DB-Authoritative, Zero List Shift) ──────────
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel("approvals_queue_realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "approval_requests" },
+        (payload: any) => {
+          const newRow = payload.new as any;
+          // Only top-level pending items trigger notifications
+          if (newRow && !newRow.parent_id && newRow.status === "pending") {
+            const matchesType =
+              typeFilterRef.current === "all" ||
+              newRow.type_key === typeFilterRef.current;
+            const matchesStatus =
+              statusRef.current === "all" || statusRef.current === "pending";
+
+            if (matchesType && matchesStatus) {
+              setNewIncomingCount((prev) => prev + 1);
+            }
+            refreshCountsDebounced();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "approval_requests" },
+        (payload: any) => {
+          const updatedRow = payload.new as any;
+          if (
+            updatedRow &&
+            (updatedRow.status === "approved" || updatedRow.status === "rejected")
+          ) {
+            // If someone else decided a request that is currently in view:
+            setItems((prev) => {
+              const match = prev.find((i) => i.id === updatedRow.id);
+              if (match && match.status === "pending") {
+                setToastMessage({
+                  type: "info",
+                  text: `Request for ${
+                    match.requester_name || match.subject_label || "applicant"
+                  } was decided by another administrator.`,
+                });
+                return prev.filter((i) => i.id !== updatedRow.id);
+              }
+              return prev;
+            });
+            refreshCountsDebounced();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refreshCountsDebounced]);
+
+  // Action: User clicks the Realtime "N new requests available" floating pill
+  const handleLoadNewRealtimeItems = useCallback(() => {
+    setNewIncomingCount(0);
+    fetchListReset(status, typeFilter);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [fetchListReset, status, typeFilter]);
+
+  // ─── Memory Search Filter & Virtualization Safeguard ───────────────────
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
     const q = searchQuery.toLowerCase().trim();
@@ -301,6 +594,14 @@ export function ApprovalsClientShell({
     });
   }, [items, searchQuery]);
 
+  // Windowed render if list grows past threshold
+  const visibleRenderedItems = useMemo(() => {
+    if (filteredItems.length > VIRTUALIZATION_THRESHOLD) {
+      return filteredItems.slice(0, VIRTUALIZATION_THRESHOLD);
+    }
+    return filteredItems;
+  }, [filteredItems]);
+
   // Open Document Lightbox
   const handleOpenDocumentLightbox = useCallback(
     (doc: AttachedDocumentSummary, userName?: string, userId?: string) => {
@@ -312,7 +613,7 @@ export function ApprovalsClientShell({
     []
   );
 
-  // Action: Approve Request (e.g. registration, document verify, replacement)
+  // ─── Action: Approve Request (Optimistic Collapse + Bottom Buffer Append) ──
   const handleApproveRequest = useCallback(
     async (requestId: string) => {
       if (processingRequestIds[requestId]) return;
@@ -321,15 +622,19 @@ export function ApprovalsClientShell({
       const targetItem = itemsRef.current.find((i) => i.id === requestId);
       const prevItems = itemsRef.current;
       const prevCounts = { ...counts, by_type: { ...counts.by_type } };
+      const idempotencyKey = crypto.randomUUID();
 
-      // ⚡ INSTANT OPTIMISTIC UI: Immediate visual update (0ms delay)
+      // ⚡ INSTANT OPTIMISTIC UI: Trigger exit transition and decrement counts
       if (statusRef.current === "pending") {
         setExitStates((prev) => ({ ...prev, [requestId]: "approved" }));
         if (targetItem) {
           setCounts((prev) => {
             const newByType = { ...prev.by_type };
             if (newByType[targetItem.type_key]) {
-              newByType[targetItem.type_key] = Math.max(0, newByType[targetItem.type_key] - 1);
+              newByType[targetItem.type_key] = Math.max(
+                0,
+                newByType[targetItem.type_key] - 1
+              );
             }
             return {
               total: Math.max(0, prev.total - 1),
@@ -338,14 +643,31 @@ export function ApprovalsClientShell({
           });
         }
 
+        // After 200ms exit animation: remove row and append next item from lookahead buffer
         setTimeout(() => {
-          setItems((prev) => prev.filter((i) => i.id !== requestId));
+          setItems((prev) => {
+            const nextList = prev.filter((i) => i.id !== requestId);
+            // Append from buffer if available to keep the list full
+            if (bufferItemsRef.current.length > 0) {
+              const [nextBuffered, ...restBuffer] = bufferItemsRef.current;
+              setBufferItems(restBuffer);
+              if (!nextList.some((i) => i.id === nextBuffered.id)) {
+                nextList.push(nextBuffered);
+              }
+              // Quietly replenish buffer if running low
+              if (restBuffer.length < 5 && hasMoreRef.current) {
+                fetchNextBatch(true);
+              }
+            }
+            return nextList;
+          });
+
           setExitStates((prev) => {
             const next = { ...prev };
             delete next[requestId];
             return next;
           });
-        }, 300);
+        }, 200);
       } else {
         setItems((prev) =>
           prev.map((i) => (i.id === requestId ? { ...i, status: "approved" } : i))
@@ -355,7 +677,6 @@ export function ApprovalsClientShell({
       setProcessingRequestIds((prev) => ({ ...prev, [requestId]: "approving" }));
 
       try {
-        // ⚡ Fast Route Handler transport (avoids heavy RSC full-page re-render)
         const res = await fetch(`/api/approvals/${requestId}/decide`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -363,11 +684,21 @@ export function ApprovalsClientShell({
             decision: "approve",
             expected_version: targetItem?.version,
             bound_request_ids: targetItem?.bound_request_ids,
+            idempotency_key: idempotencyKey,
           }),
         });
 
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
+          // If already decided by someone else (P0004 or 409): inform user without rollback
+          if (res.status === 409 || json.isAlreadyDecided || json.error?.includes("already")) {
+            setToastMessage({
+              type: "info",
+              text: "This request was already decided by another administrator.",
+            });
+            refreshCountsDebounced();
+            return;
+          }
           throw new Error(json.error || "Failed to approve request.");
         }
 
@@ -377,13 +708,14 @@ export function ApprovalsClientShell({
         });
         refreshCountsDebounced();
       } catch (err: unknown) {
-        // Fallback to Server Action if fetch had network or transport issues
+        // Fallback to Server Action
         try {
           const result = await decideApprovalAction({
             request_id: requestId,
             decision: "approve",
             expected_version: targetItem?.version,
             bound_request_ids: targetItem?.bound_request_ids,
+            idempotency_key: idempotencyKey,
           });
 
           if (result.success) {
@@ -394,6 +726,16 @@ export function ApprovalsClientShell({
             refreshCountsDebounced();
             return;
           }
+
+          if (result.isAlreadyDecided || result.error?.includes("already")) {
+            setToastMessage({
+              type: "info",
+              text: "This request was already decided by another administrator.",
+            });
+            refreshCountsDebounced();
+            return;
+          }
+
           throw new Error(result.error || "Failed to approve request.");
         } catch (fallbackErr: any) {
           // Roll back optimistic state on unexpected failure
@@ -404,11 +746,11 @@ export function ApprovalsClientShell({
             delete next[requestId];
             return next;
           });
-          const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          const msg =
+            fallbackErr instanceof Error
+              ? fallbackErr.message
+              : String(fallbackErr);
           setToastMessage({ type: "error", text: msg });
-          if (fallbackErr?.message?.includes("Refresh") || fallbackErr?.message?.includes("conflict")) {
-            fetchList(statusRef.current, typeFilterRef.current);
-          }
         }
       } finally {
         setProcessingRequestIds((prev) => {
@@ -418,7 +760,7 @@ export function ApprovalsClientShell({
         });
       }
     },
-    [counts, fetchList, processingRequestIds, refreshCountsDebounced]
+    [counts, fetchNextBatch, processingRequestIds, refreshCountsDebounced]
   );
 
   // Action: Prompt Reject Request
@@ -437,25 +779,26 @@ export function ApprovalsClientShell({
   const handleVerifyDocument = useCallback(
     async (documentId: string, userId?: string) => {
       setToastMessage(null);
-
-      // Snapshot previous items for rollback
       const prevItems = itemsRef.current;
 
-      // ⚡ INSTANT OPTIMISTIC UI: Mark document verified in memory (0ms delay)
+      // ⚡ INSTANT OPTIMISTIC UI: Mark document verified in memory
       setItems((prev) =>
         prev.map((item) => {
           const docs = item.documents?.map((d) =>
-            d.id === documentId ? { ...d, verification_status: "verified" as const } : d
+            d.id === documentId
+              ? { ...d, verification_status: "verified" as const }
+              : d
           );
           return { ...item, documents: docs };
         })
       );
       setLightboxDocument((prev) =>
-        prev && prev.id === documentId ? { ...prev, verification_status: "verified" as const } : prev
+        prev && prev.id === documentId
+          ? { ...prev, verification_status: "verified" as const }
+          : prev
       );
 
       try {
-        // Fast dedicated API endpoint (Route Handler) — avoids heavy RSC page re-render
         const res = await fetch("/api/approvals/documents/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -470,9 +813,11 @@ export function ApprovalsClientShell({
         setToastMessage({ type: "success", text: "Document verified successfully." });
         refreshCountsDebounced();
       } catch (err: unknown) {
-        // Fallback to Server Action if fetch had network issue
         try {
-          const result = await verifyUserDocumentAction({ documentId, userId: userId || "" });
+          const result = await verifyUserDocumentAction({
+            documentId,
+            userId: userId || "",
+          });
           if (result.success) {
             setToastMessage({ type: "success", text: "Document verified successfully." });
             refreshCountsDebounced();
@@ -480,12 +825,16 @@ export function ApprovalsClientShell({
           }
           throw new Error(result.error || "Failed to verify document.");
         } catch (fallbackErr: any) {
-          // Roll back optimistic document state on failure
           setItems(prevItems);
           setLightboxDocument((prev) =>
-            prev && prev.id === documentId ? { ...prev, verification_status: "pending" as const } : prev
+            prev && prev.id === documentId
+              ? { ...prev, verification_status: "pending" as const }
+              : prev
           );
-          const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          const msg =
+            fallbackErr instanceof Error
+              ? fallbackErr.message
+              : String(fallbackErr);
           setToastMessage({ type: "error", text: msg });
         }
       }
@@ -507,7 +856,7 @@ export function ApprovalsClientShell({
     []
   );
 
-  // Action: Confirm Rejection with Reason
+  // ─── Action: Confirm Rejection with Reason (Optimistic Collapse + Append) ──
   const handleConfirmRejection = useCallback(
     async (reason: string) => {
       if (!rejectTarget) return;
@@ -518,32 +867,54 @@ export function ApprovalsClientShell({
 
       const prevItems = itemsRef.current;
       const prevCounts = { ...counts, by_type: { ...counts.by_type } };
+      const idempotencyKey = crypto.randomUUID();
 
       try {
         if (target.kind === "request") {
           const requestId = target.requestId;
           const targetItem = itemsRef.current.find((i) => i.id === requestId);
 
-          // ⚡ INSTANT OPTIMISTIC UI: Mark rejected / exit state immediately (0ms delay)
+          // ⚡ INSTANT OPTIMISTIC UI: Mark rejected / exit state immediately
           if (statusRef.current === "pending") {
             setExitStates((prev) => ({ ...prev, [requestId]: "rejected" }));
             if (targetItem) {
               setCounts((prev) => {
                 const newByType = { ...prev.by_type };
                 if (newByType[targetItem.type_key]) {
-                  newByType[targetItem.type_key] = Math.max(0, newByType[targetItem.type_key] - 1);
+                  newByType[targetItem.type_key] = Math.max(
+                    0,
+                    newByType[targetItem.type_key] - 1
+                  );
                 }
-                return { total: Math.max(0, prev.total - 1), by_type: newByType };
+                return {
+                  total: Math.max(0, prev.total - 1),
+                  by_type: newByType,
+                };
               });
             }
+
             setTimeout(() => {
-              setItems((prev) => prev.filter((i) => i.id !== requestId));
+              setItems((prev) => {
+                const nextList = prev.filter((i) => i.id !== requestId);
+                if (bufferItemsRef.current.length > 0) {
+                  const [nextBuffered, ...restBuffer] = bufferItemsRef.current;
+                  setBufferItems(restBuffer);
+                  if (!nextList.some((i) => i.id === nextBuffered.id)) {
+                    nextList.push(nextBuffered);
+                  }
+                  if (restBuffer.length < 5 && hasMoreRef.current) {
+                    fetchNextBatch(true);
+                  }
+                }
+                return nextList;
+              });
+
               setExitStates((prev) => {
                 const next = { ...prev };
                 delete next[requestId];
                 return next;
               });
-            }, 300);
+            }, 200);
           } else {
             setItems((prev) =>
               prev.map((i) => (i.id === requestId ? { ...i, status: "rejected" } : i))
@@ -561,16 +932,24 @@ export function ApprovalsClientShell({
                 note: reason,
                 expected_version: target.version,
                 bound_request_ids: targetItem?.bound_request_ids,
+                idempotency_key: idempotencyKey,
               }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
+              if (res.status === 409 || json.isAlreadyDecided || json.error?.includes("already")) {
+                setToastMessage({
+                  type: "info",
+                  text: "This request was already decided by another administrator.",
+                });
+                refreshCountsDebounced();
+                return;
+              }
               throw new Error(json.error || "Failed to reject request.");
             }
             setToastMessage({ type: "success", text: "Request rejected." });
             refreshCountsDebounced();
           } catch (err: unknown) {
-            // Fallback to Server Action
             try {
               const result = await decideApprovalAction({
                 request_id: requestId,
@@ -578,9 +957,18 @@ export function ApprovalsClientShell({
                 note: reason,
                 expected_version: target.version,
                 bound_request_ids: targetItem?.bound_request_ids,
+                idempotency_key: idempotencyKey,
               });
               if (result.success) {
                 setToastMessage({ type: "success", text: "Request rejected." });
+                refreshCountsDebounced();
+                return;
+              }
+              if (result.isAlreadyDecided || result.error?.includes("already")) {
+                setToastMessage({
+                  type: "info",
+                  text: "This request was already decided by another administrator.",
+                });
                 refreshCountsDebounced();
                 return;
               }
@@ -593,7 +981,10 @@ export function ApprovalsClientShell({
                 delete next[requestId];
                 return next;
               });
-              const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+              const msg =
+                fallbackErr instanceof Error
+                  ? fallbackErr.message
+                  : String(fallbackErr);
               setToastMessage({ type: "error", text: msg });
             }
           } finally {
@@ -604,19 +995,7 @@ export function ApprovalsClientShell({
             });
           }
         } else if (target.kind === "document") {
-          // ⚡ INSTANT OPTIMISTIC UI: Mark document rejected immediately (0ms delay)
-          setItems((prev) =>
-            prev.map((item) => {
-              const docs = item.documents?.map((d) =>
-                d.id === target.docId ? { ...d, verification_status: "rejected" as const } : d
-              );
-              return { ...item, documents: docs };
-            })
-          );
-          setLightboxDocument((prev) =>
-            prev && prev.id === target.docId ? { ...prev, verification_status: "rejected" as const } : prev
-          );
-
+          setIsModalSubmitting(true);
           try {
             const res = await fetch("/api/approvals/documents/reject", {
               method: "POST",
@@ -633,27 +1012,23 @@ export function ApprovalsClientShell({
             }
             setToastMessage({ type: "success", text: "Document rejected." });
             refreshCountsDebounced();
-          } catch (err: unknown) {
-            try {
-              const result = await rejectUserDocumentAction({
-                documentId: target.docId,
-                userId: target.userId,
-                rejectionReason: reason,
+          } catch {
+            const result = await rejectUserDocumentAction({
+              documentId: target.docId,
+              userId: target.userId,
+              rejectionReason: reason,
+            });
+            if (result.success) {
+              setToastMessage({ type: "success", text: "Document rejected." });
+              refreshCountsDebounced();
+            } else {
+              setToastMessage({
+                type: "error",
+                text: result.error || "Failed to reject document.",
               });
-              if (result.success) {
-                setToastMessage({ type: "success", text: "Document rejected." });
-                refreshCountsDebounced();
-                return;
-              }
-              throw new Error(result.error || "Failed to reject document.");
-            } catch (fallbackErr: any) {
-              setItems(prevItems);
-              setLightboxDocument((prev) =>
-                prev && prev.id === target.docId ? { ...prev, verification_status: "pending" as const } : prev
-              );
-              const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-              setToastMessage({ type: "error", text: msg });
             }
+          } finally {
+            setIsModalSubmitting(false);
           }
         }
       } catch (err: unknown) {
@@ -661,157 +1036,72 @@ export function ApprovalsClientShell({
         setToastMessage({ type: "error", text: msg });
       }
     },
-    [counts, refreshCountsDebounced, rejectTarget]
+    [counts, fetchNextBatch, processingRequestIds, refreshCountsDebounced, rejectTarget]
   );
 
-  const canDecide = canDecideApproval(
-    { id: currentUser.id, role: currentUser.role },
-    {},
-    "registration"
-  );
-
-  // Pending approvals count for Approve All button badge
-  const pendingApprovalsCount = useMemo(() => {
-    if (typeFilter !== "all") {
-      const typeCount = counts.by_type[typeFilter];
-      if (typeCount !== undefined && typeCount > 0) return typeCount;
-      return items.filter((i) => i.status === "pending" && i.type_key === typeFilter).length;
-    }
-    const regCount = counts.by_type["registration"];
-    if (regCount !== undefined && regCount > 0) return regCount;
-    return counts.total || items.filter((i) => i.status === "pending").length;
-  }, [counts, items, typeFilter]);
-
-  const canApproveAll =
-    canDecide &&
-    (pendingApprovalsCount > 0 || items.some((i) => i.status === "pending"));
-
-  // Action: Approve All Pending Requests
+  // ─── Action: Bulk Approve All ──────────────────────────────────────────
   const handleApproveAll = useCallback(async () => {
-    if (isApprovingAll) return;
     setIsApprovingAll(true);
     setToastMessage(null);
-
-    const targetTypeKey = typeFilterRef.current !== "all" ? typeFilterRef.current : undefined;
-    const currentItems = itemsRef.current;
-    const pendingItemsToApprove = currentItems.filter(
-      (i) => i.status === "pending" && (!targetTypeKey || i.type_key === targetTypeKey)
-    );
-    const countToApprove = pendingApprovalsCount || pendingItemsToApprove.length;
-    const prevItems = itemsRef.current;
-    const prevCounts = { ...counts, by_type: { ...counts.by_type } };
-
-    // ⚡ Fast responsive optimistic exit state (0ms delay)
-    if (statusRef.current === "pending") {
-      const exitMap: Record<string, "approved"> = {};
-      for (const item of pendingItemsToApprove) {
-        exitMap[item.id] = "approved";
-      }
-      setExitStates((prev) => ({ ...prev, ...exitMap }));
-
-      // Optimistically clear pending counts for approved types
-      setCounts((prev) => {
-        const newByType = { ...prev.by_type };
-        if (targetTypeKey) {
-          newByType[targetTypeKey] = 0;
-        } else {
-          newByType["registration"] = 0;
-        }
-        const newTotal = Object.values(newByType).reduce((acc, v) => acc + (v || 0), 0);
-        return {
-          total: Math.max(0, newTotal),
-          by_type: newByType,
-        };
-      });
-
-      setTimeout(() => {
-        setItems((prev) =>
-          prev.filter((i) => !pendingItemsToApprove.some((p) => p.id === i.id))
-        );
-        setExitStates({});
-      }, 300);
-    } else {
-      setItems((prev) =>
-        prev.map((i) =>
-          pendingItemsToApprove.some((p) => p.id === i.id)
-            ? { ...i, status: "approved" }
-            : i
-        )
-      );
-    }
-
     try {
-      // ⚡ Fast Route Handler transport (avoids heavy RSC full-page re-render)
-      const res = await fetch("/api/approvals/approve-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type_key: targetTypeKey }),
+      const result = await approveAllAction({
+        type_key: typeFilter !== "all" ? typeFilter : undefined,
       });
 
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to approve all requests.");
+      if (!result.success) {
+        throw new Error(result.error || "Bulk approval failed.");
       }
 
-      const approvedCount = json.data?.approved_count ?? json.approved_count ?? countToApprove;
+      setApproveAllModalOpen(false);
       setToastMessage({
         type: "success",
-        text: `Successfully approved ${approvedCount} request${
-          approvedCount === 1 ? "" : "s"
-        }. User accounts activated with documents pending verification.`,
+        text: `Successfully approved all pending requests (${
+          result.data?.approved_count || 0
+        }).`,
       });
-      refreshCountsDebounced();
+
+      // Refetch page 1 cleanly
+      fetchListReset(status, typeFilter);
     } catch (err: unknown) {
-      // Fallback to Server Action
-      try {
-        const result = await approveAllAction({
-          type_key: targetTypeKey,
-        });
-
-        if (!result.success) {
-          throw new Error(result.error || "Failed to approve all requests.");
-        }
-
-        const approvedCount = result.data?.approved_count ?? countToApprove;
-        setToastMessage({
-          type: "success",
-          text: `Successfully approved ${approvedCount} request${
-            approvedCount === 1 ? "" : "s"
-          }. User accounts activated with documents pending verification.`,
-        });
-        refreshCountsDebounced();
-      } catch (fallbackErr: any) {
-        setItems(prevItems);
-        setCounts(prevCounts);
-        setExitStates({});
-        const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-        setToastMessage({ type: "error", text: msg });
-      }
+      const msg = err instanceof Error ? err.message : String(err);
+      setToastMessage({ type: "error", text: msg });
     } finally {
       setIsApprovingAll(false);
-      setApproveAllModalOpen(false);
     }
-  }, [counts, isApprovingAll, pendingApprovalsCount, refreshCountsDebounced]);
+  }, [fetchListReset, status, typeFilter]);
 
+  // Authorization check: strictly admin users who can decide
+  const canDecide = canDecideApproval(
+    { id: currentUser.id, role: currentUser.role },
+    null,
+    "registration"
+  );
+  const pendingApprovalsCount =
+    typeFilter !== "all" ? counts.by_type[typeFilter] || 0 : counts.total;
+  const canApproveAll = status === "pending" && pendingApprovalsCount > 0;
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-4rem)] max-w-7xl mx-auto p-3 sm:p-6 space-y-4">
-      {/* Toast Feedback with 5s auto-dismiss and smooth exit animation (Feedback 3) */}
+    <div className="space-y-4 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 relative min-h-screen">
+      {/* ── Toast Notification (Floating) ── */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.95 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -20, scale: 0.95 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className={`fixed top-4 right-4 z-50 p-3.5 rounded-xl border text-xs font-semibold shadow-xl flex items-center gap-2.5 backdrop-blur-md ${
               toastMessage.type === "success"
                 ? "bg-emerald-50/95 text-emerald-900 border-emerald-300 dark:bg-emerald-950/95 dark:text-emerald-100 dark:border-emerald-700"
+                : toastMessage.type === "info"
+                ? "bg-sky-50/95 text-sky-900 border-sky-300 dark:bg-sky-950/95 dark:text-sky-100 dark:border-sky-700"
                 : "bg-red-50/95 text-red-900 border-red-300 dark:bg-red-950/95 dark:text-red-100 dark:border-red-700"
             }`}
           >
             {toastMessage.type === "success" ? (
               <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            ) : toastMessage.type === "info" ? (
+              <Sparkles size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />
             ) : (
               <AlertCircle size={16} className="text-red-600 dark:text-red-400 shrink-0" />
             )}
@@ -828,20 +1118,57 @@ export function ApprovalsClientShell({
         )}
       </AnimatePresence>
 
-      {/* ── Desktop Header with Action Bar (Hidden on Mobile where navbar already displays Approvals title) ── */}
+      {/* ── Realtime "N new requests available" Floating Pill ── */}
+      <AnimatePresence>
+        {newIncomingCount > 0 && (
+          <motion.div
+            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.95 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.95 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed top-18 left-1/2 -translate-x-1/2 z-40"
+          >
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleLoadNewRealtimeItems}
+              className="px-4 py-2 rounded-full bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white shadow-xl text-xs font-semibold flex items-center gap-2 cursor-pointer border border-sky-400/40 backdrop-blur-md"
+            >
+              <ArrowUp size={13} className="animate-bounce" />
+              <span>
+                {newIncomingCount} new request{newIncomingCount > 1 ? "s" : ""}{" "}
+                available · Click to view
+              </span>
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Desktop Header with Action Bar ── */}
       <div className="hidden sm:flex sm:items-center sm:justify-between pb-3 border-b border-[var(--color-border)] gap-3">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--color-ink)]">
-          Approvals &amp; Verifications
-        </h1>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--color-ink)]">
+            Approvals &amp; Verifications
+          </h1>
+          <p className="text-xs text-[var(--color-ink-muted)] mt-0.5">
+            Single-transaction queue with server-enforced RBAC and keyset streaming
+          </p>
+        </div>
 
         {canDecide && (
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: prefersReducedMotion ? 1 : 0.98 }}
               disabled={!canApproveAll || isApprovingAll}
               onClick={() => setApproveAllModalOpen(true)}
               className="h-9 px-3.5 sm:px-4 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
-              title={canApproveAll ? "Approve all pending user registrations" : "No pending requests to approve"}
+              title={
+                canApproveAll
+                  ? "Approve all pending user registrations"
+                  : "No pending requests to approve"
+              }
             >
               {isApprovingAll ? (
                 <Loader2 size={15} className="animate-spin" />
@@ -852,12 +1179,12 @@ export function ApprovalsClientShell({
                 Approve All
                 {pendingApprovalsCount > 0 ? ` (${pendingApprovalsCount})` : ""}
               </span>
-            </button>
+            </motion.button>
           </div>
         )}
       </div>
 
-      {/* ── Standard Search & Filter Toolbar (Feedback 1) ── */}
+      {/* ── Search & Filter Toolbar ── */}
       <FilterToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -868,9 +1195,9 @@ export function ApprovalsClientShell({
         isLoading={isPendingTransition}
       >
         <div className="flex flex-col gap-3 w-full">
-          {/* Dropdown selectors for Status and Type (Feedback 4 & 5: Custom Dropdowns) */}
+          {/* Dropdown selectors for Status and Type */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-            {/* 1. Status Filter Dropdown (Custom color-coded dropdown - Feedback 5) */}
+            {/* 1. Status Filter Dropdown */}
             <div className="space-y-1.5 relative" ref={statusDropdownRef}>
               <label
                 htmlFor="approvals-status-select"
@@ -919,13 +1246,13 @@ export function ApprovalsClientShell({
                   />
                 </button>
 
-                {/* Animated Floating Popover Listbox */}
+                {/* Popover Listbox */}
                 <AnimatePresence>
                   {statusDropdownOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
+                      animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                      exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
                       transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                       className="absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl p-1 max-h-64 overflow-y-auto custom-scrollbar backdrop-blur-md"
                       role="listbox"
@@ -975,7 +1302,7 @@ export function ApprovalsClientShell({
               </div>
             </div>
 
-            {/* 2. Type Filter Dropdown (Custom dropdown selection - Feedback 4) */}
+            {/* 2. Type Filter Dropdown */}
             <div className="space-y-1.5 relative" ref={typeDropdownRef}>
               <label
                 htmlFor="approvals-type-select"
@@ -1027,13 +1354,12 @@ export function ApprovalsClientShell({
                         />
                       </button>
 
-                      {/* Animated Floating Popover Listbox */}
                       <AnimatePresence>
                         {typeDropdownOpen && (
                           <motion.div
-                            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
+                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
                             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                             className="absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl p-1 max-h-64 overflow-y-auto custom-scrollbar backdrop-blur-md"
                             role="listbox"
@@ -1143,18 +1469,20 @@ export function ApprovalsClientShell({
         </div>
       </FilterToolbar>
 
-      {/* ── Single Section Main Layout (Feedback 6, 7: Only ONE section, no second split panel) ── */}
+      {/* ── Main Queue Content ── */}
       <div className="w-full">
-        {/* Results Count Banner + Mobile-Optimized Approve All Button (Utilizes existing empty space, 0 extra vertical space) */}
+        {/* Results Count Banner */}
         <div className="flex items-center justify-between pb-2 text-xs font-medium text-[var(--color-ink-muted)]">
           <span>
-            Showing <strong className="text-[var(--color-ink)]">{filteredItems.length}</strong>{" "}
-            approval requests
+            Showing <strong className="text-[var(--color-ink)]">{filteredItems.length}</strong>
+            {hasMore ? " (streaming)" : ""}{" "}
+            of <strong className="text-[var(--color-ink)]">{pendingTotal}</strong> total requests
           </span>
 
           {canDecide && canApproveAll && (
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: prefersReducedMotion ? 1 : 0.98 }}
               disabled={isApprovingAll}
               onClick={() => setApproveAllModalOpen(true)}
               className="sm:hidden h-8 px-3 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
@@ -1169,15 +1497,47 @@ export function ApprovalsClientShell({
                 Approve All
                 {pendingApprovalsCount > 0 ? ` (${pendingApprovalsCount})` : ""}
               </span>
-            </button>
+            </motion.button>
           )}
         </div>
 
-        {/* Loading State: only if initial items is empty and transition pending */}
+        {/* Load Error Banner */}
+        {loadError && (
+          <div className="mb-4 p-3 rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-200 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={15} className="shrink-0 text-red-600 dark:text-red-400" />
+              <span>{loadError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchListReset(status, typeFilter)}
+              className="font-bold underline hover:no-underline cursor-pointer ml-3 shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Initial Loading Skeleton */}
         {isPendingTransition && items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-xs text-[var(--color-ink-muted)]">
-            <Loader2 size={24} className="animate-spin mb-2 text-sky-600" />
-            <span>Loading approval requests...</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            {[1, 2, 3, 4].map((n) => (
+              <div
+                key={n}
+                className="w-full rounded-xl border border-[var(--color-border)] p-4 bg-[var(--color-canvas-elevated)] space-y-3 animate-pulse"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-24 bg-[var(--color-border)] rounded-full" />
+                  <div className="h-4 w-16 bg-[var(--color-border)] rounded-md" />
+                </div>
+                <div className="h-5 w-40 bg-[var(--color-border)] rounded-md" />
+                <div className="h-4 w-56 bg-[var(--color-border)] rounded-md" />
+                <div className="pt-2 border-t border-[var(--color-border)]/50 flex justify-end gap-2">
+                  <div className="h-9 w-20 bg-[var(--color-border)] rounded-xl" />
+                  <div className="h-9 w-20 bg-[var(--color-border)] rounded-xl" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredItems.length === 0 ? (
           /* Empty State */
@@ -1204,24 +1564,36 @@ export function ApprovalsClientShell({
             )}
           </div>
         ) : (
-          /* Responsive Redesigned Cards Grid with Independent Smooth Exit & Layout Animations (Feedback 1 & 2) */
+          /* Cards Grid with Framer Motion Tokens */
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
             <AnimatePresence mode="popLayout" initial={false}>
-              {filteredItems.map((item) => (
+              {visibleRenderedItems.map((item) => (
                 <motion.div
                   key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{
-                    opacity: 0,
-                    scale: 0.92,
-                    y: -8,
-                    transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
-                  }}
+                  layout={!prefersReducedMotion}
+                  initial={
+                    prefersReducedMotion
+                      ? { opacity: 0 }
+                      : { opacity: 0, y: 12, scale: 0.98 }
+                  }
+                  animate={
+                    prefersReducedMotion
+                      ? { opacity: 1 }
+                      : { opacity: 1, y: 0, scale: 1 }
+                  }
+                  exit={
+                    prefersReducedMotion
+                      ? { opacity: 0 }
+                      : {
+                          opacity: 0,
+                          scale: 0.92,
+                          y: -8,
+                          transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+                        }
+                  }
                   transition={{
-                    layout: { duration: 0.35, ease: [0.16, 1, 0.3, 1] },
-                    duration: 0.25,
+                    layout: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+                    duration: 0.2,
                   }}
                   className="w-full flex"
                 >
@@ -1242,63 +1614,80 @@ export function ApprovalsClientShell({
             </AnimatePresence>
           </div>
         )}
+
+        {/* ── Infinite Scroll Sentinel & Streaming Indicator ── */}
+        <div ref={sentinelRef} className="w-full py-6 flex items-center justify-center">
+          {isLoadingMore ? (
+            <div className="flex items-center gap-2 text-xs text-[var(--color-ink-muted)]">
+              <Loader2 size={16} className="animate-spin text-sky-600" />
+              <span>Loading more requests...</span>
+            </div>
+          ) : !hasMore && bufferItems.length === 0 && items.length > 0 ? (
+            <div className="text-center text-xs text-[var(--color-mute)] border-t border-[var(--color-hairline)] pt-4 w-full">
+              <span>You have reached the end of the queue.</span>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {/* ── Document Full View Lightbox Modal (Opens when any document thumbnail is clicked) ── */}
-      <DocumentLightboxModal
-        isOpen={lightboxOpen}
-        onClose={() => {
-          setLightboxOpen(false);
-          setLightboxDocument(null);
-          setLightboxUserName(undefined);
-          setLightboxUserId(undefined);
-        }}
-        document={lightboxDocument}
-        userName={lightboxUserName}
-        userId={lightboxUserId}
-        onVerifyDocument={
-          canDecide
-            ? async (docId) => {
-                const replaceItem = items.find(
-                  (i) =>
-                    i.type_key === "document_replace" &&
-                    (i.id === docId ||
-                      i.subject_id === docId ||
-                      (i.documents && i.documents.some((d) => d.id === docId)))
-                );
-                if (replaceItem) {
-                  setLightboxOpen(false);
-                  await handleApproveRequest(replaceItem.id);
-                } else {
-                  await handleVerifyDocument(docId, lightboxUserId);
+      {/* ── Document Full View Lightbox Modal ── */}
+      {lightboxOpen && lightboxDocument && (
+        <DocumentLightboxModal
+          key={lightboxDocument.id}
+          isOpen={lightboxOpen}
+          onClose={() => {
+            setLightboxOpen(false);
+            setLightboxDocument(null);
+            setLightboxUserName(undefined);
+            setLightboxUserId(undefined);
+          }}
+          document={lightboxDocument}
+          userName={lightboxUserName}
+          userId={lightboxUserId}
+          onVerifyDocument={
+            canDecide
+              ? async (docId) => {
+                  const replaceItem = items.find(
+                    (i) =>
+                      i.type_key === "document_replace" &&
+                      (i.id === docId ||
+                        i.subject_id === docId ||
+                        (i.documents && i.documents.some((d) => d.id === docId)))
+                  );
+                  if (replaceItem) {
+                    setLightboxOpen(false);
+                    await handleApproveRequest(replaceItem.id);
+                  } else {
+                    await handleVerifyDocument(docId, lightboxUserId);
+                  }
                 }
-              }
-            : undefined
-        }
-        onRejectDocumentPrompt={
-          canDecide
-            ? (doc) => {
-                const replaceItem = items.find(
-                  (i) =>
-                    i.type_key === "document_replace" &&
-                    (i.id === doc.id ||
-                      i.subject_id === doc.id ||
-                      (i.documents && i.documents.some((d) => d.id === doc.id)))
-                );
-                if (replaceItem) {
-                  setLightboxOpen(false);
-                  handleRejectPromptRequest(replaceItem.id);
-                } else {
-                  handleRejectPromptDocument(doc, lightboxUserId);
+              : undefined
+          }
+          onRejectDocumentPrompt={
+            canDecide
+              ? (doc) => {
+                  const replaceItem = items.find(
+                    (i) =>
+                      i.type_key === "document_replace" &&
+                      (i.id === doc.id ||
+                        i.subject_id === doc.id ||
+                        (i.documents && i.documents.some((d) => d.id === doc.id)))
+                  );
+                  if (replaceItem) {
+                    setLightboxOpen(false);
+                    handleRejectPromptRequest(replaceItem.id);
+                  } else {
+                    handleRejectPromptDocument(doc, lightboxUserId);
+                  }
                 }
-              }
-            : undefined
-        }
-        canDecide={canDecide}
-        isActionLoading={isModalSubmitting}
-      />
+              : undefined
+          }
+          canDecide={canDecide}
+          isActionLoading={isModalSubmitting}
+        />
+      )}
 
-      {/* ── Rejection Reason Modal (Mandatory reason capture) ── */}
+      {/* ── Rejection Reason Modal ── */}
       <ApprovalRejectModal
         isOpen={rejectModalOpen}
         onClose={() => {
@@ -1316,9 +1705,29 @@ export function ApprovalsClientShell({
         onClose={() => setApproveAllModalOpen(false)}
         onConfirm={handleApproveAll}
         count={pendingApprovalsCount}
-        typeLabel={typeFilter !== "all" ? TYPE_FILTER_OPTIONS.find((t) => t.id === typeFilter)?.label : undefined}
+        typeLabel={
+          typeFilter !== "all"
+            ? TYPE_FILTER_OPTIONS.find((t) => t.id === typeFilter)?.label
+            : undefined
+        }
         isSubmitting={isApprovingAll}
       />
+
+      {/* ── Detailed Review Panel / Modal ── */}
+      {detailModalRequest && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-end p-4">
+          <div className="w-full max-w-xl h-full bg-[var(--color-canvas)] rounded-2xl border border-[var(--color-hairline)] shadow-2xl overflow-hidden flex flex-col">
+            <ApprovalDetailPanel
+              request={detailModalRequest as any}
+              onApprove={handleApproveRequest}
+              onRejectPrompt={(req) => handleRejectPromptRequest(req.id)}
+              onClose={() => setDetailModalRequest(null)}
+              canDecide={canDecide}
+              isActionLoading={Boolean(processingRequestIds[detailModalRequest.id])}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

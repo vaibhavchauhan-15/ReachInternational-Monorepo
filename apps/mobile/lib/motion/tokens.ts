@@ -59,3 +59,15 @@ export const SCALE = {
   backPreview: 0.9,
   popoverFrom: 0.8,
 } as const;
+
+/**
+ * Press-feedback timing & scale preset (single source of truth).
+ * Deliberately short (90ms in / 110ms out) so a tap never feels delayed,
+ * and shallow (0.97) so dense surfaces never visibly breathe.
+ * Consumed by components/ui/touch/Pressable via the opt-in `pressScale` prop.
+ */
+export const PRESS = {
+  scale: 0.97,
+  inMs: 90,
+  outMs: 110,
+} as const;

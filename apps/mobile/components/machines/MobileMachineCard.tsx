@@ -9,37 +9,55 @@ import { Badge, useTheme, HighlightText, Text, Touchable, showToast } from '../u
 import { Pressable } from '../ui/touch/Pressable';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { haptics } from '../../lib/haptics';
+import { PRESS } from '../../lib/motion/tokens';
 import {
   Copy,
   Check,
-  ChevronRight,
   History,
   Shield,
   User,
+  UserPlus,
+  Timer,
 } from '../ui/icon';
 
 export interface MobileMachineCardProps {
   machine: any;
-  isAdmin: boolean;
+  /**
+   * @deprecated Prefer the explicit capability props below. Kept for existing callers
+   * (user detail view) so behaviour is unchanged until they migrate.
+   */
+  isAdmin?: boolean;
+  /** @deprecated Prefer `canAssignOperator`. */
   isSupervisor?: boolean;
+  /** Capability `machine.assign_operator` (manager tier + supervisor). */
+  canAssignOperator?: boolean;
+  /** Capability `machine.status_update`/operator shift entry → shows the Log Entry CTA. */
+  canLogEntry?: boolean;
+  /** Operator assigned-machine view: worksite + site supervisor, no crew list. */
+  operatorView?: boolean;
   searchTerm?: string;
-  onEdit: (machine: any) => void;
-  onDelete: (machine: any) => void;
+  onEdit?: (machine: any) => void;
+  onDelete?: (machine: any) => void;
   onLogMeter?: (machine: any) => void;
   onViewHistory?: (machine: any) => void;
-  onViewDetails: (machine: any) => void;
+  onViewDetails?: (machine: any) => void;
+  onAssignOperator?: (machine: any) => void;
 }
 
 export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
   machine,
-  isAdmin,
+  isAdmin = false,
   isSupervisor = false,
+  canAssignOperator,
+  canLogEntry = false,
+  operatorView = false,
   searchTerm,
   onEdit,
   onDelete,
   onLogMeter,
   onViewHistory,
   onViewDetails,
+  onAssignOperator,
 }) => {
   const { theme, isDark } = useTheme();
   const [copied, setCopied] = useState(false);
@@ -84,6 +102,8 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
     ? machine.operators.filter((o: any) => Boolean(o?.full_name))
     : machine.current_operator?.full_name
     ? [machine.current_operator]
+    : machine.assigned_operator_name
+    ? [{ id: machine.assigned_operator_code || 'op', full_name: machine.assigned_operator_name }]
     : [];
   const opSeen = new Set<string>();
   const operators = rawOperators.filter((o: any, idx: number) => {
@@ -94,9 +114,25 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
   });
 
   const clientName = machine.client?.company_name || machine.customer_name || '—';
+  const worksiteLabel = machine.worksite_name || clientName;
+  const worksiteRegion = [machine.worksite_city, machine.worksite_state].filter(Boolean).join(', ');
+
+  // Capability resolution: explicit capability prop wins, legacy booleans keep old callers working.
+  const assignAllowed =
+    canAssignOperator !== undefined
+      ? canAssignOperator
+      : isAdmin || isSupervisor || Boolean(onAssignOperator);
+
+  const showLogEntryCta = canLogEntry && Boolean(onLogMeter);
 
   return (
-    <View
+    <Touchable
+      preset="card"
+      onPress={() => onViewDetails?.(machine)}
+      pressScale={PRESS.scale}
+      pressInMs={PRESS.inMs}
+      pressOutMs={PRESS.outMs}
+      activeOpacity={0.94}
       style={[
         styles.card,
         {
@@ -105,8 +141,10 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
           borderLeftColor: getAccentBorderColor(),
         },
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Machine ${machine.machine_id}: ${machine.model || "Asset"}`}
     >
-      {/* Top Header Row: M/C ID chip + Model name on left, Badges on right */}
+      {/* Top Header Row: M/C ID chip on left (thin padding matching status chips), Badges on right */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           {/* Machine ID Reusable Badge Chip */}
@@ -121,13 +159,16 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
           >
             <Badge
               variant="outline"
-              size="md"
+              size="sm"
               style={[
                 styles.codeBadge,
                 {
                   backgroundColor: theme.colors.canvasElevated,
                   borderColor: theme.colors.hairline,
                   opacity: 1,
+                  paddingVertical: 2,
+                  paddingHorizontal: 8,
+                  borderRadius: radiusNumeric.pill,
                 },
               ]}
             >
@@ -147,17 +188,6 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               </View>
             </Badge>
           </Pressable>
-
-          {machine.model && (
-            <HighlightText
-              text={machine.model}
-              query={searchTerm}
-              variant="heading"
-              style={[styles.modelText, { color: theme.colors.ink }]}
-              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
-              numberOfLines={1}
-            />
-          )}
         </View>
 
         {/* Badges Column: Active / Health + Rented / Available */}
@@ -184,11 +214,26 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
         </View>
       </View>
 
-      {/* Sub Metadata Row: S/N and Year of Mfg */}
-      {Boolean(machine.serial_number || machine.year_of_mfg) && (
+      {/* Sub Metadata Row: Model, S/N, Manufacturer and Year of Mfg (wraps at 360dp, never clips) */}
+      {Boolean(machine.model || machine.serial_number || machine.year_of_mfg || machine.manufacturer) && (
         <View style={styles.metaRow}>
+          {Boolean(machine.model) && (
+            <HighlightText
+              text={machine.model}
+              query={searchTerm}
+              variant="heading"
+              style={[styles.modelText, { color: theme.colors.ink }]}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3' }}
+              numberOfLines={1}
+            />
+          )}
+          {Boolean(machine.model && (machine.serial_number || machine.manufacturer || machine.year_of_mfg)) && (
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              •
+            </Text>
+          )}
           {Boolean(machine.serial_number) && (
-            <Text variant="caption" style={{ color: theme.colors.body }}>
+            <Text variant="caption" style={{ color: theme.colors.body }} numberOfLines={1}>
               S/N:{' '}
               <HighlightText
                 text={machine.serial_number}
@@ -199,7 +244,17 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               />
             </Text>
           )}
-          {Boolean(machine.serial_number && machine.year_of_mfg) && (
+          {Boolean(machine.serial_number && machine.manufacturer) && (
+            <Text variant="caption" style={{ color: theme.colors.mute }}>
+              •
+            </Text>
+          )}
+          {Boolean(machine.manufacturer) && (
+            <Text variant="caption" style={{ color: theme.colors.mute }} numberOfLines={1}>
+              {machine.manufacturer}
+            </Text>
+          )}
+          {Boolean((machine.serial_number || machine.manufacturer) && machine.year_of_mfg) && (
             <Text variant="caption" style={{ color: theme.colors.mute }}>
               •
             </Text>
@@ -212,7 +267,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
         </View>
       )}
 
-      {/* Inset Specs Well: Hour Meter & Client in Col 1 & 2; Supervisor & Operator in Row 2 */}
+      {/* Inset Specs Well */}
       <View
         style={[
           styles.specsWell,
@@ -222,114 +277,170 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
           },
         ]}
       >
-        <View style={styles.twoColGrid}>
-          <View style={styles.gridCol}>
-            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
-              Hour Meter (HMR):
-            </Text>
-            <Text variant="mono" weight="bold" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
-              {machine.hour_meter ?? 0} hrs
-            </Text>
-          </View>
+        {operatorView ? (
+          <>
+            <View style={styles.twoColGrid}>
+              <View style={styles.gridCol}>
+                <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                  Hour Meter (HMR):
+                </Text>
+                <Text variant="mono" weight="bold" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
+                  {machine.hour_meter ?? 0} hrs
+                </Text>
+              </View>
 
-          <View style={styles.gridCol}>
-            <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
-              Assigned Client:
-            </Text>
-            <Text
-              variant="caption"
-              weight="bold"
-              style={[styles.specValueClient, { color: theme.colors.ink }]}
-              numberOfLines={1}
-            >
-              {clientName}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
-
-        {/* Personnel Rows: Supervisor & Operator (24h) */}
-        <View style={styles.twoColGrid}>
-          {/* Supervisors */}
-          <View style={styles.gridCol}>
-            <View style={styles.personnelHeader}>
-              <Shield size={12} color="#0d9488" />
-              <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
-                Supervisor:
-              </Text>
+              <View style={styles.gridCol}>
+                <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                  Worksite:
+                </Text>
+                <Text
+                  variant="caption"
+                  weight="bold"
+                  style={[styles.specValueClient, { color: theme.colors.ink }]}
+                  numberOfLines={1}
+                >
+                  {worksiteLabel}
+                </Text>
+                {Boolean(worksiteRegion) && (
+                  <Text variant="micro" style={{ color: theme.colors.mute }} numberOfLines={1}>
+                    {worksiteRegion}
+                  </Text>
+                )}
+              </View>
             </View>
 
-            {supervisors.length === 0 ? (
-              <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
-                Unassigned
-              </Text>
-            ) : (
-              supervisors.slice(0, 3).map((s: any, idx: number) => {
-                const isLast = idx === Math.min(supervisors.length, 3) - 1;
-                const remaining = supervisors.length > 3 ? supervisors.length - 3 : 0;
-                return (
-                  <View key={`${s.id || 'sup'}-${idx}`} style={styles.personnelRow}>
-                    <Text
-                      variant="caption"
-                      weight="semibold"
-                      style={[{ color: theme.colors.ink, flexShrink: 1 }]}
-                      numberOfLines={1}
-                    >
-                      {s.full_name}
-                    </Text>
-                    {isLast && remaining > 0 && (
-                      <Badge variant="neutral" solid size="md">
-                        +{remaining}
-                      </Badge>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
+            <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
 
-          {/* Operators */}
-          <View style={styles.gridCol}>
-            <View style={styles.personnelHeader}>
-              <User size={12} color="#d97706" />
-              <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
-                Operator (24h):
-              </Text>
+            <View style={styles.gridCol}>
+              <View style={styles.personnelHeader}>
+                <Shield size={12} color="#0d9488" />
+                <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                  Site Supervisor:
+                </Text>
+              </View>
+              {supervisors.length === 0 ? (
+                <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
+                  Unassigned
+                </Text>
+              ) : (
+                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }} numberOfLines={1}>
+                  {supervisors[0].full_name}
+                </Text>
+              )}
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.twoColGrid}>
+              <View style={styles.gridCol}>
+                <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                  Hour Meter (HMR):
+                </Text>
+                <Text variant="mono" weight="bold" style={[styles.specValueHmr, { color: theme.colors.ink }]}>
+                  {machine.hour_meter ?? 0} hrs
+                </Text>
+              </View>
+
+              <View style={styles.gridCol}>
+                <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                  Assigned Client:
+                </Text>
+                <Text
+                  variant="caption"
+                  weight="bold"
+                  style={[styles.specValueClient, { color: theme.colors.ink }]}
+                  numberOfLines={1}
+                >
+                  {clientName}
+                </Text>
+              </View>
             </View>
 
-            {operators.length === 0 ? (
-              <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
-                Unassigned
-              </Text>
-            ) : (
-              operators.slice(0, 3).map((o: any, idx: number) => {
-                const isLast = idx === Math.min(operators.length, 3) - 1;
-                const remaining = operators.length > 3 ? operators.length - 3 : 0;
-                return (
-                  <View key={`${o.id || 'op'}-${idx}`} style={styles.personnelRow}>
-                    <Text
-                      variant="caption"
-                      weight="semibold"
-                      style={[{ color: theme.colors.ink, flexShrink: 1 }]}
-                      numberOfLines={1}
-                    >
-                      {o.full_name}
-                    </Text>
-                    {isLast && remaining > 0 && (
-                      <Badge variant="neutral" solid size="md">
-                        +{remaining}
-                      </Badge>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-        </View>
+            <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
+
+            {/* Personnel Rows: Supervisor & Operator (24h) */}
+            <View style={styles.twoColGrid}>
+              {/* Supervisors */}
+              <View style={styles.gridCol}>
+                <View style={styles.personnelHeader}>
+                  <Shield size={12} color="#0d9488" />
+                  <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                    Supervisor:
+                  </Text>
+                </View>
+
+                {supervisors.length === 0 ? (
+                  <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
+                    Unassigned
+                  </Text>
+                ) : (
+                  supervisors.slice(0, 3).map((s: any, idx: number) => {
+                    const isLast = idx === Math.min(supervisors.length, 3) - 1;
+                    const remaining = supervisors.length > 3 ? supervisors.length - 3 : 0;
+                    return (
+                      <View key={`${s.id || 'sup'}-${idx}`} style={styles.personnelRow}>
+                        <Text
+                          variant="caption"
+                          weight="semibold"
+                          style={[{ color: theme.colors.ink, flexShrink: 1 }]}
+                          numberOfLines={1}
+                        >
+                          {s.full_name}
+                        </Text>
+                        {isLast && remaining > 0 && (
+                          <Badge variant="neutral" solid size="md">
+                            +{remaining}
+                          </Badge>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+
+              {/* Operators */}
+              <View style={styles.gridCol}>
+                <View style={styles.personnelHeader}>
+                  <User size={12} color="#d97706" />
+                  <Text variant="caption" style={[styles.specLabel, { color: theme.colors.mute }]}>
+                    Operator (24h):
+                  </Text>
+                </View>
+
+                {operators.length === 0 ? (
+                  <Text variant="caption" style={[styles.unassignedText, { color: theme.colors.mute }]}>
+                    Unassigned
+                  </Text>
+                ) : (
+                  operators.slice(0, 3).map((o: any, idx: number) => {
+                    const isLast = idx === Math.min(operators.length, 3) - 1;
+                    const remaining = operators.length > 3 ? operators.length - 3 : 0;
+                    return (
+                      <View key={`${o.id || 'op'}-${idx}`} style={styles.personnelRow}>
+                        <Text
+                          variant="caption"
+                          weight="semibold"
+                          style={[{ color: theme.colors.ink, flexShrink: 1 }]}
+                          numberOfLines={1}
+                        >
+                          {o.full_name}
+                        </Text>
+                        {isLast && remaining > 0 && (
+                          <Badge variant="neutral" solid size="md">
+                            +{remaining}
+                          </Badge>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </View>
+          </>
+        )}
       </View>
 
-      {/* Action Buttons Footer: Left History Log & Right View Details */}
+      {/* Action Buttons Footer: History on the left, capability-gated primary action on the right */}
       <View style={[styles.cardFooter, { borderTopColor: theme.colors.hairline }]}>
         <View style={styles.footerLeftBtns}>
           <Touchable
@@ -341,7 +452,7 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
               } else if (onLogMeter) {
                 onLogMeter(machine);
               } else {
-                onViewDetails(machine);
+                onViewDetails?.(machine);
               }
             }}
             style={[
@@ -357,33 +468,64 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
           </Touchable>
         </View>
 
-        {/* View Details Right Squircle */}
-        <Touchable
-          preset="button"
-          onPress={(e) => {
-            e?.stopPropagation?.();
-            onViewDetails(machine);
-          }}
-          style={[
-            styles.viewDetailsBtn,
-            {
-              backgroundColor: '#0284c7',
-              borderColor: '#0284c7',
-            },
-          ]}
-          accessibilityLabel="View Machine Details"
-        >
-          <Text variant="caption" weight="semibold" style={{ color: '#ffffff' }}>
-            Details
-          </Text>
-          <ChevronRight size={14} color="#ffffff" strokeWidth={2.5} />
-        </Touchable>
+        {showLogEntryCta ? (
+          <Touchable
+            preset="button"
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              onLogMeter?.(machine);
+            }}
+            style={[
+              styles.assignOperatorBtn,
+              {
+                backgroundColor: '#0284c7',
+                borderColor: '#0284c7',
+              },
+            ]}
+            accessibilityLabel="Log machine hour meter entry"
+          >
+            <Timer size={14} color="#ffffff" strokeWidth={2.5} />
+            <Text variant="caption" weight="semibold" style={{ color: '#ffffff' }}>
+              Log Entry
+            </Text>
+          </Touchable>
+        ) : assignAllowed ? (
+          <Touchable
+            preset="button"
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              if (onAssignOperator) {
+                onAssignOperator(machine);
+              } else if (onEdit) {
+                onEdit(machine);
+              } else {
+                onViewDetails?.(machine);
+              }
+            }}
+            style={[
+              styles.assignOperatorBtn,
+              {
+                backgroundColor: '#0284c7',
+                borderColor: '#0284c7',
+              },
+            ]}
+            accessibilityLabel="Assign Operator to Machine"
+          >
+            <UserPlus size={14} color="#ffffff" strokeWidth={2.5} />
+            <Text variant="caption" weight="semibold" style={{ color: '#ffffff' }}>
+              Assign Operator
+            </Text>
+          </Touchable>
+        ) : null}
       </View>
-    </View>
+    </Touchable>
   );
 }, (prevProps, nextProps) => {
   if (prevProps.isAdmin !== nextProps.isAdmin) return false;
   if (prevProps.isSupervisor !== nextProps.isSupervisor) return false;
+  if (prevProps.canAssignOperator !== nextProps.canAssignOperator) return false;
+  if (prevProps.canLogEntry !== nextProps.canLogEntry) return false;
+  if (prevProps.operatorView !== nextProps.operatorView) return false;
   if (prevProps.searchTerm !== nextProps.searchTerm) return false;
 
   const p = prevProps.machine;
@@ -395,13 +537,19 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = React.memo(({
     p.id === n.id &&
     p.machine_id === n.machine_id &&
     p.model === n.model &&
+    p.machine_name === n.machine_name &&
     p.serial_number === n.serial_number &&
+    p.manufacturer === n.manufacturer &&
     p.year_of_mfg === n.year_of_mfg &&
     p.status === n.status &&
     p.health_status === n.health_status &&
     p.hour_meter === n.hour_meter &&
     p.client_id === n.client_id &&
     (p.client?.company_name || p.customer_name) === (n.client?.company_name || n.customer_name) &&
+    p.worksite_name === n.worksite_name &&
+    p.worksite_city === n.worksite_city &&
+    p.worksite_state === n.worksite_state &&
+    p.assigned_operator_name === n.assigned_operator_name &&
     p.current_supervisor?.id === n.current_supervisor?.id &&
     p.current_supervisor?.full_name === n.current_supervisor?.full_name &&
     p.current_operator?.id === n.current_operator?.id &&
@@ -464,9 +612,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     gap: 6,
-    flexShrink: 0,
+    flexShrink: 1,
+    maxWidth: '58%',
   },
   metaRow: {
     flexDirection: 'row',
@@ -488,6 +637,7 @@ const styles = StyleSheet.create({
   },
   gridCol: {
     flex: 1,
+    minWidth: 0,
   },
   specsDivider: {
     height: 1,
@@ -531,8 +681,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   iconActionBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     alignItems: 'center',
@@ -542,13 +692,14 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  viewDetailsBtn: {
+  assignOperatorBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: radiusNumeric.pill,
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    borderRadius: radiusNumeric.md,
     borderWidth: 1,
     ...Platform.select({
       web: { cursor: 'pointer' },

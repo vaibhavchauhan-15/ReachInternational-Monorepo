@@ -168,3 +168,10 @@ Before modifying any web code, every AI agent MUST:
    - Structured audit logging via `logAudit()` in `lib/audit.ts` for elevated mutations.
    - Secrets isolated via `import "server-only"` in `lib/env/server.ts`.
 
+### 11. Strict Monorepo Cross-Platform Parity Contract
+
+> **ABSOLUTE RULE**: Any change that affects shared product functionality, business logic, UI/UX, user workflows, API integration, data handling, validation, permissions, or application behavior in Web MUST be evaluated and implemented consistently in Native Mobile (`apps/mobile`).
+>
+> Follow the 10-point directive in `AI/RULES/WEB-MOBILE-PARITY.md` and `.agents/rules/web_mobile_parity.md`. Web and Native Mobile must remain 100% functionally equivalent, visually consistent, and behaviorally aligned.
+
+

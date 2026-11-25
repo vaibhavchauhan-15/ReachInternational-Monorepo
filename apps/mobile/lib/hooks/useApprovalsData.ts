@@ -1,18 +1,26 @@
 /**
  * Native Mobile Approvals Server State & Data Access Hooks
- * Powered by TanStack Query for on-demand caching, optimistic updates,
- * offline synchronization, and realtime query invalidation.
+ * Powered by TanStack Query for on-demand caching, keyset-cursor pagination,
+ * optimistic updates, offline guardrails, and realtime count invalidation.
  *
- * ⚡ PERFORMANCE OPTIMIZATIONS:
- * - Hoisted getSession() calls (single call per mutation vs 2-3 before)
- * - Parallel Promise.all for independent lookups (session + approval_requests)
- * - Dual-transport for document mutations (API route fast path)
- * - Debounced realtime invalidation (prevents triple-fetch storms)
- * - Targeted query invalidation (lists + counts only, not every detail query)
+ * CONTRACT (consumed as-is, zero new approval/DB logic):
+ * - Queue:        public.approval_list(p_status, p_type_key, p_cursor_created_at, p_cursor_id, p_limit)
+ *                 Keyset paginated, ordered (created_at DESC, id DESC).
+ * - Decision:     public.approval_decide(p_request_id, p_decision, p_note, p_expected_version, p_actor_id)
+ * - Counts:       public.approval_counts()  → grouped { total, by_type }
+ * All three are invoked through `@reachinternational/utils/approvals-client` (shared with Web).
+ *
+ * ⚡ PERFORMANCE / BEHAVIOUR GUARANTEES:
+ * - Keyset cursor + page size 20 (one extra row is fetched as a look-ahead buffer).
+ * - Query-key factory => zero refetch storms, targeted invalidation only.
+ * - Optimistic removal fills the bottom gap from the buffered look-ahead row, deduped by id.
+ * - Realtime events refresh grouped counts only — the visible list is never reordered
+ *   under the reviewer's thumb (the "N new" pill drives an explicit refresh instead).
  */
 
-import { useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase";
 import { getAppUrl } from "../env";
 import {
@@ -32,6 +40,27 @@ import type {
 } from "@reachinternational/types";
 import { haptics } from "../haptics";
 
+/** Rows rendered per keyset page (server maximum is 100). */
+export const APPROVALS_QUEUE_PAGE_SIZE = 20;
+/** Prefetch the next keyset page once this few rows remain below the viewport. */
+export const APPROVALS_PREFETCH_THRESHOLD = 5;
+
+export interface ApprovalsCursor {
+  created_at: string;
+  id: string;
+}
+
+export interface ApprovalsQueuePage {
+  /** Rows rendered for this page (<= APPROVALS_QUEUE_PAGE_SIZE). */
+  items: ApprovalRequestListItem[];
+  /** Look-ahead rows fetched but not rendered yet — used to fill the bottom gap on decide. */
+  overflow: ApprovalRequestListItem[];
+  /** Keyset cursor for the next page, or null when the queue is exhausted. */
+  nextCursor: ApprovalsCursor | null;
+}
+
+type ApprovalsQueueData = InfiniteData<ApprovalsQueuePage, ApprovalsCursor | null>;
+
 export const APPROVALS_QUERY_KEYS = {
   all: ["approvals"] as const,
   lists: () => [...APPROVALS_QUERY_KEYS.all, "list"] as const,
@@ -40,6 +69,332 @@ export const APPROVALS_QUERY_KEYS = {
   counts: () => [...APPROVALS_QUERY_KEYS.all, "counts"] as const,
   detail: (id: string) => [...APPROVALS_QUERY_KEYS.all, "detail", id] as const,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Error presentation (server stays authoritative — messages only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PERMISSION_PATTERN = /permission denied|not authorized|insufficient privilege|row-level security/i;
+const CONFLICT_PATTERN =
+  /conflict|modified by another|already (been )?(decided|approved|rejected)|terminal state|expected pending|stale version/i;
+
+/**
+ * Maps the server's authoritative rejections (42501 / version conflict / already decided)
+ * to a single, clear reviewer-facing sentence. Never masks the outcome.
+ */
+export function mapApprovalDecisionError(err: unknown): string {
+  const status = Number((err as any)?.status ?? (err as any)?.statusCode ?? 0);
+  const code = String((err as any)?.code ?? "");
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const message = raw.trim();
+
+  if (status === 401) {
+    return "Your session expired. Sign in again to record a decision.";
+  }
+  if (status === 403 || code === "42501" || PERMISSION_PATTERN.test(message)) {
+    return "You are not authorized to review this request. The server rejected the decision.";
+  }
+  if (status === 409 || code === "P0004" || CONFLICT_PATTERN.test(message)) {
+    return "This request was already decided or changed on the server. Refresh the queue to continue.";
+  }
+  if (status === 404 || code === "P0002" || /not found|no longer exists/i.test(message)) {
+    return "This request no longer exists. Refresh the queue to continue.";
+  }
+  if (/network|failed to fetch|timeout|timed out|offline/i.test(message)) {
+    return "The server could not be reached. Decisions are never queued offline — try again when you are online.";
+  }
+  return message || "The server could not record this decision. Please try again.";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Queue helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DOCUMENT_LABEL_OVERRIDES: Record<string, string> = {
+  aadhaar: "Aadhaar Card",
+  driving_license: "Driving License",
+  bank_document: "Bank Details",
+};
+
+function formatDocumentLabel(code?: string | null): string {
+  if (!code) return "Document";
+  const key = code.trim().toLowerCase();
+  if (DOCUMENT_LABEL_OVERRIDES[key]) return DOCUMENT_LABEL_OVERRIDES[key];
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function normalizeStoragePath(path?: string | null): string {
+  return String(path || "").replace(/^\/+/, "");
+}
+
+/** Deduplicates queue rows by request id (keyset pages can overlap after a refetch). */
+export function dedupeApprovalItems(
+  items: ApprovalRequestListItem[]
+): ApprovalRequestListItem[] {
+  const seen = new Set<string>();
+  const unique: ApprovalRequestListItem[] = [];
+  for (const item of items) {
+    if (!item?.id || seen.has(item.id)) continue;
+    seen.add(item.id);
+    unique.push(item);
+  }
+  return unique;
+}
+
+/** Stable keyset cursor for a row (matches ORDER BY created_at DESC, id DESC). */
+function cursorForItem(item: ApprovalRequestListItem): ApprovalsCursor {
+  return { created_at: item.created_at, id: item.id };
+}
+
+async function signStoragePaths(
+  bucket: "user_files" | "doc_staging",
+  paths: string[]
+): Promise<Map<string, string>> {
+  const signed = new Map<string, string>();
+  const unique = Array.from(new Set(paths.map(normalizeStoragePath).filter(Boolean)));
+  if (unique.length === 0) return signed;
+
+  try {
+    const { data } = await supabase.storage.from(bucket).createSignedUrls(unique, 3600);
+    (data || []).forEach((entry, index) => {
+      if (!entry?.signedUrl) return;
+      const path = entry.path || unique[index];
+      if (path) signed.set(path, entry.signedUrl);
+    });
+  } catch {
+    // Thumbnails are best-effort; the card still opens the detail sheet.
+  }
+  return signed;
+}
+
+/**
+ * Resolves signed URLs and human labels for a queue page in one batch per bucket.
+ * Mirrors the Web enrichment (labels + storage signing) without re-implementing approval logic.
+ */
+async function enrichQueueItems(
+  rows: ApprovalRequestListItem[]
+): Promise<ApprovalRequestListItem[]> {
+  if (rows.length === 0) return rows;
+
+  const userFilePaths: string[] = [];
+  const stagingPaths: string[] = [];
+
+  for (const row of rows) {
+    const payload = (row.payload || {}) as Record<string, any>;
+    for (const doc of row.documents || []) {
+      if (doc?.thumb_path) userFilePaths.push(doc.thumb_path);
+      if (doc?.storage_path) userFilePaths.push(doc.storage_path);
+    }
+    if (payload.storage_path) userFilePaths.push(payload.storage_path);
+    if (payload.thumb_path) userFilePaths.push(payload.thumb_path);
+    if (payload.staging_path) stagingPaths.push(payload.staging_path);
+    if (payload.staging_thumb_path) stagingPaths.push(payload.staging_thumb_path);
+  }
+
+  const [files, staging] = await Promise.all([
+    signStoragePaths("user_files", userFilePaths),
+    signStoragePaths("doc_staging", stagingPaths),
+  ]);
+
+  return rows.map((row) => {
+    const payload = (row.payload || {}) as Record<string, any>;
+
+    const documents = (row.documents || []).map((doc) => {
+      const thumbPath = normalizeStoragePath(doc.thumb_path);
+      const storagePath = normalizeStoragePath(doc.storage_path);
+      return {
+        ...doc,
+        label: formatDocumentLabel(doc.document_type_code),
+        thumb_signed_url:
+          files.get(thumbPath) || files.get(storagePath) || null,
+        signed_url: files.get(storagePath) || files.get(thumbPath) || null,
+      };
+    });
+
+    // Document replacement: surface the staged replacement file (doc_staging bucket).
+    if (row.type_key === "document_replace" && payload.staging_path) {
+      const stagingPath = normalizeStoragePath(payload.staging_path);
+      const stagingThumb = normalizeStoragePath(payload.staging_thumb_path);
+      documents.unshift({
+        id: row.id,
+        document_type_code: payload.document_type_code || "document",
+        label: `${formatDocumentLabel(payload.document_type_code)} (Replacement)`,
+        thumb_path: payload.staging_thumb_path || null,
+        storage_path: payload.staging_path,
+        thumb_signed_url:
+          staging.get(stagingThumb) || staging.get(stagingPath) || null,
+        signed_url: staging.get(stagingPath) || staging.get(stagingThumb) || null,
+        verification_status: "pending",
+        file_size_bytes: payload.file_size_bytes,
+        mime_type: payload.mime_type || "image/jpeg",
+      });
+    }
+
+    // Document verification without an aggregated document list: fall back to the payload paths.
+    if (
+      row.type_key === "document_verify" &&
+      documents.length === 0 &&
+      payload.document_type_code
+    ) {
+      const storagePath = normalizeStoragePath(payload.storage_path);
+      const thumbPath = normalizeStoragePath(payload.thumb_path);
+      documents.push({
+        id: payload.document_id || row.id,
+        document_type_code: payload.document_type_code,
+        label: formatDocumentLabel(payload.document_type_code),
+        thumb_path: payload.thumb_path || null,
+        storage_path: payload.storage_path || null,
+        thumb_signed_url:
+          files.get(thumbPath) || files.get(storagePath) || null,
+        signed_url: files.get(storagePath) || files.get(thumbPath) || null,
+        verification_status: row.status,
+        file_size_bytes: payload.file_size_bytes,
+        mime_type: payload.mime_type || "image/jpeg",
+      });
+    }
+
+    return { ...row, documents };
+  });
+}
+
+/**
+ * Fetches one keyset page of the approvals queue.
+ * Requests `PAGE_SIZE + 1` rows so the surplus row can buffer the bottom gap after a decide.
+ */
+async function fetchApprovalsQueuePage(params: {
+  status: ApprovalStatus | "all";
+  typeKey?: string;
+  cursor: ApprovalsCursor | null;
+}): Promise<ApprovalsQueuePage> {
+  const res = await listApprovals(supabase, {
+    status: params.status === "all" ? "all" : params.status,
+    type_key: params.typeKey && params.typeKey !== "all" ? params.typeKey : undefined,
+    cursor_created_at: params.cursor?.created_at,
+    cursor_id: params.cursor?.id,
+    limit: APPROVALS_QUEUE_PAGE_SIZE + 1,
+  });
+
+  if (res.error) {
+    throw new Error(res.error);
+  }
+
+  const rows = dedupeApprovalItems((res.data || []) as ApprovalRequestListItem[]);
+  const visible = rows.slice(0, APPROVALS_QUEUE_PAGE_SIZE);
+  const overflow = rows.slice(APPROVALS_QUEUE_PAGE_SIZE);
+  const enriched = await enrichQueueItems([...visible, ...overflow]);
+  const items = enriched.slice(0, visible.length);
+  const buffered = enriched.slice(visible.length);
+
+  const lastVisible = items[items.length - 1];
+  const nextCursor =
+    visible.length === APPROVALS_QUEUE_PAGE_SIZE && lastVisible
+      ? cursorForItem(lastVisible)
+      : null;
+
+  return { items, overflow: buffered, nextCursor };
+}
+
+function findQueuedApprovalItem(
+  queryClient: QueryClient,
+  requestId: string
+): ApprovalRequestListItem | undefined {
+  const caches = queryClient.getQueriesData<ApprovalsQueueData>({
+    queryKey: APPROVALS_QUERY_KEYS.lists(),
+  });
+  for (const [, data] of caches) {
+    for (const page of data?.pages || []) {
+      const match = page.items.find((item) => item.id === requestId);
+      if (match) return match;
+      const buffered = page.overflow.find((item) => item.id === requestId);
+      if (buffered) return buffered;
+    }
+  }
+  return undefined;
+}
+
+/** Applies a row transform to every cached queue page (used by document verify/reject). */
+function transformApprovalsQueueCaches(
+  queryClient: QueryClient,
+  transform: (items: ApprovalRequestListItem[]) => ApprovalRequestListItem[]
+) {
+  queryClient.setQueriesData<ApprovalsQueueData>(
+    { queryKey: APPROVALS_QUERY_KEYS.lists() },
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          items: transform(page.items),
+        })),
+      };
+    }
+  );
+}
+
+/**
+ * Optimistically removes a decided request from every cached queue page,
+ * then pulls the next buffered row into the bottom of the last page and dedupes by id.
+ * The list never jumps backwards — only the bottom gap is refilled.
+ */
+function removeApprovalFromQueueCaches(queryClient: QueryClient, requestId: string) {
+  queryClient.setQueriesData<ApprovalsQueueData>(
+    { queryKey: APPROVALS_QUERY_KEYS.lists() },
+    (old) => {
+      if (!old) return old;
+
+      const pages = old.pages.map((page) => {
+        if (!page.items.some((item) => item.id === requestId)) return page;
+        return { ...page, items: page.items.filter((item) => item.id !== requestId) };
+      });
+
+      // Refill the bottom gap from the look-ahead buffer of the last loaded page.
+      const lastIndex = pages.length - 1;
+      if (lastIndex >= 0) {
+        const lastPage = pages[lastIndex];
+        if (lastPage.overflow.length > 0) {
+          const [buffered, ...rest] = lastPage.overflow;
+          const alreadyVisible = lastPage.items.some((item) => item.id === buffered.id);
+          pages[lastIndex] = {
+            ...lastPage,
+            items: alreadyVisible ? lastPage.items : [...lastPage.items, buffered],
+            overflow: rest,
+          };
+        }
+      }
+
+      const seen = new Set<string>();
+      return {
+        ...old,
+        pages: pages.map((page) => ({
+          ...page,
+          items: page.items.filter((item) => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          }),
+        })),
+      };
+    }
+  );
+}
+
+/** Optimistically decrements the grouped count for a decided request. */
+function decrementApprovalCounts(
+  queryClient: QueryClient,
+  item?: ApprovalRequestListItem
+) {
+  queryClient.setQueryData<ApprovalCounts>(APPROVALS_QUERY_KEYS.counts(), (old) => {
+    if (!old) return old;
+    const byType = { ...old.by_type };
+    if (item?.type_key && typeof byType[item.type_key] === "number") {
+      byType[item.type_key] = Math.max(0, (byType[item.type_key] as number) - 1);
+    }
+    return { total: Math.max(0, old.total - 1), by_type: byType };
+  });
+}
 
 // ⚡ Targeted invalidation helper — gentle mode avoids heavy list re-fetches when state is optimistically updated
 function invalidateApprovalListsAndCounts(
@@ -57,117 +412,62 @@ function invalidateApprovalListsAndCounts(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Queries
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface UseApprovalsListOptions {
   status?: ApprovalStatus | "all";
   typeKey?: string;
   enabled?: boolean;
 }
 
+/**
+ * Keyset-cursor approvals queue (page size 20, look-ahead buffer of 1).
+ * Consumes the shared `approval_list` RPC — no client-side approval logic.
+ */
 export function useApprovalsListQuery(options: UseApprovalsListOptions = {}) {
   const { status = "pending", typeKey, enabled = true } = options;
 
-  return useQuery({
+  return useInfiniteQuery<ApprovalsQueuePage, Error, ApprovalsQueueData, ReturnType<typeof APPROVALS_QUERY_KEYS.list>, ApprovalsCursor | null>({
     queryKey: APPROVALS_QUERY_KEYS.list(status, typeKey),
-    queryFn: async (): Promise<ApprovalRequestListItem[]> => {
-      // 1. Dual-Transport: Attempt rich Next.js API route with Bearer auth for pre-signed thumbnails
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        if (token) {
-          const appUrl = getAppUrl();
-          const q = new URLSearchParams();
-          if (status && status !== "all") {
-            q.set("status", status);
-          } else if (status === "all") {
-            q.set("status", "all");
-          }
-          if (typeKey && typeKey !== "all") {
-            q.set("type_key", typeKey);
-          }
-          q.set("limit", "50");
-
-          const res = await fetch(`${appUrl}/api/approvals?${q.toString()}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data)) {
-              return data;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("[Approvals] Rich API fetch fallback to direct RPC:", err);
-      }
-
-      // 2. Direct RPC fallback
-      const res = await listApprovals(supabase, {
-        status: status === "all" ? "all" : status,
-        type_key: typeKey === "all" ? undefined : typeKey,
-        limit: 50,
-      });
-
-      if (res.error) {
-        throw new Error(res.error);
-      }
-
-      const items: ApprovalRequestListItem[] = res.data || [];
-
-      // 3. Batch resolve signed URLs for thumbnails that need signing
-      const pathsToSign: string[] = [];
-      for (const item of items) {
-        if (item.documents && Array.isArray(item.documents)) {
-          for (const doc of item.documents) {
-            if (!doc.thumb_signed_url && !doc.signed_url) {
-              const p = (doc.thumb_path || doc.storage_path || "").replace(/^\/+/, "");
-              if (p) pathsToSign.push(p);
-            }
-          }
-        }
-      }
-
-      if (pathsToSign.length > 0) {
-        try {
-          const uniquePaths = Array.from(new Set(pathsToSign));
-          const { data: signedUrls } = await supabase.storage
-            .from("user_files")
-            .createSignedUrls(uniquePaths, 3600);
-
-          if (signedUrls && Array.isArray(signedUrls)) {
-            const urlMap = new Map<string, string>();
-            signedUrls.forEach((s, idx) => {
-              if (s?.signedUrl) {
-                if (s.path) urlMap.set(s.path, s.signedUrl);
-                if (uniquePaths[idx]) urlMap.set(uniquePaths[idx], s.signedUrl);
-              }
-            });
-
-            for (const item of items) {
-              if (item.documents && Array.isArray(item.documents)) {
-                for (const doc of item.documents) {
-                  const p = (doc.thumb_path || doc.storage_path || "").replace(/^\/+/, "");
-                  if (urlMap.has(p)) {
-                    doc.thumb_signed_url = urlMap.get(p);
-                    doc.signed_url = urlMap.get(p);
-                  }
-                }
-              }
-            }
-          }
-        } catch {
-          // Non-blocking thumbnail signing
-        }
-      }
-
-      return items;
-    },
+    queryFn: ({ pageParam }) =>
+      fetchApprovalsQueuePage({ status, typeKey, cursor: pageParam ?? null }),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    // Tuned for review sessions: no focus/reconnect storm, cheap staleness window.
     staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     enabled,
   });
+}
+
+/**
+ * Explicit queue refresh (pull-to-refresh / "N new" pill).
+ * Replaces the loaded pages atomically with a fresh first page — one request, no empty flash.
+ */
+export function useRefreshApprovalsQueue(options: UseApprovalsListOptions = {}) {
+  const { status = "pending", typeKey } = options;
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refresh = useCallback(async (): Promise<ApprovalRequestListItem[]> => {
+    setIsRefreshing(true);
+    try {
+      const page = await fetchApprovalsQueuePage({ status, typeKey, cursor: null });
+      queryClient.setQueryData<ApprovalsQueueData>(
+        APPROVALS_QUERY_KEYS.list(status, typeKey),
+        { pages: [page], pageParams: [null] }
+      );
+      return page.items;
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [queryClient, status, typeKey]);
+
+  return { refresh, isRefreshing };
 }
 
 export function useApprovalCountsQuery(options: { enabled?: boolean } = {}) {
@@ -202,6 +502,10 @@ export function useApprovalDetailQuery(requestId: string | null) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutations
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function useDecideApprovalMutation() {
   const queryClient = useQueryClient();
 
@@ -219,12 +523,12 @@ export function useDecideApprovalMutation() {
       expectedVersion?: number;
       boundRequestIds?: string[];
     }) => {
-      // ⚡ Hoist getSession() — single call, reuse for both transports (was 2-3 calls before)
+      // ⚡ Hoist getSession() — single call, reused for both transports
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       const actorId = sessionData?.session?.user?.id || null;
 
-      // 1. Dual-Transport: Try Next.js API route with Bearer auth
+      // 1. Dual-Transport: Try Next.js API route with Bearer auth (propagates HTTP status)
       if (token) {
         try {
           const appUrl = getAppUrl();
@@ -245,19 +549,22 @@ export function useDecideApprovalMutation() {
 
           if (res.ok) {
             return await res.json();
-          } else if (res.status === 409) {
-            const json = await res.json().catch(() => ({}));
-            throw new Error(
-              json.error || "Approval request was modified by another reviewer. Please refresh."
-            );
           }
+
+          const json = await res.json().catch(() => ({}));
+          const serverError = new Error(
+            json.error || `Decision rejected by the server (${res.status}).`
+          ) as Error & { status?: number };
+          serverError.status = res.status;
+          throw serverError;
         } catch (err: any) {
-          if (err?.message?.includes("another reviewer")) throw err;
+          // Authoritative 4xx rejection → surface it; 5xx/transport failures fall through to the RPC.
+          if (err?.status && err.status < 500) throw err;
           console.warn("[useDecideApprovalMutation] Web API call fallback to direct RPC:", err);
         }
       }
 
-      // 2. Direct RPC fallback — reuse already-fetched actorId (no duplicate getSession)
+      // 2. Direct RPC fallback — the shared approval_decide contract
       const res = await decideApproval(supabase, {
         request_id: requestId,
         decision,
@@ -271,18 +578,11 @@ export function useDecideApprovalMutation() {
       }
       return res.data;
     },
-    onMutate: async ({ requestId, decision }) => {
-      // Optimistic haptic feedback
-      if (decision === "approve") {
-        haptics.confirm();
-      } else {
-        haptics.reject();
-      }
-
-      // Cancel outgoing refetches
+    onMutate: async ({ requestId }) => {
+      // Cancel in-flight queue reads so they cannot resurrect the decided row.
       await queryClient.cancelQueries({ queryKey: APPROVALS_QUERY_KEYS.all });
 
-      // Snapshot previous state
+      const decidedItem = findQueuedApprovalItem(queryClient, requestId);
       const previousLists = queryClient.getQueriesData({
         queryKey: APPROVALS_QUERY_KEYS.lists(),
       });
@@ -290,31 +590,21 @@ export function useDecideApprovalMutation() {
         APPROVALS_QUERY_KEYS.counts()
       );
 
-      // Optimistically remove from pending lists or mark decided
-      queryClient.setQueriesData<ApprovalRequestListItem[]>(
-        { queryKey: APPROVALS_QUERY_KEYS.lists() },
-        (old) => {
-          if (!old) return [];
-          return old.filter((item) => item.id !== requestId);
-        }
-      );
-
-      // Optimistically decrement count
-      queryClient.setQueryData<ApprovalCounts>(
-        APPROVALS_QUERY_KEYS.counts(),
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            total: Math.max(0, old.total - 1),
-          };
-        }
-      );
+      removeApprovalFromQueueCaches(queryClient, requestId);
+      decrementApprovalCounts(queryClient, decidedItem);
 
       return { previousLists, previousCounts };
     },
+    onSuccess: (_data, variables) => {
+      // Server confirmed the decision.
+      if (variables.decision === "approve") {
+        haptics.confirm();
+      } else {
+        haptics.reject();
+      }
+    },
     onError: (_err, _vars, context) => {
-      // Rollback on error
+      haptics.reject();
       if (context?.previousLists) {
         for (const [key, data] of context.previousLists) {
           queryClient.setQueryData(key, data);
@@ -325,7 +615,7 @@ export function useDecideApprovalMutation() {
       }
     },
     onSettled: () => {
-      // ⚡ Targeted invalidation — gentle mode invalidates counts without forcing immediate heavy list refetch
+      // ⚡ Targeted invalidation — gentle mode invalidates counts without forcing a heavy list refetch
       invalidateApprovalListsAndCounts(queryClient, { gentle: true });
     },
   });
@@ -392,12 +682,8 @@ export function useApproveAllMutation() {
       return res.data;
     },
     onMutate: async ({ typeKey }) => {
-      haptics.confirm();
-
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: APPROVALS_QUERY_KEYS.all });
 
-      // Snapshot previous state
       const previousLists = queryClient.getQueriesData({
         queryKey: APPROVALS_QUERY_KEYS.lists(),
       });
@@ -405,43 +691,33 @@ export function useApproveAllMutation() {
         APPROVALS_QUERY_KEYS.counts()
       );
 
-      // Optimistically remove approved items from cached lists
-      queryClient.setQueriesData<ApprovalRequestListItem[]>(
-        { queryKey: APPROVALS_QUERY_KEYS.lists() },
-        (old) => {
-          if (!old) return [];
-          return old.filter((item) => {
-            if (typeKey && typeKey !== "all") {
-              return item.type_key !== typeKey;
-            }
-            return item.type_key !== "registration";
-          });
-        }
+      transformApprovalsQueueCaches(queryClient, (items) =>
+        items.filter((item) =>
+          typeKey && typeKey !== "all"
+            ? item.type_key !== typeKey
+            : item.type_key !== "registration"
+        )
       );
 
-      // Optimistically clear counts for approved type
-      queryClient.setQueryData<ApprovalCounts>(
-        APPROVALS_QUERY_KEYS.counts(),
-        (old) => {
-          if (!old) return old;
-          const newByType = { ...old.by_type };
-          if (typeKey && typeKey !== "all") {
-            newByType[typeKey] = 0;
-          } else {
-            newByType["registration"] = 0;
-          }
-          const newTotal = Object.values(newByType).reduce((acc, v) => acc + (v || 0), 0);
-          return {
-            total: Math.max(0, newTotal),
-            by_type: newByType,
-          };
+      queryClient.setQueryData<ApprovalCounts>(APPROVALS_QUERY_KEYS.counts(), (old) => {
+        if (!old) return old;
+        const byType = { ...old.by_type };
+        if (typeKey && typeKey !== "all") {
+          byType[typeKey] = 0;
+        } else {
+          byType["registration"] = 0;
         }
-      );
+        const total = Object.values(byType).reduce((acc, value) => acc + (value || 0), 0);
+        return { total: Math.max(0, total), by_type: byType };
+      });
 
       return { previousLists, previousCounts };
     },
+    onSuccess: () => {
+      haptics.confirm();
+    },
     onError: (_err, _vars, context) => {
-      // Rollback on error
+      haptics.reject();
       if (context?.previousLists) {
         for (const [key, data] of context.previousLists) {
           queryClient.setQueryData(key, data);
@@ -452,7 +728,6 @@ export function useApproveAllMutation() {
       }
     },
     onSettled: () => {
-      // ⚡ Targeted invalidation — gentle lists + counts + users
       invalidateApprovalListsAndCounts(queryClient, { gentle: true });
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
@@ -495,7 +770,14 @@ export function useVerifyDocumentMutation() {
           if (res.ok) {
             return await res.json();
           }
-        } catch (err) {
+          const json = await res.json().catch(() => ({}));
+          const serverError = new Error(
+            json.error || `Verification rejected by the server (${res.status}).`
+          ) as Error & { status?: number };
+          serverError.status = res.status;
+          throw serverError;
+        } catch (err: any) {
+          if (err?.status && err.status < 500) throw err;
           console.warn("[useVerifyDocumentMutation] API fallback to RPC:", err);
         }
       }
@@ -517,36 +799,36 @@ export function useVerifyDocumentMutation() {
           })
           .eq("id", documentId)
           .select();
-        if (updErr) throw new Error(updErr.message);
+        if (updErr) throw new Error(mapApprovalDecisionError(updErr));
         return updData;
       }
       return data;
     },
     onMutate: async ({ documentId }) => {
-      haptics.confirm();
       await queryClient.cancelQueries({ queryKey: APPROVALS_QUERY_KEYS.all });
       const previousLists = queryClient.getQueriesData({
         queryKey: APPROVALS_QUERY_KEYS.lists(),
       });
 
-      // Optimistically update document verification status in cached lists
-      queryClient.setQueriesData<ApprovalRequestListItem[]>(
-        { queryKey: APPROVALS_QUERY_KEYS.lists() },
-        (old) => {
-          if (!old) return old;
-          return old.map((item) => {
-            if (!item.documents) return item;
-            const updatedDocs = item.documents.map((doc) =>
-              doc.id === documentId ? { ...doc, verification_status: "verified" as const } : doc
-            );
-            return { ...item, documents: updatedDocs };
-          });
-        }
+      transformApprovalsQueueCaches(queryClient, (items) =>
+        items.map((item) => {
+          if (!item.documents) return item;
+          const documents = item.documents.map((doc) =>
+            doc.id === documentId
+              ? { ...doc, verification_status: "verified" as const }
+              : doc
+          );
+          return { ...item, documents };
+        })
       );
 
       return { previousLists };
     },
+    onSuccess: () => {
+      haptics.confirm();
+    },
     onError: (_err, _vars, context) => {
+      haptics.reject();
       if (context?.previousLists) {
         for (const [key, data] of context.previousLists) {
           queryClient.setQueryData(key, data);
@@ -554,7 +836,6 @@ export function useVerifyDocumentMutation() {
       }
     },
     onSettled: () => {
-      // ⚡ Targeted gentle invalidation — updates counts without triggering heavy list re-fetch
       invalidateApprovalListsAndCounts(queryClient, { gentle: true });
     },
   });
@@ -606,7 +887,14 @@ export function useRejectDocumentMutation() {
           if (res.ok) {
             return await res.json();
           }
-        } catch (err) {
+          const json = await res.json().catch(() => ({}));
+          const serverError = new Error(
+            json.error || `Rejection rejected by the server (${res.status}).`
+          ) as Error & { status?: number };
+          serverError.status = res.status;
+          throw serverError;
+        } catch (err: any) {
+          if (err?.status && err.status < 500) throw err;
           console.warn("[useRejectDocumentMutation] API fallback to RPC:", err);
         }
       }
@@ -629,36 +917,36 @@ export function useRejectDocumentMutation() {
           })
           .eq("id", documentId)
           .select();
-        if (updErr) throw new Error(updErr.message);
+        if (updErr) throw new Error(mapApprovalDecisionError(updErr));
         return updData;
       }
       return data;
     },
     onMutate: async ({ documentId }) => {
-      haptics.reject();
       await queryClient.cancelQueries({ queryKey: APPROVALS_QUERY_KEYS.all });
       const previousLists = queryClient.getQueriesData({
         queryKey: APPROVALS_QUERY_KEYS.lists(),
       });
 
-      // Optimistically update document verification status in cached lists
-      queryClient.setQueriesData<ApprovalRequestListItem[]>(
-        { queryKey: APPROVALS_QUERY_KEYS.lists() },
-        (old) => {
-          if (!old) return old;
-          return old.map((item) => {
-            if (!item.documents) return item;
-            const updatedDocs = item.documents.map((doc) =>
-              doc.id === documentId ? { ...doc, verification_status: "rejected" as const } : doc
-            );
-            return { ...item, documents: updatedDocs };
-          });
-        }
+      transformApprovalsQueueCaches(queryClient, (items) =>
+        items.map((item) => {
+          if (!item.documents) return item;
+          const documents = item.documents.map((doc) =>
+            doc.id === documentId
+              ? { ...doc, verification_status: "rejected" as const }
+              : doc
+          );
+          return { ...item, documents };
+        })
       );
 
       return { previousLists };
     },
+    onSuccess: () => {
+      haptics.reject();
+    },
     onError: (_err, _vars, context) => {
+      haptics.reject();
       if (context?.previousLists) {
         for (const [key, data] of context.previousLists) {
           queryClient.setQueryData(key, data);
@@ -666,7 +954,6 @@ export function useRejectDocumentMutation() {
       }
     },
     onSettled: () => {
-      // ⚡ Targeted gentle invalidation — updates counts without triggering heavy list re-fetch
       invalidateApprovalListsAndCounts(queryClient, { gentle: true });
     },
   });
@@ -694,16 +981,16 @@ export function useCancelApprovalMutation() {
       return res.data;
     },
     onSettled: () => {
-      // ⚡ Targeted gentle invalidation
       invalidateApprovalListsAndCounts(queryClient, { gentle: true });
     },
   });
 }
 
 /**
- * Realtime hook subscribing to approval_requests updates.
- * ⚡ Debounced: waits 1500ms after last change before invalidating,
- *    preventing triple-fetch storms (optimistic + onSettled + realtime).
+ * Realtime hook subscribing to approval_requests changes.
+ * ⚡ Refreshes the grouped count only — never the visible list, so a reviewer's
+ *    scroll position is never reordered under their thumb. The screen surfaces
+ *    an "N new" pill that drives an explicit, user-initiated refresh.
  */
 export function useApprovalsRealtimeSync(enabled = true) {
   const queryClient = useQueryClient();
@@ -722,10 +1009,15 @@ export function useApprovalsRealtimeSync(enabled = true) {
           table: "approval_requests",
         },
         () => {
-          // ⚡ Debounce realtime invalidation — prevents triple-fetch after mutations
+          // ⚡ Debounce — prevents triple-fetch after local mutations
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(() => {
-            invalidateApprovalListsAndCounts(queryClient);
+            queryClient.invalidateQueries({ queryKey: APPROVALS_QUERY_KEYS.counts() });
+            // Mark queue pages stale without refetching them (no reorder under the thumb).
+            queryClient.invalidateQueries({
+              queryKey: APPROVALS_QUERY_KEYS.lists(),
+              refetchType: "none",
+            });
           }, 1500);
         }
       )

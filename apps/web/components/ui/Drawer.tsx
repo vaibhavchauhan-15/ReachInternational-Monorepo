@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AnimatedX } from "./animated-icons";
 
 export interface DrawerProps {
@@ -36,6 +36,7 @@ export function Drawer({
   className = "",
 }: DrawerProps) {
   const [mounted, setMounted] = React.useState(false);
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     setMounted(true);
@@ -69,7 +70,7 @@ export function Drawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
             onClick={onClose}
             className="fixed inset-0 bg-black/40 backdrop-blur-xs"
           />
@@ -77,17 +78,25 @@ export function Drawer({
           {/* Drawer Container */}
           <motion.div
             initial={
-              position === "right"
-                ? { x: "100%" }
-                : { y: "100%" }
+              shouldReduceMotion
+                ? { opacity: 0 }
+                : position === "right"
+                  ? { x: "100%" }
+                  : { y: "100%" }
             }
-            animate={{ x: 0, y: 0 }}
+            animate={shouldReduceMotion ? { opacity: 1 } : { x: 0, y: 0, opacity: 1 }}
             exit={
-              position === "right"
-                ? { x: "100%" }
-                : { y: "100%" }
+              shouldReduceMotion
+                ? { opacity: 0 }
+                : position === "right"
+                  ? { x: "100%" }
+                  : { y: "100%" }
             }
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            transition={
+              shouldReduceMotion
+                ? { duration: 0.18 }
+                : { type: "spring", damping: 30, stiffness: 300 }
+            }
             className={`relative z-10 w-full ml-auto bg-[var(--color-canvas-elevated)] shadow-2xl border-l border-[var(--color-hairline)] flex flex-col h-full max-h-screen overflow-hidden ${
               sizeClasses[size]
             } ${className}`}
@@ -108,7 +117,7 @@ export function Drawer({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer shrink-0"
+                className="motion-press p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer shrink-0"
                 aria-label="Close drawer"
               >
                 <AnimatedX size={16} />

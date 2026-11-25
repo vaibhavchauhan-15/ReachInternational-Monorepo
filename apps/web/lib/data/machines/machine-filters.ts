@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { User, ActiveOperatorOtherAssignment } from "@/lib/types/database";
+import { getMachineScope } from "@reachinternational/permissions";
 
 export interface MachineFilterOptions {
   supervisors: User[];
@@ -297,8 +298,16 @@ export async function getActiveOperatorsForUser(userId?: string, userRole?: stri
 }
 
 export const getActiveOperatorMachineAssignments = unstable_cache(
-  async (targetDate?: string | null): Promise<ActiveOperatorOtherAssignment[]> => {
+  async (targetDate?: string | null, scopeUserId?: string | null, scopeRole?: string | null): Promise<ActiveOperatorOtherAssignment[]> => {
     const supabase = createSupabaseAdminClient();
+    const scope = getMachineScope(scopeRole ?? null);
+    // Never return fleet-wide assignment data to a scoped caller. Managers pass null scope;
+    // supervisors are limited to supervised clients/direct machines, operators to their own rows.
+    if (scope === "supervised" || scope === "assigned") {
+      if (!scopeUserId) return [];
+    } else if (scope === "none") {
+      return [];
+    }
     const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     const dateFilter =
       targetDate && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)
@@ -320,8 +329,28 @@ export const getActiveOperatorMachineAssignments = unstable_cache(
         `)
       .lte("valid_from", dateFilter)
       .or(`valid_to.is.null,valid_to.gte.${dateFilter}`);
+    let scopedQuery = isPastDate ? baseQuery : baseQuery.eq("is_active", true);
+
+    if (scope === "assigned") {
+      scopedQuery = scopedQuery.eq("operator_id", scopeUserId);
+    } else if (scope === "supervised") {
+      const { data: supervisedClients } = await supabase
+        .from("client_supervisors")
+        .select("client_id")
+        .eq("supervisor_id", scopeUserId);
+      const clientIds = (supervisedClients || [])
+        .map((row: { client_id: string | null }) => row.client_id)
+        .filter((id): id is string => Boolean(id));
+      const machineFilters = [
+        `current_supervisor_id.eq.${scopeUserId}`,
+        `supervisor_ids.cs.{${scopeUserId}}`,
+        clientIds.length > 0 ? `client_id.in.(${clientIds.join(",")})` : null,
+      ].filter(Boolean) as string[];
+      scopedQuery = scopedQuery.or(machineFilters.join(","), { foreignTable: "machines" });
+    }
+
     const [{ data, error }, { data: shiftCodes }] = await Promise.all([
-      isPastDate ? baseQuery : baseQuery.eq("is_active", true),
+      scopedQuery,
       supabase
         .from("client_shift_codes")
         .select("client_id, code, name, start_time, end_time")
@@ -366,7 +395,7 @@ export const getActiveOperatorMachineAssignments = unstable_cache(
         };
       });
   },
-  ["active-operator-machine-assignments-v3"],
+  ["active-operator-machine-assignments-v4"],
   { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines, TAGS.users, TAGS.clients] }
 );
 

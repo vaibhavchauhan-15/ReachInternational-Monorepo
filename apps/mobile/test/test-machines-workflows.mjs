@@ -39,21 +39,25 @@ const machineCategoryModalContent = fs.readFileSync(machineCategoryModalPath, 'u
 const deleteMachineDialogPath = path.join(__dirname, 'components/machines/DeleteMachineDialog.tsx');
 const deleteMachineDialogContent = fs.readFileSync(deleteMachineDialogPath, 'utf8');
 
+const useMachinesDataPath = path.join(__dirname, 'lib/hooks/useMachinesData.ts');
+const useMachinesDataContent = fs.readFileSync(useMachinesDataPath, 'utf8');
+
 // 1. UI State Primitives Integration
 assert(
   machinesScreenContent.includes('EmptyState') &&
   machinesScreenContent.includes('ErrorState') &&
-  machinesScreenContent.includes('PermissionDeniedView') &&
   machinesScreenContent.includes('SlowNetworkBanner'),
-  'machines.tsx imports canonical EmptyState, ErrorState, PermissionDeniedView, and SlowNetworkBanner'
+  'machines.tsx imports canonical EmptyState, ErrorState, and SlowNetworkBanner'
 );
 
-// 2. Permission Denied Gate (No silent return null)
+// 2. Route Guard (capability-driven redirect, no in-place denial screen)
 assert(
-  machinesScreenContent.includes('<PermissionDeniedView') &&
-  machinesScreenContent.includes('featureName="Fleet') &&
-  !machinesScreenContent.includes('if (role && isHr) {\n    return null;\n  }'),
-  'machines.tsx guards HR role with PermissionDeniedView instead of abrupt return null'
+  machinesScreenContent.includes('canAccessMachinesRoute')
+    ? machinesScreenContent.includes('canAccessMachinesRoute(role)') &&
+      machinesScreenContent.includes('<Redirect href={getMobileRoleHomeRoute(role) as any} />') &&
+      !machinesScreenContent.includes('<PermissionDeniedView')
+    : machinesScreenContent.includes('<PermissionDeniedView'),
+  'machines.tsx redirects unauthorized roles (HR, unknown) through the shared capability guard'
 );
 
 // 3. Slow Network Telemetry
@@ -104,15 +108,16 @@ assert(
 // 7. Optimistic Deletion & Concurrency Mutex Lock
 assert(
   machinesScreenContent.includes('isDeletingRef') &&
-  machinesScreenContent.includes('if (!deleteMachine?.id || isDeletingRef.current) return;') &&
-  machinesScreenContent.includes('setMachines((prev) => prev.filter'),
-  'machines.tsx enforces isDeletingRef mutex lock and optimistically removes machine from state'
+  machinesScreenContent.includes('if (!target?.id || isDeletingRef.current) return;') &&
+  useMachinesDataContent.includes('onMutate: async (machine: any)') &&
+  useMachinesDataContent.includes('removeMachineFromCache(machine?.id)'),
+  'machines.tsx enforces isDeletingRef mutex lock and the cache layer removes the row optimistically'
 );
 
 assert(
-  machinesScreenContent.includes('setMachines(prevMachines)') &&
-  machinesScreenContent.includes("queryClient.setQueriesData({ queryKey: ['machines'] }"),
-  'machines.tsx rolls back local state and queryClient cache on deletion failure'
+  useMachinesDataContent.includes('onError: async () =>') &&
+  useMachinesDataContent.includes('await resyncMachines()'),
+  'useMachinesData.ts rolls back the TanStack cache through an authoritative resync on deletion failure'
 );
 
 // 8. Zero Alert.alert in Machine Modals
@@ -146,14 +151,11 @@ assert(
 );
 
 // 11. TanStack Query v5 Server State & RPC Aggregation
-const useMachinesDataPath = path.join(__dirname, 'lib/hooks/useMachinesData.ts');
-const useMachinesDataContent = fs.readFileSync(useMachinesDataPath, 'utf8');
-
 assert(
   useMachinesDataContent.includes('useMachinesInfiniteQuery') &&
   useMachinesDataContent.includes('useMachineKPIs') &&
-  useMachinesDataContent.includes('PAGE_SIZE = 15'),
-  'useMachinesData.ts exports useMachinesInfiniteQuery, useMachineKPIs, and bounded PAGE_SIZE = 15'
+  useMachinesDataContent.includes('PAGE_SIZE = 10'),
+  'useMachinesData.ts exports useMachinesInfiniteQuery, useMachineKPIs, and bounded PAGE_SIZE = 10'
 );
 
 assert(
@@ -164,19 +166,20 @@ assert(
 );
 
 assert(
-  useMachinesDataContent.includes('operator_machine_assignments') &&
-  useMachinesDataContent.includes("eq('is_active', true)") &&
-  useMachinesDataContent.includes('abortSignal(signal)'),
-  'useMachinesData.ts scopes operator assignments safely with is_active = true and abort signal handling'
+  useMachinesDataContent.includes('get_operator_assigned_machines') &&
+  useMachinesDataContent.includes('isOperatorMachineView') &&
+  useMachinesDataContent.includes('abortSignal(signal)') &&
+  !useMachinesDataContent.includes("from('operator_machine_assignments')"),
+  'useMachinesData.ts reads operator machinery through the role-checked RPC (no client-side fleet query)'
 );
 
 // 12. FlatList Virtualization & 60fps Scrolling Ergonomics
 assert(
   machinesScreenContent.includes('<FlatList') &&
   machinesScreenContent.includes('renderItem={renderMachineItem}') &&
-  machinesScreenContent.includes('initialNumToRender={6}') &&
-  machinesScreenContent.includes('maxToRenderPerBatch={8}') &&
-  machinesScreenContent.includes('windowSize={7}') &&
+  machinesScreenContent.includes('initialNumToRender={10}') &&
+  machinesScreenContent.includes('maxToRenderPerBatch={10}') &&
+  machinesScreenContent.includes('windowSize={5}') &&
   !machinesScreenContent.includes('<ScrollView\n        contentContainerStyle={styles.scrollContent}'),
   'machines.tsx uses FlatList virtualization with batching and windowSize tuning instead of unbounded ScrollView'
 );
@@ -208,7 +211,7 @@ assert(
 // 14. Server-Side Infinite Pagination & End-of-List Status
 assert(
   machinesScreenContent.includes('onEndReached={handleEndReached}') &&
-  machinesScreenContent.includes('onEndReachedThreshold={0.4}') &&
+  machinesScreenContent.includes('onEndReachedThreshold={0.5}') &&
   machinesScreenContent.includes('isFetchingNextPage') &&
   machinesScreenContent.includes('All {totalCount} machines loaded'),
   'machines.tsx implements server-side chunked pagination with onEndReached and end-of-list status'
@@ -252,10 +255,10 @@ assert(
 // 19. Role-Scoped Deep Link Authorization Gate
 assert(
   machinesScreenContent.includes('handledDeepLinkRef') &&
-  machinesScreenContent.includes("normalizedRole === 'operator' && user?.id") &&
-  machinesScreenContent.includes('operator_machine_assignments') &&
+  machinesScreenContent.includes('operatorView') &&
+  useMachinesDataContent.includes('get_operator_assigned_machines') &&
   machinesScreenContent.includes("toast('warning', 'Access Restricted'"),
-  'machines.tsx guards deep-link machine resolution with role and assignment authorization'
+  'machines.tsx guards deep-link machine resolution with role capability + assigned-machine RPC'
 );
 
 // 20. Zero SELECT * on Clients in MachineDetailView

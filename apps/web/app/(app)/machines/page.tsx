@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { getCurrentUser } from "@/lib/dal";
 import {
   getMachineList,
   getMachineKPIs,
@@ -8,6 +7,11 @@ import {
 import { getClientOptions } from "@/lib/queries/clients";
 import { MachineListClient } from "@/components/machines/MachineListClient";
 import { MachinesSkeleton } from "@/components/ui";
+import {
+  MACHINE_CAPABILITIES,
+  requireMachinesPageAccess,
+} from "@/lib/machines/authorization";
+import { isOperatorMachineView } from "@reachinternational/permissions";
 
 interface MachinesPageProps {
   searchParams: Promise<{
@@ -22,16 +26,55 @@ interface MachinesPageProps {
   }>;
 }
 
+const EMPTY_KPIS = {
+  total: 0,
+  available: 0,
+  rented: 0,
+  breakdown: 0,
+  maintenance: 0,
+  spare: 0,
+  active: 0,
+};
+
 async function MachinesContent({ searchParams }: MachinesPageProps) {
-  const user = await getCurrentUser();
-  if (!user) return null;
+  // Route guard: unauthenticated -> /login, HR/sales/marketing -> role home.
+  const { user, auth } = await requireMachinesPageAccess();
+
+  // Operator: dedicated assigned-machine view. Never runs fleet list / KPI / client queries.
+  if (isOperatorMachineView(user.role)) {
+    const assignedMachine = await getOperatorAssignedMachine(user.id);
+    const machines = assignedMachine ? [assignedMachine] : [];
+    return (
+      <MachineListClient
+        machines={machines}
+        total={machines.length}
+        page={1}
+        pageSize={25}
+        totalPages={1}
+        clients={[]}
+        userRole={user.role}
+        capabilities={auth.capabilities}
+        currentSearch=""
+        currentStatus="all"
+        currentHealthStatus="all"
+        currentSupervisor="all"
+        currentClientId="all"
+        currentSort="machine_id_asc"
+        initialKpis={EMPTY_KPIS}
+      />
+    );
+  }
 
   const resolvedParams = await searchParams;
   const page = parseInt(resolvedParams.page || "1", 10);
   const search = resolvedParams.search || "";
   const status = resolvedParams.status || "all";
   const health_status = resolvedParams.health_status || "all";
-  const supervisor = resolvedParams.supervisor || "all";
+  // Supervisors are hard-scoped to themselves; only manager tier may pick another supervisor.
+  const supervisor =
+    auth.scope === "supervised"
+      ? user.id
+      : resolvedParams.supervisor || "all";
   const client_id = resolvedParams.client_id || "all";
   const sort = resolvedParams.sort || "machine_id_asc";
 
@@ -57,7 +100,9 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
     sortOrder = "asc";
   }
 
-  // Fast initial page load: concurrently fetch machine slice, fleet KPIs, and cached client options
+  const canFilterBySupervisor = auth.can(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+
+  // Parallel fetch: directory slice, fleet KPIs, and client options.
   const [machineData, kpis, clientOptions] = await Promise.all([
     getMachineList({
       search,
@@ -72,35 +117,22 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
     }),
     getMachineKPIs({
       supervisorId: supervisor !== "all" ? supervisor : undefined,
-      operatorId: user.role === "operator" ? user.id : undefined,
       clientId: client_id !== "all" ? client_id : undefined,
     }),
-    getClientOptions(),
+    auth.can(MACHINE_CAPABILITIES.ASSIGN_CLIENT) ? getClientOptions() : Promise.resolve([]),
   ]);
-
-  let finalMachines = machineData.machines;
-  let finalTotal = machineData.total;
-  let finalTotalPages = machineData.totalPages;
-
-  // Fallback for operator if list query returned empty but direct or shift assignment exists
-  if (user.role === "operator" && finalMachines.length === 0 && !search && status === "all" && health_status === "all") {
-    const assignedMachine = await getOperatorAssignedMachine(user.id);
-    if (assignedMachine) {
-      finalMachines = [assignedMachine];
-      finalTotal = 1;
-      finalTotalPages = 1;
-    }
-  }
 
   return (
     <MachineListClient
-      machines={finalMachines}
-      total={finalTotal}
+      machines={machineData.machines}
+      total={machineData.total}
       page={machineData.page}
       pageSize={machineData.pageSize}
-      totalPages={finalTotalPages}
+      totalPages={machineData.totalPages}
       clients={clientOptions}
       userRole={user.role}
+      capabilities={auth.capabilities}
+      canFilterBySupervisor={canFilterBySupervisor}
       currentSearch={search}
       currentStatus={status}
       currentHealthStatus={health_status}

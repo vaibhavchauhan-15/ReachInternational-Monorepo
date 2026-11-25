@@ -792,6 +792,7 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
         await adminSupabase.rpc("approval_decide", {
           p_request_id: engineReq.id,
           p_decision: "approve",
+          p_actor_id: currentUser.id,
           p_expected_version: engineReq.version,
         });
       }
@@ -893,6 +894,7 @@ export async function rejectProfileChangeRequest(requestId: string, reason?: str
           p_request_id: engineReq.id,
           p_decision: "reject",
           p_note: rejectionReasonText,
+          p_actor_id: currentUser.id,
           p_expected_version: engineReq.version,
         });
       }

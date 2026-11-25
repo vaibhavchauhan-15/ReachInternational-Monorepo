@@ -14,9 +14,30 @@ import { showToast } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Printer, FileSpreadsheet, X, Loader2 } from '../ui/icon';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
+
+/**
+ * Export-only native modules (expo-print / expo-sharing / expo-file-system) are resolved
+ * lazily on first export. Importing them at module scope registers their native modules and
+ * buffers during app start even though the Operations screen never prints on open.
+ */
+type ExportNativeModules = {
+  Print: typeof import('expo-print');
+  Sharing: typeof import('expo-sharing');
+  FileSystem: typeof import('expo-file-system/legacy');
+};
+
+let cachedExportModules: ExportNativeModules | null = null;
+
+function loadExportNativeModules(): ExportNativeModules {
+  if (!cachedExportModules) {
+    cachedExportModules = {
+      Print: require('expo-print') as ExportNativeModules['Print'],
+      Sharing: require('expo-sharing') as ExportNativeModules['Sharing'],
+      FileSystem: require('expo-file-system/legacy') as ExportNativeModules['FileSystem'],
+    };
+  }
+  return cachedExportModules;
+}
 import {
   formatDate,
   formatTo12Hour,
@@ -511,6 +532,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       setIsExportingPdf(true);
       haptics.select();
       const html = generateReportHtml();
+      const { Print, Sharing, FileSystem } = loadExportNativeModules();
 
       if (Platform.OS === 'web') {
         // On Web: launch the print dialog directly with "Save as PDF" capability
@@ -619,6 +641,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
         }
       } else {
         // Native iOS / Android file share
+        const { Sharing, FileSystem } = loadExportNativeModules();
         const targetUri = `${FileSystem.cacheDirectory}${filename}`;
         await FileSystem.writeAsStringAsync(targetUri, csvContent, {
           encoding: FileSystem.EncodingType.UTF8,

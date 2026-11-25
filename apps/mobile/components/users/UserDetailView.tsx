@@ -51,6 +51,7 @@ import { UserEditModal } from './UserEditModal';
 import { AssignSupervisorModal } from './AssignSupervisorModal';
 import { AssignMachineModal } from './AssignMachineModal';
 import { PasswordResetModal } from './PasswordResetModal';
+import { MobileMachineCard } from '../machines/MobileMachineCard';
 import {
   MobileDocumentViewerModal,
   type MobileViewerDoc,
@@ -1127,20 +1128,33 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
           {/* Subtle top accent ribbon */}
           <View style={[styles.heroRibbon, { backgroundColor: theme.colors.link }]} />
 
+          {/* Top Row: Avatar + Name + Badges */}
           <View style={styles.heroMainRow}>
-            {/* Initials Avatar Box (100% Black & White, Dark & Light Optimized) */}
-            <View
-              style={[
-                styles.avatarBox,
-                {
-                  backgroundColor: avatarBg,
-                  borderColor: avatarBorder,
-                },
-              ]}
-            >
-              <Text variant="subheading" weight="bold" style={{ color: avatarText }}>
-                {getUserInitials(user.full_name)}
-              </Text>
+            {/* Avatar with Role Styling and Status Pulse Dot */}
+            <View style={{ position: 'relative' }}>
+              <View
+                style={[
+                  styles.avatarBox,
+                  {
+                    backgroundColor: avatarBg,
+                    borderColor: avatarBorder,
+                  },
+                ]}
+              >
+                <Text variant="subheading" weight="bold" style={{ color: avatarText }}>
+                  {getUserInitials(user.full_name)}
+                </Text>
+              </View>
+              {/* Active/Inactive Status Dot */}
+              <View
+                style={[
+                  styles.statusPulseDot,
+                  {
+                    backgroundColor: user.status === 'active' ? '#10b981' : '#94a3b8',
+                    borderColor: theme.colors.canvasElevated,
+                  },
+                ]}
+              />
             </View>
 
             {/* Title & Metadata Details */}
@@ -1149,17 +1163,38 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                 {user.full_name}
               </Text>
 
-              {/* Small, low opacity Employee ID directly below the user name (no copy icon) */}
-              <Text
-                variant="caption"
-                weight="medium"
-                style={[styles.heroEmpId, { color: theme.colors.mute }]}
-              >
-                {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
-              </Text>
-
-              {/* Badges Row */}
+              {/* Badges Row: 1-click copy EMP-xxxx badge, Role, Machine Category, Status */}
               <View style={styles.heroBadgeRow}>
+                {/* 1-Click Copy EMP-ID Badge */}
+                <Pressable
+                  variant="plain"
+                  haptic="tap"
+                  hitSlopToMin48
+                  onPress={() =>
+                    handleCopy(
+                      user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`,
+                      'Employee ID'
+                    )
+                  }
+                  style={[
+                    styles.empIdBadge,
+                    {
+                      backgroundColor: theme.colors.canvas,
+                      borderColor: theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityLabel="Copy Employee ID"
+                >
+                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
+                    {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
+                  </Text>
+                  {copiedKey === 'Employee ID' ? (
+                    <Check size={11} color="#10b981" />
+                  ) : (
+                    <Copy size={11} color={theme.colors.mute} />
+                  )}
+                </Pressable>
+
                 <Badge role={user.role} />
 
                 {user.role === 'operator' && user.machine_category && (
@@ -1174,288 +1209,266 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
                   dot
                   customLabel={user.status === 'active' ? 'Active' : 'Inactive'}
                 />
+              </View>
+            </View>
+          </View>
 
-                {shiftDisplay !== '—' && (
-                  <View style={styles.heroSecondaryItem}>
-                    <Clock size={12} color="#f59e0b" />
-                    <Text variant="caption" style={{ color: theme.colors.mute }}>
-                      {shiftDisplay}
+          {/* Structured Operational Metadata Grid: Shift, Joining, Supervisor, Location */}
+          <View
+            style={[
+              styles.heroMetadataGrid,
+              {
+                backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            {/* Shift Time */}
+            <View style={styles.heroMetaCol}>
+              <View style={styles.heroMetaColHeader}>
+                <Clock size={12} color="#f59e0b" />
+                <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                  Shift Time
+                </Text>
+              </View>
+              <Text variant="caption" weight="semibold" numberOfLines={1} style={{ color: theme.colors.ink }}>
+                {shiftDisplay && shiftDisplay !== '—' ? shiftDisplay : 'Standard Shift'}
+              </Text>
+            </View>
+
+            {/* Joining Date */}
+            <View style={styles.heroMetaCol}>
+              <View style={styles.heroMetaColHeader}>
+                <Calendar size={12} color="#8b5cf6" />
+                <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                  Joining Date
+                </Text>
+              </View>
+              <Text variant="caption" weight="semibold" numberOfLines={1} style={{ color: theme.colors.ink }}>
+                {formatDate((user as any).doj || user.created_at)}
+              </Text>
+            </View>
+
+            {/* Supervisor */}
+            <View style={styles.heroMetaCol}>
+              <View style={styles.heroMetaColHeader}>
+                <Users size={12} color="#0d9488" />
+                <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                  Supervisor
+                </Text>
+              </View>
+              <Text variant="caption" weight="semibold" numberOfLines={1} style={{ color: theme.colors.ink }}>
+                {supervisorDisplay}
+              </Text>
+            </View>
+
+            {/* Location */}
+            <View style={styles.heroMetaCol}>
+              <View style={styles.heroMetaColHeader}>
+                <MapPin size={12} color="#0284c7" />
+                <Text variant="micro" weight="medium" style={{ color: theme.colors.mute }}>
+                  Location
+                </Text>
+              </View>
+              <Text variant="caption" weight="semibold" numberOfLines={1} style={{ color: theme.colors.ink }}>
+                {user.location || (user.city && user.state ? `${user.city}, ${user.state}` : user.city || '—')}
+              </Text>
+            </View>
+          </View>
+
+          {/* Mobile Full-Width Edit Profile Button (Eliminates dead space on mobile) */}
+          {canEditUsers && (
+            <Pressable
+              variant="primary"
+              haptic="tap"
+              onPress={() => setEditModalVisible(true)}
+              style={styles.heroEditProfileBtn}
+              accessibilityLabel="Edit Profile"
+            >
+              <Edit2 size={13} color="#ffffff" />
+              <Text variant="label" weight="semibold" style={{ color: '#ffffff' }}>
+                Edit Profile
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* ─── 3. PROFILE DETAILS GROUPS (Single Surface, Zero Duplication) ─── */}
+        <View
+          style={[
+            styles.profileDetailsCard,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          {/* Section Header */}
+          <View style={[styles.profileDetailsHeader, { borderBottomColor: theme.colors.hairline }]}>
+            <Text variant="micro" weight="bold" style={[styles.profileDetailsHeaderTitle, { color: theme.colors.mute }]}>
+              PROFILE DETAILS
+            </Text>
+            <Text variant="micro" style={{ color: theme.colors.mute }}>
+              Directory record · read-only
+            </Text>
+          </View>
+
+          <View style={styles.profileDetailsBody}>
+            {/* Group 1: Contact Information */}
+            <View style={styles.profileGroupCard}>
+              <View style={styles.profileGroupTitleRow}>
+                <View style={[styles.profileGroupIconBox, { backgroundColor: 'rgba(2, 132, 199, 0.1)', borderColor: 'rgba(2, 132, 199, 0.2)' }]}>
+                  <Mail size={12} color="#0284c7" />
+                </View>
+                <Text variant="micro" weight="bold" style={{ color: theme.colors.mute, textTransform: 'uppercase' }}>
+                  Contact
+                </Text>
+              </View>
+
+              <View style={styles.profileGroupRows}>
+                {/* Email */}
+                <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Email</Text>
+                  <View style={styles.detailValueRow}>
+                    <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
+                      {user.email || '—'}
+                    </Text>
+                    {user.email ? (
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(user.email, 'Email')}>
+                        {copiedKey === 'Email' ? <Check size={12} color="#10b981" /> : <Copy size={12} color={theme.colors.mute} />}
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Phone */}
+                <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Phone</Text>
+                  <View style={styles.detailValueRow}>
+                    <Text variant="mono" weight="semibold" style={{ color: theme.colors.ink }}>
+                      {user.phone || '—'}
+                    </Text>
+                    {user.phone ? (
+                      <Pressable variant="iconButton" haptic="tap" hitSlopToMin48 onPress={() => handleCopy(user.phone, 'Phone')}>
+                        {copiedKey === 'Phone' ? <Check size={12} color="#10b981" /> : <Copy size={12} color={theme.colors.mute} />}
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* WhatsApp */}
+                <View style={styles.detailRow}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>WhatsApp</Text>
+                  {whatsappUrl ? (
+                    <Pressable variant="plain" haptic="tap" hitSlopToMin48 onPress={handleWhatsapp} style={styles.whatsappActionRow}>
+                      <WhatsAppIcon size={12} color="#10b981" />
+                      <Text variant="caption" weight="bold" style={{ color: '#10b981' }}>
+                        Chat direct
+                      </Text>
+                      <ExternalLink size={10} color="#10b981" />
+                    </Pressable>
+                  ) : (
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>—</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Group 2: Pay & Leave */}
+            <View style={[styles.profileGroupCard, { borderTopWidth: 1, borderTopColor: theme.colors.hairline }]}>
+              <View style={styles.profileGroupTitleRow}>
+                <View style={[styles.profileGroupIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.2)' }]}>
+                  <Clock size={12} color="#f59e0b" />
+                </View>
+                <Text variant="micro" weight="bold" style={{ color: theme.colors.mute, textTransform: 'uppercase' }}>
+                  Pay & Leave
+                </Text>
+              </View>
+
+              <View style={styles.profileGroupRows}>
+                {/* PL Leave Quota */}
+                <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>PL Leave Quota</Text>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                    {(user as any).total_pl_quota != null
+                      ? `${(user as any).total_pl_quota - ((user as any).pl_used_as_on_date || 0)} / ${(user as any).total_pl_quota} days`
+                      : '12 days'}
+                  </Text>
+                </View>
+
+                {/* Monthly Salary */}
+                {canViewSalary && user.monthly_salary != null && Number(user.monthly_salary) > 0 ? (
+                  <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>Monthly Salary</Text>
+                    <Text variant="mono" weight="bold" style={{ color: '#10b981' }}>
+                      ₹{Number(user.monthly_salary).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>Compensation</Text>
+                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.mute }}>
+                      Standard grade
                     </Text>
                   </View>
                 )}
-              </View>
-            </View>
-          </View>
-        </View>
 
-        {/* ─── 3. 4-CARD HIGH-DENSITY METADATA GRID ─── */}
-        <View style={styles.metadataGrid}>
-          {/* Card 1: Contact Information */}
-          <View
-            style={[
-              styles.infoCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                width: isDesktop ? '24%' : isTablet ? '48.5%' : '100%',
-              },
-            ]}
-          >
-            <View style={[styles.infoCardHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <Mail size={14} color="#0284c7" />
-              <Text variant="label" weight="bold" style={[styles.infoCardTitle, { color: theme.colors.mute }]}>
-                CONTACT INFORMATION
-              </Text>
-            </View>
-
-            <View style={styles.infoCardBody}>
-              {/* Email */}
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Email</Text>
-                <View style={styles.infoValueRow}>
-                  <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
-                    {user.email || '—'}
-                  </Text>
-                  {user.email ? (
+                {/* Supervised Operators (if Supervisor) */}
+                {user.role === 'supervisor' ? (
+                  <View style={styles.detailRow}>
+                    <Text variant="caption" style={{ color: theme.colors.mute }}>Supervised</Text>
                     <Pressable
                       variant="plain"
                       haptic="tap"
                       hitSlopToMin48
-                      onPress={() => handleCopy(user.email, 'Email')}
+                      onPress={() => handleTabChange('operators')}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
-                      {copiedKey === 'Email' ? (
-                        <Check size={12} color="#10b981" />
-                      ) : (
-                        <Copy size={12} color={theme.colors.mute} />
-                      )}
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-
-              {/* Phone */}
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Phone</Text>
-                <View style={styles.infoValueRow}>
-                  <Text variant="mono" weight="semibold" style={{ color: theme.colors.ink }}>
-                    {user.phone || '—'}
-                  </Text>
-                  {user.phone ? (
-                    <Pressable
-                      variant="plain"
-                      haptic="tap"
-                      hitSlopToMin48
-                      onPress={() => handleCopy(user.phone, 'Phone')}
-                    >
-                      {copiedKey === 'Phone' ? (
-                        <Check size={12} color="#10b981" />
-                      ) : (
-                        <Copy size={12} color={theme.colors.mute} />
-                      )}
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-
-              {/* WhatsApp */}
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>WhatsApp</Text>
-                {whatsappUrl ? (
-                  <Pressable variant="plain" haptic="tap" hitSlopToMin48 onPress={handleWhatsapp}>
-                    <View style={styles.whatsappActionRow}>
-                      <WhatsAppIcon size={13} color="#10b981" />
-                      <Text variant="caption" weight="bold" style={{ color: '#10b981' }}>
-                        Chat Direct
+                      <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
+                        {totalOperatorsCount || kpis.supervisedOperatorsCount || 0} operators
                       </Text>
-                    </View>
-                  </Pressable>
-                ) : (
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>—</Text>
-                )}
+                      <ChevronRight size={12} color={theme.colors.link} />
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             </View>
-          </View>
 
-          {/* Card 2: Employment Details */}
-          <View
-            style={[
-              styles.infoCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                width: isDesktop ? '24%' : isTablet ? '48.5%' : '100%',
-              },
-            ]}
-          >
-            <View style={[styles.infoCardHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <User size={14} color="#0d9488" />
-              <Text variant="label" weight="bold" style={[styles.infoCardTitle, { color: theme.colors.mute }]}>
-                EMPLOYMENT DETAILS
-              </Text>
-            </View>
-
-            <View style={styles.infoCardBody}>
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Employee ID</Text>
-                <View style={styles.infoValueRow}>
-                  <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                    {user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`}
-                  </Text>
-                  <Pressable
-                    variant="plain"
-                    haptic="tap"
-                    hitSlopToMin48
-                    onPress={() =>
-                      handleCopy(
-                        user.employee_id || `EMP-${user.id.slice(0, 4).toUpperCase()}`,
-                        'Employee ID'
-                      )
-                    }
-                    accessibilityLabel="Copy Employee ID"
-                  >
-                    {copiedKey === 'Employee ID' ? (
-                      <Check size={12} color="#10b981" />
-                    ) : (
-                      <Copy size={12} color={theme.colors.mute} />
-                    )}
-                  </Pressable>
+            {/* Group 3: Address */}
+            <View style={[styles.profileGroupCard, { borderTopWidth: 1, borderTopColor: theme.colors.hairline }]}>
+              <View style={styles.profileGroupTitleRow}>
+                <View style={[styles.profileGroupIconBox, { backgroundColor: 'rgba(244, 63, 94, 0.1)', borderColor: 'rgba(244, 63, 94, 0.2)' }]}>
+                  <MapPin size={12} color="#f43f5e" />
                 </View>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Joining Date</Text>
-                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                  {formatDate((user as any).doj || user.created_at)}
+                <Text variant="micro" weight="bold" style={{ color: theme.colors.mute, textTransform: 'uppercase' }}>
+                  Address
                 </Text>
               </View>
 
-              {user.role === 'operator' && (
-                <View style={styles.infoRow}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>Supervisor</Text>
+              <View style={styles.profileGroupRows}>
+                {/* Street */}
+                <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>Street</Text>
                   <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
-                    {supervisorDisplay}
+                    {user.street || user.address || '—'}
                   </Text>
                 </View>
-              )}
 
-              {user.role === 'supervisor' && (
-                <View style={styles.infoRow}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>Supervised Operators</Text>
-                  <Pressable
-                    variant="plain"
-                    haptic="tap"
-                    hitSlopToMin48
-                    onPress={() => handleTabChange('operators')}
-                  >
-                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.link }}>
-                      {totalOperatorsCount || kpis.supervisedOperatorsCount || 0} operators assigned
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {user.role === 'operator' && (
-                <View style={styles.infoRow}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>Machine Category</Text>
-                  {user.machine_category ? (
-                    <Badge
-                      variant="info"
-                      label={formatMachineCategoryLabel(user.machine_category)}
-                    />
-                  ) : (
-                    <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                      —
-                    </Text>
-                  )}
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Card 3: Shift & Compensation */}
-          <View
-            style={[
-              styles.infoCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                width: isDesktop ? '24%' : isTablet ? '48.5%' : '100%',
-              },
-            ]}
-          >
-            <View style={[styles.infoCardHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <Clock size={14} color="#f59e0b" />
-              <Text variant="label" weight="bold" style={[styles.infoCardTitle, { color: theme.colors.mute }]}>
-                SHIFT & COMPENSATION
-              </Text>
-            </View>
-
-            <View style={styles.infoCardBody}>
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Shift Hours</Text>
-                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                  {shiftDisplay}
-                </Text>
-              </View>
-
-              {canViewSalary && user.monthly_salary != null && Number(user.monthly_salary) > 0 && (
-                <View style={styles.infoRow}>
-                  <Text variant="caption" style={{ color: theme.colors.mute }}>Monthly Salary</Text>
-                  <Text variant="mono" weight="bold" style={{ color: '#10b981' }}>
-                    ₹{Number(user.monthly_salary).toLocaleString('en-IN')} / mo
+                {/* City / District */}
+                <View style={[styles.detailRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>City / District</Text>
+                  <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
+                    {user.city && user.district ? `${user.city}, ${user.district}` : user.city || user.district || '—'}
                   </Text>
                 </View>
-              )}
 
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>PL Leave Quota</Text>
-                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                  {(user as any).total_pl_quota != null
-                    ? `${(user as any).total_pl_quota - ((user as any).pl_used_as_on_date || 0)} / ${(user as any).total_pl_quota} days`
-                    : '12 / 12 days'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Card 4: Location & Address */}
-          <View
-            style={[
-              styles.infoCard,
-              {
-                backgroundColor: theme.colors.canvasElevated,
-                borderColor: theme.colors.hairline,
-                width: isDesktop ? '24%' : isTablet ? '48.5%' : '100%',
-              },
-            ]}
-          >
-            <View style={[styles.infoCardHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <MapPin size={14} color="#e11d48" />
-              <Text variant="label" weight="bold" style={[styles.infoCardTitle, { color: theme.colors.mute }]}>
-                LOCATION & ADDRESS
-              </Text>
-            </View>
-
-            <View style={styles.infoCardBody}>
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>City / District</Text>
-                <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
-                  {user.city && user.district ? `${user.city}, ${user.district}` : user.city || user.district || '—'}
-                </Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>State</Text>
-                <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                  {user.state || '—'}
-                </Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text variant="caption" style={{ color: theme.colors.mute }}>Street</Text>
-                <Text variant="caption" weight="semibold" numberOfLines={1} style={[styles.truncateMax, { color: theme.colors.ink }]}>
-                  {user.street || user.address || '—'}
-                </Text>
+                {/* State */}
+                <View style={styles.detailRow}>
+                  <Text variant="caption" style={{ color: theme.colors.mute }}>State</Text>
+                  <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
+                    {user.state || '—'}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -1501,19 +1514,6 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
             );
           })}
         </ScrollView>
-
-        {/* ─── 5B. IN-TAB SEARCH TOOLBAR (100% Web Parity) ─── */}
-        {activeTab !== 'attendance' && activeTab !== 'documents' && (
-          <View style={styles.tabSearchContainer}>
-            <SearchInput
-              value={tabSearch}
-              onChangeText={setTabSearch}
-              onClear={() => setTabSearch('')}
-              placeholder={`Search in ${tabChips.find((t) => t.id === activeTab)?.label || activeTab}...`}
-              size="sm"
-            />
-          </View>
-        )}
 
         {/* ─── 6. TAB CONTENT PANELS WITH LAZY LOADING & INFINITE PAGINATION ─── */}
 
@@ -1580,77 +1580,16 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({
               <>
                 <View style={styles.cardsList}>
                   {filteredMachines.map((m) => (
-                    <View
+                    <MobileMachineCard
                       key={m.id}
-                      style={[
-                        styles.machineListItem,
-                        {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.machineItemHeader}>
-                        <View style={styles.machineItemHeaderLeft}>
-                          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                            {m.machine_id}
-                          </Text>
-                          <Badge
-                            status={m.status === 'rented' ? 'rented' : 'available'}
-                            customLabel={m.status === 'rented' ? 'Rented' : 'Available'}
-                          />
-                        </View>
-
-                        <Pressable
-                          variant="plain"
-                          haptic="tap"
-                          hitSlopToMin48
-                          onPress={() => {
-                            showToast('info', `Inspecting ${m.machine_id}`);
-                          }}
-                          style={styles.inspectBtn}
-                        >
-                          <Text variant="caption" weight="bold" style={{ color: theme.colors.link }}>
-                            Inspect
-                          </Text>
-                          <ExternalLink size={12} color={theme.colors.link} />
-                        </Pressable>
-                      </View>
-
-                      <View style={styles.machineItemDetails}>
-                        <Text variant="body" weight="semibold" style={{ color: theme.colors.ink }}>
-                          {m.machine_name} {m.model ? `· ${m.model}` : ''}
-                        </Text>
-
-                        {/* If viewing a supervisor, show assigned operator */}
-                        {user.role === 'supervisor' && (m.assigned_operator_name || m.assigned_operator_code) ? (
-                          <View style={styles.machineOperatorRow}>
-                            <UserCheck size={12} color="#0284c7" />
-                            <Text variant="caption" style={{ color: theme.colors.mute }}>
-                              Operator:{' '}
-                            </Text>
-                            <Text variant="caption" weight="semibold" style={{ color: theme.colors.ink }}>
-                              {m.assigned_operator_name || 'Assigned Operator'}
-                            </Text>
-                            {m.assigned_operator_code ? (
-                              <Badge status="default" customLabel={m.assigned_operator_code} />
-                            ) : null}
-                          </View>
-                        ) : null}
-
-                        <View style={styles.machineItemSpecsRow}>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>
-                            S/N: {m.serial_number || '—'}
-                          </Text>
-                          <Text variant="caption" style={{ color: theme.colors.mute }}>
-                            MFR: {m.manufacturer || '—'}
-                          </Text>
-                          <Text variant="mono" weight="bold" style={{ color: theme.colors.ink }}>
-                            {m.hour_meter != null ? `${m.hour_meter} h` : '—'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
+                      machine={m}
+                      isAdmin={canManageUsers}
+                      isSupervisor={isSupervisor}
+                      onAssignOperator={canAssignMachineUsers ? () => setAssignMachineVisible(true) : undefined}
+                      onViewDetails={(item: any) => {
+                        router.push(`/(app)/machines?id=${item.id || item.machine_id}` as any);
+                      }}
+                    />
                   ))}
                 </View>
 
@@ -2939,66 +2878,92 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
-  heroSecondaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 2,
-  },
-  heroSecondaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  editProfileBtn: {
+  statusPulseDot: {
     position: 'absolute',
-    top: 14,
-    right: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radiusNumeric.pill,
-    borderWidth: 1,
-    minHeight: 36,
-    zIndex: 10,
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
   },
-  heroDetailsWithEdit: {
-    paddingRight: 110,
-  },
-  metadataGrid: {
+  heroMetadataGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 12,
+    gap: 10,
   },
-  infoCard: {
+  heroMetaCol: {
+    flex: 1,
+    minWidth: '45%',
+    gap: 2,
+  },
+  heroMetaColHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroEditProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radiusNumeric.md,
+    backgroundColor: '#0284c7',
+    paddingVertical: 9,
+    marginTop: 12,
+    minHeight: 40,
+  },
+  profileDetailsCard: {
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
-    padding: 14,
+    overflow: 'hidden',
+    marginBottom: 16,
   },
-  infoCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    marginBottom: 8,
-  },
-  infoCardTitle: {
-  },
-  infoCardBody: {
-    gap: 8,
-  },
-  infoRow: {
+  profileDetailsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
   },
-  infoValueRow: {
+  profileDetailsHeaderTitle: {
+  },
+  profileDetailsBody: {
+    gap: 0,
+  },
+  profileGroupCard: {
+    padding: 14,
+  },
+  profileGroupTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  profileGroupIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileGroupRows: {
+    gap: 0,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  detailValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

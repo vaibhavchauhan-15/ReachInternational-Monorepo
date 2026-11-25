@@ -1,7 +1,7 @@
 # Performance & Optimization Testing Standards
 
 > **PERFORMANCE BUDGETS AND VERIFICATION STANDARDS FOR WEB, DATABASE, AND MOBILE**  
-> *Cross-references the monorepo performance rules in [`AI/RULES/PERFORMANCE.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/AI/RULES/PERFORMANCE.md). Performance is treated as an essential product requirement.*
+> *Cross-references the monorepo performance rules in [`AI/RULES/PERFORMANCE.md`](../../AI/RULES/PERFORMANCE.md). Performance is treated as an essential product requirement.*
 
 ---
 

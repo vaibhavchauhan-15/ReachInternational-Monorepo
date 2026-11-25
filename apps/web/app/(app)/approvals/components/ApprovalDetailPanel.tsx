@@ -49,7 +49,11 @@ interface AttachedUserDoc {
   signedUrl?: string | null;
 }
 
-export function ApprovalDetailPanel({
+export function ApprovalDetailPanel(props: ApprovalDetailPanelProps) {
+  return <ApprovalDetailPanelInner key={props.request?.id || "empty"} {...props} />;
+}
+
+function ApprovalDetailPanelInner({
   request,
   isLoading = false,
   onApprove,
@@ -71,8 +75,6 @@ export function ApprovalDetailPanel({
 
   useEffect(() => {
     if (!request) {
-      setDocSignedUrl(null);
-      setRegDocs([]);
       return;
     }
 
@@ -176,13 +178,8 @@ export function ApprovalDetailPanel({
 
     if (request.type_key === "document_verify" || request.type_key === "document_replace") {
       resolveSingleDocUrl();
-      setRegDocs([]);
     } else if (request.type_key === "registration") {
-      setDocSignedUrl(null);
       resolveRegistrationDocs();
-    } else {
-      setDocSignedUrl(null);
-      setRegDocs([]);
     }
 
     return () => {
@@ -391,6 +388,14 @@ export function ApprovalDetailPanel({
                 <div className="p-3 flex justify-between items-center">
                   <span className="text-[var(--color-ink-muted)]">Machine Fleet</span>
                   <span>{payload.machine_category}</span>
+                </div>
+              )}
+              {(payload.role === "operator" || (request as any).role === "operator") && (
+                <div className="p-3 flex justify-between items-center">
+                  <span className="text-[var(--color-ink-muted)]">Supervisor</span>
+                  <span className="font-medium text-[var(--color-ink)]">
+                    {(request as any).supervisor_name || payload.supervisor_name || payload.supervisorName || "Unassigned"}
+                  </span>
                 </div>
               )}
               {(payload.city || payload.state) && (

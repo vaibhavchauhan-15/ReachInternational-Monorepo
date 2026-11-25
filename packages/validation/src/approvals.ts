@@ -20,6 +20,7 @@ export const ApprovalDecideInputSchema = z.object({
   note: z.string().trim().max(1000).optional(),
   expected_version: z.number().int().positive().optional(),
   bound_request_ids: z.array(z.string().uuid()).optional(),
+  idempotency_key: z.string().trim().max(128).optional(),
 });
 
 export type ApprovalDecideInput = z.infer<typeof ApprovalDecideInputSchema>;
@@ -39,14 +40,48 @@ export const ApprovalApproveAllInputSchema = z.object({
 
 export type ApprovalApproveAllInput = z.infer<typeof ApprovalApproveAllInputSchema>;
 
+/** A keyset page cursor is always a (created_at, id) pair. */
+const CursorCreatedAtSchema = z
+  .string()
+  .trim()
+  .min(1, "Cursor timestamp is required")
+  .refine((value) => !Number.isNaN(Date.parse(value)), {
+    message: "Invalid cursor timestamp",
+  });
 
-export const ApprovalListQuerySchema = z.object({
-  status: z.enum(["pending", "approved", "rejected", "cancelled", "expired", "all"]).optional().default("pending"),
-  type_key: z.string().trim().optional(),
-  cursor_created_at: z.string().datetime().optional(),
-  cursor_id: z.string().uuid().optional(),
-  limit: z.number().int().min(1).max(100).optional().default(20),
+export const ApprovalCursorSchema = z.object({
+  created_at: CursorCreatedAtSchema,
+  id: z.string().uuid("Invalid cursor ID"),
 });
+
+export type ApprovalCursorInput = z.infer<typeof ApprovalCursorSchema>;
+
+export const ApprovalListQuerySchema = z
+  .object({
+    status: z.enum(["pending", "approved", "rejected", "cancelled", "expired", "all"]).optional().default("pending"),
+    type_key: z.string().trim().optional(),
+    cursor: ApprovalCursorSchema.optional(),
+    cursor_created_at: CursorCreatedAtSchema.optional(),
+    cursor_id: z.string().uuid("Invalid cursor ID").optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  })
+  .superRefine((value, ctx) => {
+    // The keyset cursor is a pair: accepting one half silently restarts the page.
+    if (Boolean(value.cursor_created_at) !== Boolean(value.cursor_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "cursor_created_at and cursor_id must be supplied together",
+      });
+    }
+  })
+  .transform((value) => {
+    const cursor = value.cursor;
+    return {
+      ...value,
+      cursor_created_at: cursor?.created_at ?? value.cursor_created_at,
+      cursor_id: cursor?.id ?? value.cursor_id,
+    };
+  });
 
 export type ApprovalListQuery = z.infer<typeof ApprovalListQuerySchema>;
 

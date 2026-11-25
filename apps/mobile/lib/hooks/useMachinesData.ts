@@ -1,11 +1,26 @@
 /**
  * Native Mobile Machines Fleet Server State & Business Logic Hook
- * Encapsulates TanStack Query caching, role-scoped queries, server-side pagination,
+ * Encapsulates TanStack Query caching, role-capability scoped queries, server-side pagination,
  * trigram search, fast KPI aggregations, and resilient mutations.
+ *
+ * RBAC: every gate here reads from `@reachinternational/permissions` (MACHINE_CAPABILITIES) so the
+ * native Machines module has exactly one capability source of truth shared with Web.
+ *
+ * Data contracts:
+ *  - Fleet tier (super_admin / admin / manager) and supervised tier (supervisor) → `machines` PostgREST
+ *    read scoped by RLS + `get_machines_directory_summary` RPC (identical contract to the Web DAL).
+ *  - Operator tier → `get_operator_assigned_machines` RPC only. The operator never receives the fleet
+ *    list, fleet KPIs, filter options, rental rates or audit rows (server-enforced 42501 for non-operators).
  */
 
 import { useMemo, useCallback } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import {
+  MACHINE_CAPABILITIES,
+  getMachineScope,
+  hasMachineCapability,
+  isOperatorMachineView,
+} from '@reachinternational/permissions';
 import { supabase } from '../supabase';
 import { notifyMachineDeleted } from '../notifications';
 import { isAbortError } from '@reachinternational/utils';
@@ -75,11 +90,79 @@ export interface MachineKPIStats {
   activeCount?: number;
 }
 
-export const PAGE_SIZE = 15;
+/** Progressive chunk size — 10 rows keeps first paint and windowed rendering small. */
+export const PAGE_SIZE = 10;
+
+/** Cache policy: fleet reads are operational (fast) but must not thrash on tab focus. */
+const LIST_STALE_MS = 60 * 1000;
+const LIST_GC_MS = 10 * 60 * 1000;
+const KPI_STALE_MS = 30 * 1000;
+const OPERATOR_STALE_MS = 60 * 1000;
+const FILTER_OPTIONS_STALE_MS = 10 * 60 * 1000;
+
+/** Row shape returned by the operator-only RPC (slim, server-projected). */
+export interface OperatorAssignedMachineRow {
+  id: string;
+  machine_id: string;
+  machine_name?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  manufacturer?: string | null;
+  year_of_mfg?: number | null;
+  health_status?: string | null;
+  status?: string | null;
+  hour_meter?: number | string | null;
+  client_id?: string | null;
+  client_name?: string | null;
+  client_code?: string | null;
+  worksite_name?: string | null;
+  worksite_city?: string | null;
+  worksite_state?: string | null;
+  site_supervisor_id?: string | null;
+  site_supervisor_name?: string | null;
+  shift_codes?: string | null;
+}
+
+/**
+ * Maps the operator RPC row onto the shared card/detail shape.
+ * Deliberately omits operator_ids / supervisor_ids / customer PII — operators only get
+ * their own machinery, the worksite and the site supervisor.
+ */
+function mapOperatorMachine(row: OperatorAssignedMachineRow): any {
+  const supervisor = row.site_supervisor_id && row.site_supervisor_name
+    ? { id: row.site_supervisor_id, full_name: row.site_supervisor_name }
+    : null;
+
+  return {
+    id: row.id,
+    machine_id: row.machine_id,
+    machine_name: row.machine_name ?? null,
+    model: row.model ?? null,
+    serial_number: row.serial_number ?? null,
+    manufacturer: row.manufacturer ?? null,
+    year_of_mfg: row.year_of_mfg ?? null,
+    health_status: row.health_status ?? 'active',
+    status: row.status ?? 'available',
+    hour_meter: row.hour_meter ?? 0,
+    client_id: row.client_id ?? null,
+    client: row.client_name
+      ? { id: row.client_id ?? null, code: row.client_code ?? null, company_name: row.client_name }
+      : null,
+    worksite_name: row.worksite_name ?? null,
+    worksite_city: row.worksite_city ?? null,
+    worksite_state: row.worksite_state ?? null,
+    current_supervisor: supervisor,
+    supervisors: supervisor ? [supervisor] : [],
+    current_operator: null,
+    operators: [],
+    shift_codes: row.shift_codes ?? null,
+  };
+}
 
 /**
  * 1. High-Performance Machine Directory KPI Aggregation
  * Calls PostgreSQL RPC `get_machines_directory_summary` for instant, indexed count calculations.
+ * Disabled for every role without FLEET_VIEW (operators and HR never fetch fleet aggregates).
  */
 export function useMachineKPIs({
   userRole,
@@ -95,23 +178,33 @@ export function useMachineKPIs({
   enabled?: boolean;
 }) {
   const normalizedRole = (userRole || '').toLowerCase();
+  const canViewFleet = hasMachineCapability(userRole, MACHINE_CAPABILITIES.FLEET_VIEW);
+  const scope = getMachineScope(userRole);
 
   return useQuery<MachineKPIStats>({
     queryKey: ['machines', 'kpis', { role: normalizedRole, userId, supervisorFilter, clientFilter }],
-    enabled: enabled && Boolean(userId),
-    staleTime: 15 * 1000,
+    enabled: enabled && canViewFleet && Boolean(userId),
+    staleTime: KPI_STALE_MS,
+    gcTime: LIST_GC_MS,
+    refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => {
       let p_supervisor_id: string | null = null;
       let p_operator_id: string | null = null;
-      let p_client_id: string | null = clientFilter !== 'all' ? clientFilter : null;
+      const p_client_id: string | null = clientFilter !== 'all' ? clientFilter : null;
 
-      if (normalizedRole === 'operator' && userId) {
-        p_operator_id = userId;
-      } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && userId) {
+      if (scope === 'supervised' && userId) {
+        // Supervisors are always pinned to their supervised scope, whatever the filter says.
         p_supervisor_id = userId;
       } else if (supervisorFilter && supervisorFilter !== 'all') {
         p_supervisor_id = supervisorFilter;
       }
+
+      const emptyStats: MachineKPIStats = {
+        totalCount: 0,
+        availableCount: 0,
+        rentedCount: 0,
+        breakdownCount: 0,
+      };
 
       try {
         const { data, error } = await supabase.rpc('get_machines_directory_summary', {
@@ -121,14 +214,9 @@ export function useMachineKPIs({
         }).abortSignal(signal);
 
         if (error) {
-          if (isAbortError(error, signal)) {
-            return {
-              totalCount: 0,
-              availableCount: 0,
-              rentedCount: 0,
-              breakdownCount: 0,
-            };
-          }
+          if (isAbortError(error, signal)) return emptyStats;
+          // 42501 → capability denied by the database; surface an explicit zero rather than fleet data.
+          if ((error as any).code === '42501') return emptyStats;
           throw error;
         }
 
@@ -142,14 +230,7 @@ export function useMachineKPIs({
           activeCount: Number(data?.active ?? 0),
         };
       } catch (err: any) {
-        if (isAbortError(err, signal)) {
-          return {
-            totalCount: 0,
-            availableCount: 0,
-            rentedCount: 0,
-            breakdownCount: 0,
-          };
-        }
+        if (isAbortError(err, signal)) return emptyStats;
         throw err;
       }
     },
@@ -164,8 +245,43 @@ export interface MachinePageChunk {
 }
 
 /**
- * 2. Infinite Chunked Machine Fleet Fetcher
+ * 2a. Operator assigned-machine query (RPC contract, slim server-side projection).
+ * Never touches the fleet list, KPIs, filter options or audit surfaces.
+ */
+export function useOperatorAssignedMachines({
+  userId,
+  machineId,
+  enabled = true,
+}: {
+  userId?: string | null;
+  machineId?: string | null;
+  enabled?: boolean;
+}) {
+  return useQuery<any[]>({
+    queryKey: ['machines', 'operator', userId, machineId || 'all'],
+    enabled: enabled && Boolean(userId),
+    staleTime: OPERATOR_STALE_MS,
+    gcTime: LIST_GC_MS,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase
+        .rpc('get_operator_assigned_machines', { p_machine_id: machineId || null })
+        .abortSignal(signal);
+
+      if (error) {
+        if (isAbortError(error, signal)) return [];
+        throw new Error(error.message || 'Failed to load assigned machinery');
+      }
+
+      return ((data || []) as OperatorAssignedMachineRow[]).map(mapOperatorMachine);
+    },
+  });
+}
+
+/**
+ * 2b. Infinite Chunked Machine Fleet Fetcher
  * Server-side pagination, GIN trigram text search, role-scoping, and indexed column ordering.
+ * Fleet + supervised tiers only (capability-gated at the query level).
  */
 export function useMachinesInfiniteQuery({
   userRole,
@@ -179,6 +295,8 @@ export function useMachinesInfiniteQuery({
   enabled = true,
 }: UseMachinesDataOptions) {
   const normalizedRole = (userRole || '').toLowerCase();
+  const scope = getMachineScope(userRole);
+  const canViewFleet = hasMachineCapability(userRole, MACHINE_CAPABILITIES.FLEET_VIEW);
   const trimmedSearch = searchQuery.trim();
 
   return useInfiniteQuery<MachinePageChunk, Error>({
@@ -196,9 +314,11 @@ export function useMachinesInfiniteQuery({
         sortBy,
       },
     ],
-    enabled: enabled && Boolean(userId),
+    enabled: enabled && canViewFleet && Boolean(userId),
     initialPageParam: 1,
-    staleTime: 30 * 1000,
+    staleTime: LIST_STALE_MS,
+    gcTime: LIST_GC_MS,
+    refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
     getNextPageParam: (lastPage, allPages) => {
       return lastPage.hasMore ? allPages.length + 1 : undefined;
@@ -214,34 +334,8 @@ export function useMachinesInfiniteQuery({
           .select(MACHINE_SELECT_COLUMNS, { count: 'exact' })
           .abortSignal(signal);
 
-        // Role-scoping matching canonical Web DAL
-        if (normalizedRole === 'operator' && userId) {
-          const { data: omaList, error: omaErr } = await supabase
-            .from('operator_machine_assignments')
-            .select('machine_id')
-            .eq('operator_id', userId)
-            .eq('is_active', true)
-            .abortSignal(signal);
-
-          if (omaErr && !isAbortError(omaErr, signal)) {
-            // Silently handled non-fatal assignment check warning
-          }
-
-          const assignedMachineIds = (omaList || [])
-            .map((r: any) => r.machine_id)
-            .filter(Boolean);
-
-          if (assignedMachineIds.length > 0) {
-            query = query.or(
-              `current_operator_id.eq.${userId},operator_ids.cs.{${userId}},id.in.(${assignedMachineIds.join(',')})`
-            );
-          } else {
-            query = query.or(
-              `current_operator_id.eq.${userId},operator_ids.cs.{${userId}}`
-            );
-          }
-        } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && userId) {
-          // Fetch clients supervised by this user to include inherited fleet equipment
+        // Supervised tier: RLS is the authority, the client filter keeps the query plan narrow.
+        if (scope === 'supervised' && userId) {
           const { data: clientSupervisors } = await supabase
             .from('client_supervisors')
             .select('client_id')
@@ -279,8 +373,8 @@ export function useMachinesInfiniteQuery({
           query = query.eq('health_status', healthFilter);
         }
 
-        // Server-side supervisor filter
-        if (supervisorFilter && supervisorFilter !== 'all') {
+        // Server-side supervisor filter (filter options are only requested by fleet-capable roles)
+        if (supervisorFilter && supervisorFilter !== 'all' && scope === 'all') {
           query = query.or(`current_supervisor_id.eq.${supervisorFilter},supervisor_ids.cs.{${supervisorFilter}}`);
         }
 
@@ -324,12 +418,7 @@ export function useMachinesInfiniteQuery({
 
         if (error) {
           if (isAbortError(error, signal)) {
-            return {
-              machines: [],
-              totalCount: 0,
-              page,
-              hasMore: false,
-            };
+            return { machines: [], totalCount: 0, page, hasMore: false };
           }
           throw new Error(error.message || 'Failed to fetch fleet machines');
         }
@@ -380,14 +469,14 @@ export function useMachinesInfiniteQuery({
           const supIds: string[] = Array.isArray(m.supervisor_ids)
             ? m.supervisor_ids
             : m.current_supervisor_id
-            ? [m.current_supervisor_id]
-            : [];
+              ? [m.current_supervisor_id]
+              : [];
 
           const opIds: string[] = Array.isArray(m.operator_ids)
             ? m.operator_ids
             : m.current_operator_id
-            ? [m.current_operator_id]
-            : [];
+              ? [m.current_operator_id]
+              : [];
 
           const supervisorsList = supIds
             .map((id: string) => knownUsersCache.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null))
@@ -414,12 +503,7 @@ export function useMachinesInfiniteQuery({
         };
       } catch (err: any) {
         if (isAbortError(err, signal)) {
-          return {
-            machines: [],
-            totalCount: 0,
-            page,
-            hasMore: false,
-          };
+          return { machines: [], totalCount: 0, page, hasMore: false };
         }
         throw err;
       }
@@ -428,8 +512,9 @@ export function useMachinesInfiniteQuery({
 }
 
 /**
- * 3. Unified Hook for Machines Screen
- * Combines infinite server-side pagination, KPI summarization, lazy filter options, and mutations.
+ * 3. Unified Hook for the Machines Screen
+ * Combines role-scoped server state, KPI summarisation, lazy filter options, cache patching
+ * and mutations. The TanStack cache is the single source of truth (no mirrored local array).
  */
 export function useMachinesData({
   userRole,
@@ -444,7 +529,17 @@ export function useMachinesData({
 }: UseMachinesDataOptions) {
   const queryClient = useQueryClient();
 
-  // Infinite machines list query
+  const operatorView = isOperatorMachineView(userRole);
+  const canViewFleet = hasMachineCapability(userRole, MACHINE_CAPABILITIES.FLEET_VIEW);
+  const canFilter = canViewFleet && hasMachineCapability(userRole, MACHINE_CAPABILITIES.VIEW);
+
+  // Operator tier: dedicated RPC, no fleet queries at all.
+  const operatorQuery = useOperatorAssignedMachines({
+    userId,
+    enabled: enabled && operatorView,
+  });
+
+  // Infinite machines list query (fleet + supervised tiers only)
   const infiniteQuery = useMachinesInfiniteQuery({
     userRole,
     userId,
@@ -454,22 +549,25 @@ export function useMachinesData({
     supervisorFilter,
     clientFilter,
     sortBy,
-    enabled,
+    enabled: enabled && !operatorView,
   });
 
-  // Dedicated fast scalar KPI RPC query
+  // Dedicated fast scalar KPI RPC query (FLEET_VIEW only)
   const kpisQuery = useMachineKPIs({
     userRole,
     userId,
     supervisorFilter,
     clientFilter,
-    enabled,
+    enabled: enabled && !operatorView && canViewFleet,
   });
 
-  // Lazy loaded supervisor and client options for filter panel
+  // Lazy loaded supervisor and client options for the filter drawer (FLEET_VIEW only)
   const { data: filterOptions = { supervisors: [], clients: [] }, isLoading: isLoadingOptions } = useQuery({
     queryKey: ['machines_filter_options'],
-    staleTime: 5 * 60 * 1000,
+    enabled: enabled && canFilter,
+    staleTime: FILTER_OPTIONS_STALE_MS,
+    gcTime: LIST_GC_MS,
+    refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => {
       const [supsRes, clientsRes] = await Promise.all([
         supabase
@@ -499,8 +597,8 @@ export function useMachinesData({
     },
   });
 
-  // Flattened deduplicated machines array across all loaded pages
-  const machines = useMemo(() => {
+  // Flattened deduplicated machines array across all loaded pages (fleet tier)
+  const fleetMachines = useMemo(() => {
     if (!infiniteQuery.data?.pages) return [];
     const seen = new Set<string>();
     const list: any[] = [];
@@ -517,14 +615,89 @@ export function useMachinesData({
     return list;
   }, [infiniteQuery.data?.pages]);
 
-  const totalCount = infiniteQuery.data?.pages?.[0]?.totalCount ?? machines.length;
+  const operatorMachines = operatorQuery.data ?? EMPTY_MACHINES;
+  const machines = operatorView ? operatorMachines : fleetMachines;
+  const totalCount = operatorView
+    ? operatorMachines.length
+    : infiniteQuery.data?.pages?.[0]?.totalCount ?? fleetMachines.length;
 
-  // Single unified refetch handler
+  /** Patches one machine inside every cached machine page/list (single source of truth). */
+  const patchMachine = useCallback(
+    (patch: any) => {
+      if (!patch?.id) return;
+      queryClient.setQueriesData<any>({ queryKey: ['machines', 'infinite'] }, (old: any) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            machines: Array.isArray(page.machines)
+              ? page.machines.map((m: any) => (m.id === patch.id ? { ...m, ...patch } : m))
+              : page.machines,
+          })),
+        };
+      });
+      queryClient.setQueriesData<any>({ queryKey: ['machines', 'operator'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((m: any) => (m.id === patch.id ? { ...m, ...patch } : m));
+      });
+    },
+    [queryClient]
+  );
+
+  /** Optimistically removes one machine, then re-syncs only the affected machine keys. */
+  const removeMachineFromCache = useCallback(
+    (machineId: string) => {
+      if (!machineId) return;
+      queryClient.setQueriesData<any>({ queryKey: ['machines', 'infinite'] }, (old: any) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            machines: Array.isArray(page.machines)
+              ? page.machines.filter((m: any) => m.id !== machineId)
+              : page.machines,
+            totalCount: Math.max(0, (page.totalCount || 1) - 1),
+          })),
+        };
+      });
+      queryClient.setQueriesData<any>({ queryKey: ['machines', 'operator'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((m: any) => m.id !== machineId);
+      });
+    },
+    [queryClient]
+  );
+
+  /** Authoritative resync — used as the rollback path for optimistic mutations. */
+  const resyncMachines = useCallback(() => {
+    const tasks: Array<Promise<unknown>> = [
+      queryClient.invalidateQueries({ queryKey: ['machines', 'infinite'] }),
+      queryClient.invalidateQueries({ queryKey: ['machines', 'operator'] }),
+    ];
+    if (canViewFleet) {
+      tasks.push(queryClient.invalidateQueries({ queryKey: ['machines', 'kpis'] }));
+    }
+    return Promise.all(tasks);
+  }, [canViewFleet, queryClient]);
+
+  /** Refreshes KPIs only (list rows are patched optimistically). */
+  const invalidateMachineKPIs = useCallback(() => {
+    if (!canViewFleet) return Promise.resolve();
+    return queryClient.invalidateQueries({ queryKey: ['machines', 'kpis'] });
+  }, [canViewFleet, queryClient]);
+
+  // Single unified refetch handler (pull-to-refresh / sync / header action)
   const refetch = useCallback(async () => {
+    if (operatorView) {
+      await operatorQuery.refetch();
+      return;
+    }
     await Promise.all([infiniteQuery.refetch(), kpisQuery.refetch()]);
-  }, [infiniteQuery, kpisQuery]);
+  }, [infiniteQuery, kpisQuery, operatorQuery, operatorView]);
 
-  // Delete Machine Mutation with cache invalidation
+  // Delete Machine Mutation — optimistic, capability-assumed (DB RLS/trigger is the authority)
   const deleteMutation = useMutation({
     mutationFn: async (machine: any) => {
       const machineDbId = machine.id;
@@ -547,34 +720,61 @@ export function useMachinesData({
 
       return machineDbId;
     },
-    onSuccess: (deletedId) => {
-      // Invalidate all machine queries
-      queryClient.invalidateQueries({ queryKey: ['machines'] });
+    onMutate: async (machine: any) => {
+      await queryClient.cancelQueries({ queryKey: ['machines'] });
+      removeMachineFromCache(machine?.id);
+      return { machineId: machine?.id };
+    },
+    onError: async () => {
+      await resyncMachines();
+    },
+    onSuccess: async () => {
+      await invalidateMachineKPIs();
     },
   });
 
+  const isLoading = operatorView ? operatorQuery.isLoading : infiniteQuery.isLoading;
+  const isFetching = operatorView ? operatorQuery.isFetching : infiniteQuery.isFetching;
+  const error = operatorView
+    ? (operatorQuery.error ? operatorQuery.error.message : null)
+    : (infiniteQuery.error ? infiniteQuery.error.message : null);
+
   return {
+    /** 'operator' → assigned-machine view; 'fleet' → directorate view. */
+    mode: operatorView ? ('operator' as const) : ('fleet' as const),
+    canViewFleet,
+    canFilter,
     machines,
     totalCount,
-    kpis: kpisQuery.data || {
-      totalCount: 0,
-      availableCount: 0,
-      rentedCount: 0,
-      breakdownCount: 0,
-    },
-    isKPIsLoading: kpisQuery.isLoading,
-    isLoading: infiniteQuery.isLoading,
-    isFetching: infiniteQuery.isFetching,
-    isFetchingNextPage: infiniteQuery.isFetchingNextPage,
-    hasNextPage: Boolean(infiniteQuery.hasNextPage),
-    fetchNextPage: infiniteQuery.fetchNextPage,
-    isError: infiniteQuery.isError,
-    error: infiniteQuery.error ? infiniteQuery.error.message : null,
+    kpis: canViewFleet
+      ? (kpisQuery.data || {
+          totalCount: 0,
+          availableCount: 0,
+          rentedCount: 0,
+          breakdownCount: 0,
+        })
+      : null,
+    isKPIsLoading: canViewFleet ? kpisQuery.isLoading : false,
+    isLoading,
+    isFetching,
+    isFetchingNextPage: operatorView ? false : infiniteQuery.isFetchingNextPage,
+    hasNextPage: operatorView ? false : Boolean(infiniteQuery.hasNextPage),
+    fetchNextPage: operatorView ? noop : infiniteQuery.fetchNextPage,
+    isError: operatorView ? operatorQuery.isError : infiniteQuery.isError,
+    error,
     refetch,
-    supervisorsList: filterOptions.supervisors,
-    clientsList: filterOptions.clients,
-    isLoadingOptions,
+    supervisorsList: canFilter ? filterOptions.supervisors : EMPTY_OPTIONS,
+    clientsList: canFilter ? filterOptions.clients : EMPTY_OPTIONS,
+    isLoadingOptions: canFilter ? isLoadingOptions : false,
     deleteMachine: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+    patchMachine,
+    removeMachineFromCache,
+    resyncMachines,
+    invalidateMachineKPIs,
   };
 }
+
+const EMPTY_MACHINES: any[] = [];
+const EMPTY_OPTIONS: Array<{ id: string; full_name?: string; company_name?: string; code?: string }> = [];
+const noop = () => undefined;

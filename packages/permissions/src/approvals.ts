@@ -185,3 +185,39 @@ export function canCancelApproval(
   if (!requesterId || !userId) return false;
   return requesterId === userId;
 }
+
+/**
+ * Checks whether a role can access the approvals queue route.
+ * Dynamically derived from the approval types matrix: any role that belongs
+ * to any approver pool (decide or view) has queue access.
+ */
+export function canAccessApprovalsRoute(
+  role: UserRole | string | null | undefined
+): boolean {
+  const norm = normalizeRole(role);
+  if (!norm) return false;
+  if (norm === "super_admin") return true;
+
+  for (const config of Object.values(APPROVAL_TYPE_ROLES)) {
+    if (config.decide.includes(norm) || config.view.includes(norm)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns all canonical roles that belong to at least one approver pool.
+ */
+export function getAllApproverRoles(): UserRole[] {
+  const roles = new Set<UserRole>(["super_admin"]);
+  for (const config of Object.values(APPROVAL_TYPE_ROLES)) {
+    for (const r of config.decide) {
+      roles.add(r);
+    }
+    for (const r of config.view) {
+      roles.add(r);
+    }
+  }
+  return Array.from(roles);
+}

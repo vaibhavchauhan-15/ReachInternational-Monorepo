@@ -11,6 +11,7 @@ import { formatTinyRelativeTime } from "@reachinternational/utils";
 import {
   Clock,
   User,
+  UserCheck,
   Hash,
   CheckCircle2,
   XCircle,
@@ -55,18 +56,17 @@ interface DocumentThumbnailProps {
   fallbackIcon?: React.ReactNode;
 }
 
-function DocumentThumbnail({
+function DocumentThumbnail(props: DocumentThumbnailProps) {
+  return <DocumentThumbnailInner key={props.src || "none"} {...props} />;
+}
+
+function DocumentThumbnailInner({
   src,
   alt,
   className,
   fallbackIcon,
 }: DocumentThumbnailProps) {
   const [hasError, setHasError] = React.useState(false);
-
-  // Reset error state if src changes
-  React.useEffect(() => {
-    setHasError(false);
-  }, [src]);
 
   // If no source or error occurred, NEVER render an <img> tag.
   // Rendering <img src=""> triggers React's console error and browser reload attempts.
@@ -252,6 +252,15 @@ export const ApprovalRow = React.memo(function ApprovalRow({
   const documents = item.documents || [];
   const payload = item.payload || {};
 
+  const isOperator =
+    role?.toLowerCase() === "operator" ||
+    payload.role?.toLowerCase() === "operator";
+  const supervisorName =
+    item.supervisor_name ||
+    payload.supervisor_name ||
+    payload.supervisorName ||
+    null;
+
   // Type categorization
   const isRegistration = item.type_key === "registration";
   const isDocVerify = item.type_key === "document_verify";
@@ -288,6 +297,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
 
   return (
     <div
+      id={`approval-row-${item.id}`}
       className={`w-full relative flex flex-col justify-between rounded-xl border p-3.5 sm:p-4 shadow-xs transition-all duration-300 gap-3 ${
         isApprovedExit
           ? "border-emerald-500/80 bg-emerald-50/40 dark:bg-emerald-950/25 ring-1 ring-emerald-500/30 shadow-md"
@@ -296,7 +306,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
           : "border-[var(--color-border)] bg-[var(--color-canvas-elevated)] hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-md"
       }`}
     >
-      {/* ── Top Header: Badges & Relative Registration Time ── */}
+      {/* ── Top Header: Badges ── */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5 min-w-0">
           <ApprovalTypeBadge typeKey={item.type_key} typeLabel={item.type_label} />
@@ -311,15 +321,6 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               High Priority
             </span>
           )}
-        </div>
-
-        {/* Registration time ago */}
-        <div
-          className="flex items-center gap-1 shrink-0 text-[var(--color-ink-muted)] text-[11px] sm:text-xs font-medium tabular-nums ml-auto"
-          title={`Submitted on ${item.created_at}`}
-        >
-          <Clock size={11} className="shrink-0 text-[var(--color-mute)]" />
-          <span>{formatTinyRelativeTime(item.created_at)}</span>
         </div>
       </div>
 
@@ -338,8 +339,8 @@ export const ApprovalRow = React.memo(function ApprovalRow({
           )}
         </div>
 
-        {/* Contact details: Email, Phone Number, Machine Category */}
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-[var(--color-ink-muted)]">
+        {/* Contact details: Email, Phone Number, Machine Category & Operator Supervisor */}
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs text-[var(--color-ink-muted)]">
           {email && (
             <div className="flex items-center gap-1.5 min-w-0">
               <Mail size={12} className="text-emerald-500 shrink-0" />
@@ -360,6 +361,17 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               </span>
             </div>
           )}
+          {isOperator && (
+            <div
+              className="flex items-center gap-1.5 min-w-0"
+              title={`Supervisor: ${supervisorName || "Unassigned"}`}
+            >
+              <UserCheck size={12} className="text-sky-500 shrink-0" />
+              <span className="text-[var(--color-ink)] font-medium truncate">
+                Supervisor: {supervisorName || "Unassigned"}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -376,7 +388,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               </span>
             </div>
 
-            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5 touch-pan-x">
               {documents.map((doc) => (
                 <AttachedDocCard
                   key={doc.id}
@@ -402,7 +414,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               </span>
             </div>
 
-            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5 touch-pan-x">
               <AttachedDocCard
                 key={singleDocTarget.id}
                 doc={singleDocTarget}
@@ -460,7 +472,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
             )}
           </div>
 
-          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5 touch-pan-x">
             {replacementDocTarget ? (
               <AttachedDocCard
                 key={replacementDocTarget.id}
@@ -629,7 +641,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               </span>
             </div>
 
-            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5 touch-pan-x">
               {documents.map((doc) => (
                 <AttachedDocCard
                   key={doc.id}
@@ -672,7 +684,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
                 Attached Documents ({documents.length})
               </span>
             </div>
-            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-0.5 touch-pan-x">
               {documents.map((doc) => (
                 <AttachedDocCard
                   key={doc.id}
@@ -705,7 +717,16 @@ export const ApprovalRow = React.memo(function ApprovalRow({
       )}
 
       {/* ── Card Bottom Action Bar (Optimized for Mobile & Desktop) ── */}
-      <div className="pt-3 border-t border-[var(--color-border)]/70 flex items-center justify-between sm:justify-end gap-2 mt-auto">
+      <div className="pt-3 border-t border-[var(--color-border)]/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mt-auto">
+        {/* Registration time ago (Bottom Left) */}
+        <div
+          className="flex items-center gap-1.5 text-[var(--color-ink-muted)] text-[11px] sm:text-xs font-medium tabular-nums"
+          title={`Submitted on ${item.created_at}`}
+        >
+          <Clock size={12} className="shrink-0 text-[var(--color-mute)]" />
+          <span>{formatTinyRelativeTime(item.created_at)}</span>
+        </div>
+
         {/* Quick Approve / Reject Buttons (Strictly ONE loading spinner) */}
         {isApprovedExit ? (
           <div className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold animate-in zoom-in-95 duration-200">
@@ -727,7 +748,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               loading={isRejectLoading}
               disabled={isActionLoading || isRejectLoading}
               onClick={() => onRejectPrompt(item.id)}
-              className="flex-1 sm:flex-initial gap-1.5 h-10 sm:h-9 min-h-[40px] sm:min-h-[36px] px-3.5 text-xs font-semibold text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10 cursor-pointer justify-center rounded-xl"
+              className="flex-1 sm:flex-initial gap-1.5 h-10 sm:h-9 min-h-[44px] sm:min-h-[36px] px-3.5 text-xs font-semibold text-red-600 dark:text-red-400 border-red-500/30 hover:bg-red-500/10 cursor-pointer justify-center rounded-xl"
             >
               <span>Reject</span>
             </Button>
@@ -739,7 +760,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
               loading={isActionLoading}
               disabled={isActionLoading || isRejectLoading}
               onClick={() => onApprove(item.id)}
-              className="flex-1 sm:flex-initial gap-1.5 h-10 sm:h-9 min-h-[40px] sm:min-h-[36px] px-4 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer justify-center rounded-xl"
+              className="flex-1 sm:flex-initial gap-1.5 h-10 sm:h-9 min-h-[44px] sm:min-h-[36px] px-4 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer justify-center rounded-xl"
             >
               <span>Approve</span>
             </Button>
@@ -748,7 +769,7 @@ export const ApprovalRow = React.memo(function ApprovalRow({
 
         {/* Status notice if not pending and not actively exiting */}
         {!isPending && !isApprovedExit && !isRejectedExit && (
-          <div className="flex items-center gap-1.5 text-xs text-[var(--color-ink-muted)] ml-auto">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--color-ink-muted)] sm:ml-auto">
             {item.status === "approved" ? (
               <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
                 <CheckCircle2 size={13} />

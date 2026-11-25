@@ -3,7 +3,12 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
-import { requireRole } from "@/lib/dal";
+import {
+  MACHINE_CAPABILITIES,
+  isMachineForbiddenError,
+  machineForbiddenResult,
+  requireMachineCapability,
+} from "@/lib/machines/authorization";
 import { revalidateTag } from "next/cache";
 import * as XLSX from "xlsx";
 import { formatMachineDatabaseError } from "@/lib/utils/machine-errors";
@@ -12,18 +17,32 @@ export interface BulkImportResult {
   success: number;
   failed: number;
   errors: Array<{ row: number; reason: string }>;
+  error?: string;
+  code?: string;
+  status?: number;
 }
 
 export async function importMachinesFromExcel(formData: FormData): Promise<BulkImportResult> {
-  await requireRole("admin", "super_admin", "manager");
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized.");
+  let caller: Awaited<ReturnType<typeof requireMachineCapability>> | null = null;
+  try {
+    caller = await requireMachineCapability(MACHINE_CAPABILITIES.IMPORT);
+  } catch (err) {
+    if (isMachineForbiddenError(err)) {
+      return { ...machineForbiddenResult(err), success: 0, failed: 0, errors: [] };
+    }
+    throw err;
   }
+  if (!caller) {
+    return {
+      success: 0,
+      failed: 0,
+      errors: [],
+      error: "Unauthorized: authentication required.",
+      status: 403,
+    };
+  }
+  const user = caller.user;
+  const supabase = await createSupabaseServerClient();
 
   const file = formData.get("excel_file") as File;
   if (!file) {

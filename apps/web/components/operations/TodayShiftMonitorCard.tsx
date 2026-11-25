@@ -64,9 +64,9 @@ export function TodayShiftMonitorCard({
           onInitiateAssign(row);
         }
       }}
-      className={`rounded-lg border bg-[var(--color-canvas-elevated)] p-3 space-y-2 transition-all ${
+      className={`rounded-lg border bg-[var(--color-canvas-elevated)] p-3 space-y-2 transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         isUnassigned
-          ? "cursor-pointer hover:border-[var(--color-ink)]/30 active:scale-[0.99]"
+          ? "cursor-pointer hover:border-[var(--color-ink)]/30 active:scale-[0.98] motion-reduce:active:scale-100"
           : ""
       } ${
         isEntered
@@ -168,7 +168,7 @@ export function TodayShiftMonitorCard({
                 serialText.trim().toUpperCase().startsWith("SN") ||
                 serialText.trim().toUpperCase().startsWith("S/N");
               return (
-                <span className="font-mono text-muted-foreground text-[11px] shrink-0">
+                <span className="font-mono text-muted-foreground text-[11px] min-w-0 truncate">
                   ({hasPrefix ? "" : "SN: "}
                   <Highlight text={serialText} query={searchQuery} />)
                 </span>
@@ -261,7 +261,7 @@ export function TodayShiftMonitorCard({
             e.stopPropagation();
             onEnterLog(row);
           }}
-          className={`w-full h-10 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer mt-1 ${
+          className={`w-full min-h-[44px] lg:min-h-0 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer mt-1 ${
             isEntered
               ? "border-sky-500/40 text-sky-700 dark:text-sky-300 hover:bg-sky-500/10"
               : "bg-sky-600 hover:bg-sky-500 text-white"
@@ -277,7 +277,7 @@ export function TodayShiftMonitorCard({
             e.stopPropagation();
             onInitiateAssign(row);
           }}
-          className={`w-full h-10 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer mt-1 ${
+          className={`w-full min-h-[44px] lg:min-h-0 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer mt-1 ${
             isBreakdown
               ? "border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
               : isMaintenance

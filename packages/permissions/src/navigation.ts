@@ -379,7 +379,7 @@ export const PRIMARY: Record<UserRole, NavKey[]> = {
   admin: ["home", "operations", "machines", "users"],
   super_admin: ["home", "operations", "machines", "users"],
   sales: ["home", "rfq", "clients"],
-  marketing: ["home", "machines"],
+  marketing: ["home"],
 };
 
 // ─── Runtime helpers ────────────────────────────────────────────

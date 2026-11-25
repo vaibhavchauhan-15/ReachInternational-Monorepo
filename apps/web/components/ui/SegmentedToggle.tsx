@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export interface SegmentedToggleItem<T extends string = string> {
@@ -88,6 +88,7 @@ export function SegmentedToggle<T extends string = string>({
   ariaLabel,
 }: SegmentedToggleProps<T>) {
   const autoId = useId();
+  const shouldReduceMotion = useReducedMotion();
   const effectiveLayoutId = `${layoutIdPrefix || "segmented-toggle"}-${autoId}`;
   const config = sizeStyles[size];
   const isVertical = orientation === "vertical";
@@ -135,7 +136,7 @@ export function SegmentedToggle<T extends string = string>({
             type="button"
             disabled={item.disabled}
             title={item.title}
-            whileTap={item.disabled ? undefined : { scale: 0.98 }}
+            whileTap={item.disabled || shouldReduceMotion ? undefined : { scale: 0.98 }}
             onClick={() => {
               if (!item.disabled && item.id !== value) {
                 onChange(item.id);
@@ -159,7 +160,11 @@ export function SegmentedToggle<T extends string = string>({
                   "absolute inset-0 bg-sky-600 dark:bg-sky-600 shadow-sm shadow-sky-600/30 border border-sky-600 z-0 pointer-events-none",
                   isVertical ? "rounded-[5px] sm:rounded-md" : "rounded-lg sm:rounded-xl"
                 )}
-                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 450, damping: 32 }
+                }
               />
             )}
 

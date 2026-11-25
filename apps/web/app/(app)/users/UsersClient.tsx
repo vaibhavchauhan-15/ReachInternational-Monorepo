@@ -1075,16 +1075,16 @@ export function UsersPageClient({
 
       {/* Centralized Approvals Alert Banner (Admin Only) */}
       {!readOnly && (currentUser.role === "admin" || currentUser.role === "super_admin") && (pendingApprovalCounts?.total || 0) > 0 && (
-        <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400">
+        <div className="rounded-xl border border-amber-300/80 dark:border-amber-800/80 bg-amber-50/60 dark:bg-amber-950/25 p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 shadow-2xs">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="h-9 w-9 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0">
               <ShieldAlert className="h-5 w-5" />
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-[var(--color-ink)]">
+            <div className="min-w-0">
+              <h4 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] leading-snug">
                 Pending Approvals in Central Queue
               </h4>
-              <p className="text-[11px] text-[var(--color-mute)]">
+              <p className="text-[11px] sm:text-xs text-[var(--color-mute)] mt-0.5 leading-relaxed">
                 {pendingApprovalCounts?.total} approval request{(pendingApprovalCounts?.total || 0) === 1 ? "" : "s"} awaiting review in the Centralized Approval Engine.
               </p>
             </div>
@@ -1093,7 +1093,7 @@ export function UsersPageClient({
             variant="primary"
             size="sm"
             onClick={() => router.push("/approvals")}
-            className="h-8 text-xs px-3 font-semibold shrink-0 cursor-pointer"
+            className="w-full sm:w-auto h-10 sm:h-8 min-h-[44px] sm:min-h-[32px] text-xs px-4 font-semibold shrink-0 cursor-pointer justify-center rounded-lg sm:rounded-md active:scale-[0.99] transition-transform"
           >
             Review in Approvals →
           </Button>

@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
-  Modal,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   ActivityIndicator,
   Image,
-  Pressable,
+  useWindowDimensions,
 } from "react-native";
 import type { ApprovalRequest } from "@reachinternational/types";
 import { Text } from "../ui/Text";
 import { Badge } from "../ui/Badge";
+import { Sheet } from "../ui/overlay/Sheet";
+import { Pressable } from "../ui/touch/Pressable";
 import { Button } from "../ui/Button";
 import { useTheme } from "../../lib/theming";
 import { formatExactTimestamp, formatTinyRelativeTime } from "@reachinternational/utils";
@@ -71,6 +71,9 @@ export function ApprovalDetailBottomSheet({
   canDecide = true,
 }: ApprovalDetailBottomSheetProps) {
   const { colors } = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  // Bottom sheet panel height (Sheet clamps it to the viewport with its own maxHeight).
+  const sheetHeight = Math.round(windowHeight * 0.9);
 
   // Full-screen viewer state
   const [activeViewerDoc, setActiveViewerDoc] = useState<MobileViewerDoc | null>(null);
@@ -231,19 +234,15 @@ export function ApprovalDetailBottomSheet({
     });
   }, []);
 
-  if (!visible) return null;
-
   return (
     <>
-      <Modal
+      <Sheet
         visible={visible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={onClose}
+        onClose={onClose}
+        maxHeightRatio={0.92}
+        style={{ height: sheetHeight }}
       >
-        <SafeAreaView
-          style={[styles.container, { backgroundColor: colors.canvas }]}
-        >
+        <View style={styles.container}>
           {/* Header */}
           <View
             style={[
@@ -283,7 +282,7 @@ export function ApprovalDetailBottomSheet({
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#0284c7" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text variant="caption" style={styles.loadingText}>
                 Loading request details...
               </Text>
@@ -356,7 +355,7 @@ export function ApprovalDetailBottomSheet({
                   >
                     {isSigningDoc ? (
                       <View style={styles.previewPlaceholder}>
-                        <ActivityIndicator size="small" color="#0284c7" />
+                        <ActivityIndicator size="small" color={colors.primary} />
                         <Text variant="micro" style={{ marginTop: 6, color: colors.mute }}>
                           Loading document preview...
                         </Text>
@@ -378,8 +377,8 @@ export function ApprovalDetailBottomSheet({
                           resizeMode="cover"
                         />
                         <View style={styles.inspectOverlay}>
-                          <Eye size={16} color="#ffffff" />
-                          <Text variant="micro" style={{ color: "#ffffff", marginLeft: 4 }}>
+                          <Eye size={16} color={colors.onPrimary} />
+                          <Text variant="micro" style={{ color: colors.onPrimary, marginLeft: 4 }}>
                             Inspect Full Document
                           </Text>
                         </View>
@@ -410,8 +409,8 @@ export function ApprovalDetailBottomSheet({
                       }
                       style={styles.inspectBtn}
                     >
-                      <Eye size={16} color="#0284c7" />
-                      <Text variant="label" style={{ color: "#0284c7", marginLeft: 6 }}>
+                      <Eye size={16} color={colors.primary} />
+                      <Text variant="label" style={{ color: colors.primary, marginLeft: 6 }}>
                         Open in Fullscreen Viewer
                       </Text>
                     </Button>
@@ -445,7 +444,7 @@ export function ApprovalDetailBottomSheet({
                   >
                     {isSigningDoc ? (
                       <View style={styles.previewPlaceholder}>
-                        <ActivityIndicator size="small" color="#0284c7" />
+                        <ActivityIndicator size="small" color={colors.primary} />
                         <Text variant="micro" style={{ marginTop: 6, color: colors.mute }}>
                           Loading replacement preview...
                         </Text>
@@ -467,8 +466,8 @@ export function ApprovalDetailBottomSheet({
                           resizeMode="cover"
                         />
                         <View style={styles.inspectOverlay}>
-                          <Eye size={16} color="#ffffff" />
-                          <Text variant="micro" style={{ color: "#ffffff", marginLeft: 4 }}>
+                          <Eye size={16} color={colors.onPrimary} />
+                          <Text variant="micro" style={{ color: colors.onPrimary, marginLeft: 4 }}>
                             Inspect Replacement
                           </Text>
                         </View>
@@ -496,8 +495,8 @@ export function ApprovalDetailBottomSheet({
                       }
                       style={styles.inspectBtn}
                     >
-                      <Eye size={16} color="#0284c7" />
-                      <Text variant="label" style={{ color: "#0284c7", marginLeft: 6 }}>
+                      <Eye size={16} color={colors.primary} />
+                      <Text variant="label" style={{ color: colors.primary, marginLeft: 6 }}>
                         Inspect Staged Replacement
                       </Text>
                     </Button>
@@ -546,10 +545,10 @@ export function ApprovalDetailBottomSheet({
 
                       <View style={styles.detailItem}>
                         <View style={styles.detailItemLabel}>
-                          <ShieldCheck size={14} color="#0284c7" />
+                          <ShieldCheck size={14} color={colors.primary} />
                           <Text variant="caption">Assigned Role</Text>
                         </View>
-                        <Text variant="heading" style={{ color: "#0284c7" }}>
+                        <Text variant="heading" style={{ color: colors.primary }}>
                           {String(payload.role || "operator").toUpperCase()}
                         </Text>
                       </View>
@@ -561,6 +560,18 @@ export function ApprovalDetailBottomSheet({
                             <Text variant="caption">Machine Fleet</Text>
                           </View>
                           <Text variant="body">{payload.machine_category}</Text>
+                        </View>
+                      ) : null}
+
+                      {String(payload.role || (request as any)?.role || "").toLowerCase() === "operator" ? (
+                        <View style={styles.detailItem}>
+                          <View style={styles.detailItemLabel}>
+                            <User size={14} color={colors.mute} />
+                            <Text variant="caption">Supervisor</Text>
+                          </View>
+                          <Text variant="body">
+                            {(request as any)?.supervisor_name || payload.supervisor_name || payload.supervisorName || "Unassigned"}
+                          </Text>
                         </View>
                       ) : null}
 
@@ -593,7 +604,7 @@ export function ApprovalDetailBottomSheet({
 
                     {isLoadingRegDocs ? (
                       <View style={styles.docsLoadingBox}>
-                        <ActivityIndicator size="small" color="#0284c7" />
+                        <ActivityIndicator size="small" color={colors.primary} />
                         <Text variant="micro" style={{ marginTop: 6, color: colors.mute }}>
                           Loading user documents...
                         </Text>
@@ -691,10 +702,10 @@ export function ApprovalDetailBottomSheet({
                         <Text variant="label" style={styles.diffKey}>
                           {key.replace(/_/g, " ")}
                         </Text>
-                        <Text variant="caption" style={styles.diffOld}>
+                        <Text variant="caption" style={[styles.diffOld, { color: colors.error }]}>
                           {val?.old_value !== undefined ? String(val.old_value) : "(empty)"}
                         </Text>
-                        <Text variant="body" style={styles.diffNew}>
+                        <Text variant="body" style={[styles.diffNew, { color: colors.success }]}>
                           {val?.new_value !== undefined ? String(val.new_value) : "(empty)"}
                         </Text>
                       </View>
@@ -715,9 +726,9 @@ export function ApprovalDetailBottomSheet({
                     ACCOUNT DELETION
                   </Text>
                   <View style={styles.deletionBox}>
-                    <ShieldAlert size={18} color="#ef4444" />
+                    <ShieldAlert size={18} color={colors.error} />
                     <View style={{ flex: 1 }}>
-                      <Text variant="label" style={{ color: "#ef4444" }}>
+                      <Text variant="label" style={{ color: colors.error }}>
                         Reason for Deletion
                       </Text>
                       <Text variant="body" style={{ marginTop: 2 }}>
@@ -803,8 +814,8 @@ export function ApprovalDetailBottomSheet({
                 disabled={isActionLoading}
                 style={styles.actionBtn}
               >
-                <X size={16} color="#ffffff" />
-                <Text variant="label" style={{ color: "#ffffff", marginLeft: 6 }}>
+                <X size={16} color={colors.onPrimary} />
+                <Text variant="label" style={{ color: colors.onPrimary, marginLeft: 6 }}>
                   Reject
                 </Text>
               </Button>
@@ -814,14 +825,14 @@ export function ApprovalDetailBottomSheet({
                 size="sm"
                 onPress={() => onApprove(request.id)}
                 disabled={isActionLoading}
-                style={[styles.actionBtn, { backgroundColor: "#10b981" }]}
+                style={[styles.actionBtn, { backgroundColor: colors.success }]}
               >
                 {isActionLoading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
                 ) : (
                   <>
-                    <Check size={16} color="#ffffff" />
-                    <Text variant="label" style={{ color: "#ffffff", marginLeft: 6 }}>
+                    <Check size={16} color={colors.onPrimary} />
+                    <Text variant="label" style={{ color: colors.onPrimary, marginLeft: 6 }}>
                       Approve
                     </Text>
                   </>
@@ -829,8 +840,8 @@ export function ApprovalDetailBottomSheet({
               </Button>
             </View>
           )}
-        </SafeAreaView>
-      </Modal>
+        </View>
+      </Sheet>
 
       {/* Embedded High-Priority Fullscreen Document Viewer */}
       {activeViewerDoc && (
@@ -972,11 +983,8 @@ const styles = StyleSheet.create({
   },
   diffOld: {
     textDecorationLine: "line-through",
-    color: "#ef4444",
   },
-  diffNew: {
-    color: "#10b981",
-  },
+  diffNew: {},
   detailList: {
     gap: 10,
   },

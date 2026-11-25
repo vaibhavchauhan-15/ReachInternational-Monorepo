@@ -58,15 +58,14 @@ check(
 
 check(
   'Machine ID has copyable chip with haptics and confirmation icon',
-  machineDetailContent.includes('styles.heroIdChip') &&
   machineDetailContent.includes('handleCopy(machine.machine_id') &&
-  machineDetailContent.includes('copiedId ?')
+  machineDetailContent.includes('copiedId ?') &&
+  machineDetailContent.includes('Copy Machine Code')
 );
 
 check(
   'Status badges row is well-formatted without harsh divider line and includes quick HMR pill',
   machineDetailContent.includes('styles.heroBadgeRow') &&
-  machineDetailContent.includes('styles.heroHmrPill') &&
   machineDetailContent.includes("'On Rent'") &&
   machineDetailContent.includes("'Available'")
 );

@@ -198,6 +198,7 @@ export async function approveUser(userId: string): Promise<UserFormState> {
             await adminSupabase.rpc("approval_decide", {
               p_request_id: engineReq.id,
               p_decision: "approve",
+              p_actor_id: user.id,
               p_expected_version: engineReq.version,
             });
           }
@@ -290,6 +291,7 @@ export async function rejectUser(userId: string): Promise<UserFormState> {
               p_request_id: engineReq.id,
               p_decision: "reject",
               p_note: "Registration rejected by administrator",
+              p_actor_id: user.id,
               p_expected_version: engineReq.version,
             });
           }

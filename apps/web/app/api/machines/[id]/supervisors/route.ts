@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/dal";
+import {
+  MACHINE_CAPABILITIES,
+  isMachineForbiddenError,
+  requireMachineCapability,
+  requireMachineRecordAccess,
+} from "@/lib/machines/authorization";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
 
@@ -39,13 +44,11 @@ export async function GET(
       );
     }
 
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized. Authentication required." },
-        { status: 401, headers: NO_CACHE_HEADERS }
-      );
-    }
+    // GET returns the complete supervisor candidate pool (contact columns), which is only
+    // needed by the assignment dialog. Keep it manager-tier instead of exposing it to every
+    // supervisor/operator that can read the machine.
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+    await requireMachineRecordAccess(user, id);
 
     const supabase = createSupabaseAdminClient();
 
@@ -118,6 +121,12 @@ export async function GET(
       { status: 200, headers: NO_CACHE_HEADERS }
     );
   } catch (err: unknown) {
+    if (isMachineForbiddenError(err)) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
     const msg = err instanceof Error ? err.message : "Failed to load machine supervisors.";
     return NextResponse.json(
       { error: msg },
@@ -145,20 +154,8 @@ export async function POST(
       );
     }
 
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized. Authentication required." },
-        { status: 401, headers: NO_CACHE_HEADERS }
-      );
-    }
-
-    if (!["admin", "super_admin", "manager"].includes(user.role)) {
-      return NextResponse.json(
-        { error: "Forbidden: You do not have permission to assign equipment supervisors." },
-        { status: 403, headers: NO_CACHE_HEADERS }
-      );
-    }
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+    await requireMachineRecordAccess(user, id);
 
     const body = await req.json().catch(() => ({}));
     const rawIds = body.supervisor_ids ?? body.supervisorIds ?? [];
@@ -256,6 +253,12 @@ export async function POST(
       { status: 200, headers: NO_CACHE_HEADERS }
     );
   } catch (err: unknown) {
+    if (isMachineForbiddenError(err)) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
     const msg = err instanceof Error ? err.message : "Failed to update supervisors.";
     return NextResponse.json(
       { error: msg },

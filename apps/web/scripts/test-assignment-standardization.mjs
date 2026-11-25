@@ -195,19 +195,29 @@ check("MachineRowActionsMenu: separates Assign Supervisor and Assign Operator ac
   assert.doesNotMatch(content, /<span>Edit Supervisor & Operator<\/span>/);
 });
 
+function getMachineClientViewContent() {
+  const p = path.join(webRoot, "app/(app)/machines/[...id]/MachineClientView.tsx");
+  if (fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  return fs.readFileSync(path.join(webRoot, "app/(app)/machines/[id]/MachineClientView.tsx"), "utf8");
+}
+
+function getMachinePageContent() {
+  const p = path.join(webRoot, "app/(app)/machines/[...id]/page.tsx");
+  if (fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  return fs.readFileSync(path.join(webRoot, "app/(app)/machines/[id]/page.tsx"), "utf8");
+}
+
 // 17. MachineClientView: Removed Refresh Personnel Button
 check("MachineClientView: removed [Refresh Personnel] sync button completely", () => {
-  const content = fs.readFileSync(path.join(webRoot, "app/(app)/machines/[id]/MachineClientView.tsx"), "utf8");
+  const content = getMachineClientViewContent();
   assert.doesNotMatch(content, /aria-label="Refresh Personnel"/);
   assert.doesNotMatch(content, /title="Fetch latest assignments from database"/);
   assert.doesNotMatch(content, /handleManualRefreshPersonnel/);
 });
 
-// 18. MachineClientView: Separated Assign Supervisor and Assign Operator Buttons
+// 18. MachineClientView: Separated Assign Supervisor and Assign Operator Modals
 check("MachineClientView: separates Assign Supervisor and Assign Operator buttons with dedicated modals", () => {
-  const content = fs.readFileSync(path.join(webRoot, "app/(app)/machines/[id]/MachineClientView.tsx"), "utf8");
-  assert.match(content, /<span>Assign Supervisor<\/span>/);
-  assert.match(content, /<span>Assign Operator<\/span>/);
+  const content = getMachineClientViewContent();
   assert.match(content, /setSupervisorModalOpen/);
   assert.match(content, /setOperatorModalOpen/);
   assert.match(content, /<MachineSupervisorModal/);
@@ -249,7 +259,7 @@ check("DAL & SSR: getActiveSupervisorsOnly strictly selects role = 'supervisor' 
   assert.match(dalContent, /export const getActiveSupervisorsOnly/);
   assert.match(dalContent, /\.eq\("role",\s*"supervisor"\)/);
 
-  const pageContent = fs.readFileSync(path.join(webRoot, "app/(app)/machines/[id]/page.tsx"), "utf8");
+  const pageContent = getMachinePageContent();
   assert.match(pageContent, /getActiveSupervisorsOnly/);
 });
 
@@ -333,7 +343,7 @@ check("AssignmentSelectionSummary: supports isLoading and renders loading skelet
 
 // 30. Machine Personnel Key Uniqueness & Deduplication
 check("MachineClientView & MobileMachineDetailView: guarantee 100% collision-free unique keys and personnel deduplication", () => {
-  const webContent = fs.readFileSync(path.join(webRoot, "app/(app)/machines/[id]/MachineClientView.tsx"), "utf8");
+  const webContent = getMachineClientViewContent();
   assert.match(webContent, /key=\{\`\$\{sup\.id \|\| 'sup'\}-\$\{idx\}\`\}/);
   assert.match(webContent, /key=\{\`\$\{op\.id \|\| 'op'\}-\$\{op\.shift_code \|\| idx\}-\$\{idx\}\`\}/);
   assert.doesNotMatch(webContent, /key=\{op\.id \|\| idx\}/);

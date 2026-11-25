@@ -854,7 +854,7 @@ export function ClientDetailClient({
                           >
                             <TableCell className="py-3 px-3 font-mono font-bold text-sky-600 dark:text-sky-400">
                               <Link
-                                href={`/machines/${m.id}`}
+                                href={`/machines/${m.machine_id || m.id}`}
                                 className="hover:underline inline-flex items-center gap-1"
                               >
                                 <span>{m.machine_id}</span>
@@ -886,7 +886,7 @@ export function ClientDetailClient({
                             </TableCell>
                             <TableCell className="py-3 px-3 text-right">
                               <Link
-                                href={`/machines/${m.id}`}
+                                href={`/machines/${m.machine_id || m.id}`}
                                 className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline inline-flex items-center gap-1"
                               >
                                 <span>Inspect</span>
@@ -904,7 +904,7 @@ export function ClientDetailClient({
                     {filteredMachines.map((m) => (
                       <Link
                         key={m.id}
-                        href={`/machines/${m.id}`}
+                        href={`/machines/${m.machine_id || m.id}`}
                         className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 block hover:border-sky-500/50 transition-colors"
                       >
                         <div className="flex items-center justify-between">

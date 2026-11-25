@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
-import { requireRole, getCurrentUser } from "@/lib/dal";
+
 import { formatMachineDatabaseError } from "@/lib/utils/machine-errors";
 import {
   parseTimeToMinutes,
@@ -31,24 +31,27 @@ import {
   type ActiveOperatorOtherAssignment,
   getMachineAssignments,
   getMachineExportData,
-  getMachineSummaryOnly,
-  getMachineClientOnly,
-  getMachineSupervisorsOnly,
-  getMachineMaintenanceLogs,
-  getMachineBreakdownLogs,
   getMachineAuditLogs,
-  getMachineDocuments,
   getMachineList,
   type MachineListParams,
   type MachineExportParams,
 } from "@/lib/data/machines";
 import { getClientOptions } from "@/lib/queries/clients";
-
+import {
+  MACHINE_CAPABILITIES,
+  MachineForbiddenError,
+  isMachineForbiddenError,
+  machineForbiddenResult,
+  requireMachineCapability,
+  requireMachineRecordAccess,
+} from "@/lib/machines/authorization";
 
 export interface MachineFormState {
   error?: string;
   fieldErrors?: Record<string, string>;
   success?: boolean;
+  code?: string;
+  status?: number;
 }
 
 const machineIdRegex = /^M\/C-\d{4,}$/i;
@@ -57,6 +60,25 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 function isValidUuid(id?: string | null): boolean {
   if (!id || typeof id !== "string") return false;
   return UUID_REGEX.test(id.trim());
+}
+
+/**
+ * Maps a thrown guard error to the action result contract:
+ * capability denials return { code: "MACHINE_FORBIDDEN", status: 403 }.
+ */
+function machineActionError(
+  err: unknown,
+  fallback: string,
+  rlsMessage?: string
+): { error: string; code?: string; status?: number } {
+  if (isMachineForbiddenError(err)) {
+    return machineForbiddenResult(err);
+  }
+  const rawMsg = err instanceof Error ? err.message : fallback;
+  return {
+    error:
+      rlsMessage && rawMsg.includes("row-level security") ? rlsMessage : rawMsg,
+  };
 }
 
 function parseUuidArray(formData: FormData, fieldName: string, fallbackField?: string): string[] {
@@ -91,7 +113,7 @@ function parseUuidArray(formData: FormData, fieldName: string, fallbackField?: s
 
 export async function createMachine(state: MachineFormState, formData: FormData): Promise<MachineFormState> {
   try {
-    await requireRole("admin", "super_admin", "manager");
+    await requireMachineCapability(MACHINE_CAPABILITIES.CREATE);
 
     const supabase = await createSupabaseServerClient();
     const {
@@ -232,12 +254,11 @@ export async function createMachine(state: MachineFormState, formData: FormData)
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to register machine";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to add new machines."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to register machine",
+      "Permission denied: Your account role does not have authorization to add new machines."
+    );
   }
 }
 
@@ -246,15 +267,16 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     return { error: "Invalid machine ID format." };
   }
   try {
-    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
+    const { user: caller, auth } = await requireMachineCapability(MACHINE_CAPABILITIES.VIEW);
+    await requireMachineRecordAccess(caller, id);
+
+    const isSupervisor =
+      !auth.can(MACHINE_CAPABILITIES.EDIT_SPECS) &&
+      auth.can(MACHINE_CAPABILITIES.STATUS_UPDATE);
+    if (!isSupervisor && !auth.can(MACHINE_CAPABILITIES.EDIT_SPECS)) {
+      throw new MachineForbiddenError(MACHINE_CAPABILITIES.EDIT_SPECS);
+    }
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return { error: "Authentication required. Please log in to update machine details." };
-
-    const isSupervisor = caller.role === "supervisor";
 
     const operator_ids = parseUuidArray(formData, "operator_ids", "current_operator_id");
     const current_operator_id = operator_ids[0] || null;
@@ -277,7 +299,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     // Fetch current machine state before update to log previous and updated details
     const { data: previousMachine } = await supabase
       .from("machines")
-      .select("*, client:clients(id, company_name)")
+      .select("id, machine_id, model, serial_number, year_of_mfg, manufacturer, supervisor_ids, current_supervisor_id, operator_ids, current_operator_id, client_id, site_id, hour_meter, health_status, status, updated_at, client:clients(id, company_name)")
       .eq("id", id)
       .maybeSingle();
 
@@ -306,7 +328,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
       const changes: Record<string, { previous: any; updated: any; deleted?: boolean }> = {};
       for (const [key, val] of Object.entries(updateData)) {
         if (key === "updated_at") continue;
-        const prevVal = previousMachine ? previousMachine[key] : undefined;
+        const prevVal = previousMachine ? (previousMachine as Record<string, any>)[key] : undefined;
         if (JSON.stringify(prevVal) !== JSON.stringify(val)) {
           changes[key] = {
             previous: prevVal ?? null,
@@ -421,7 +443,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     const changes: Record<string, { previous: any; updated: any; deleted?: boolean }> = {};
     for (const [key, val] of Object.entries(updateData)) {
       if (key === "updated_at") continue;
-      const prevVal = previousMachine ? previousMachine[key] : undefined;
+      const prevVal = previousMachine ? (previousMachine as Record<string, any>)[key] : undefined;
       if (JSON.stringify(prevVal) !== JSON.stringify(val)) {
         changes[key] = {
           previous: prevVal ?? null,
@@ -454,12 +476,11 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update machine details";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to update machine details."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to update machine details",
+      "Permission denied: Your account role does not have authorization to update machine details."
+    );
   }
 }
 
@@ -474,20 +495,30 @@ export async function updateMachineOperationalStatus(
     health_status?: "active" | "under_maintenance" | "breakdown" | "spare";
     status?: "available" | "rented";
   }
-): Promise<{ success?: boolean; error?: string }> {
+): Promise<{ success?: boolean; error?: string; code?: string; status?: number }> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "supervisor");
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { user, auth } = await requireMachineCapability(MACHINE_CAPABILITIES.STATUS_UPDATE);
+    await requireMachineRecordAccess(user, machineId);
 
-    if (!user) {
-      return { error: "Authentication required." };
+    // Field-level capability checks: operational status updates must not become a
+    // back door for supervisor/operator assignment or commercial client changes.
+    if (payload.supervisor_ids !== undefined && !auth.can(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR)) {
+      throw new MachineForbiddenError(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
     }
+    if (
+      (payload.operator_ids !== undefined || payload.current_operator_id !== undefined) &&
+      !auth.can(MACHINE_CAPABILITIES.ASSIGN_OPERATOR)
+    ) {
+      throw new MachineForbiddenError(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    }
+    if (payload.client_id !== undefined && !auth.can(MACHINE_CAPABILITIES.ASSIGN_CLIENT)) {
+      throw new MachineForbiddenError(MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+    }
+
+    const supabase = await createSupabaseServerClient();
 
     const updateData: Record<string, any> = {
       updated_at: new Date().toISOString(),
@@ -555,7 +586,7 @@ export async function updateMachineOperationalStatus(
     // Fetch current machine state before update for tamper-evident audit diff tracking
     const { data: previousMachine } = await supabase
       .from("machines")
-      .select("*, client:clients(id, company_name)")
+      .select("id, machine_id, hour_meter, health_status, status, client_id, site_id, operator_ids, current_operator_id, supervisor_ids, current_supervisor_id, updated_at")
       .eq("id", machineId)
       .maybeSingle();
 
@@ -572,7 +603,7 @@ export async function updateMachineOperationalStatus(
     const changes: Record<string, { previous: any; updated: any; deleted?: boolean }> = {};
     for (const [key, val] of Object.entries(updateData)) {
       if (key === "updated_at") continue;
-      const prevVal = previousMachine ? previousMachine[key] : undefined;
+      const prevVal = previousMachine ? (previousMachine as Record<string, any>)[key] : undefined;
       if (JSON.stringify(prevVal) !== JSON.stringify(val)) {
         changes[key] = {
           previous: prevVal ?? null,
@@ -605,20 +636,39 @@ export async function updateMachineOperationalStatus(
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update machine status";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to update machine status."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to update machine status",
+      "Permission denied: Your account role does not have authorization to update machine status."
+    );
   }
 }
 
-export async function deleteMachine(id: string): Promise<{ success?: boolean; error?: string }> {
-  return deactivateMachineDal(id);
+export async function deleteMachine(
+  id: string
+): Promise<{ success?: boolean; error?: string; code?: string; status?: number }> {
+  if (!isValidUuid(id)) {
+    return { error: "Invalid machine ID format." };
+  }
+  try {
+    await requireMachineCapability(MACHINE_CAPABILITIES.DELETE);
+    return await deactivateMachineDal(id);
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
+      throw err;
+    }
+    return machineActionError(
+      err,
+      "Failed to delete machine",
+      "Permission denied: Your account role does not have authorization to delete machines."
+    );
+  }
 }
 
-export async function reassignMachineSupervisor(machineId: string, supervisorId: string): Promise<{ success?: boolean; error?: string }> {
+export async function reassignMachineSupervisor(
+  machineId: string,
+  supervisorId: string
+): Promise<{ success?: boolean; error?: string; code?: string; status?: number }> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
@@ -626,7 +676,7 @@ export async function reassignMachineSupervisor(machineId: string, supervisorId:
     return { error: "Invalid supervisor ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager");
+    await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
     const supabase = await createSupabaseServerClient();
 
     const { data: previousMachine } = await supabase
@@ -676,12 +726,11 @@ export async function reassignMachineSupervisor(machineId: string, supervisorId:
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to reassign supervisor";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to reassign supervisors."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to reassign supervisor",
+      "Permission denied: Your account role does not have authorization to reassign supervisors."
+    );
   }
 }
 
@@ -689,6 +738,12 @@ export async function checkMachineSerialNumberAvailable(
   serialNumber: string,
   excludeMachineId?: string
 ): Promise<{ available: boolean; existingMachineId?: string }> {
+  try {
+    await requireMachineCapability(MACHINE_CAPABILITIES.CREATE);
+  } catch (err) {
+    if (isMachineForbiddenError(err)) return { available: false };
+    throw err;
+  }
   return checkSerialDal(serialNumber, excludeMachineId);
 }
 
@@ -698,6 +753,13 @@ export async function checkMachineIdAvailable(
 ): Promise<{ available: boolean; existingMachineId?: string }> {
   const trimmed = (machineId || "").trim().toUpperCase();
   if (!trimmed) return { available: true };
+
+  try {
+    await requireMachineCapability(MACHINE_CAPABILITIES.CREATE);
+  } catch (err) {
+    if (isMachineForbiddenError(err)) return { available: false };
+    throw err;
+  }
 
   const supabase = createSupabaseAdminClient();
   let query = supabase
@@ -736,15 +798,14 @@ export async function updateMachineInfoAction(
     hour_meter?: number;
     health_status?: "active" | "under_maintenance" | "breakdown" | "spare";
   }
-): Promise<{ success?: boolean; error?: string; fieldErrors?: Record<string, string>; machine?: Partial<Machine> }> {
+): Promise<{ success?: boolean; error?: string; fieldErrors?: Record<string, string>; machine?: Partial<Machine>; code?: string; status?: number }> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "supervisor");
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.EDIT_SPECS);
+    await requireMachineRecordAccess(user, machineId);
     const supabase = await createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Authentication required." };
 
     const model = payload.model?.trim();
     const serial_number = payload.serial_number?.trim();
@@ -887,12 +948,11 @@ export async function updateMachineInfoAction(
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update machine info";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to update machine info."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to update machine info",
+      "Permission denied: Your account role does not have authorization to update machine info."
+    );
   }
 }
 
@@ -906,6 +966,8 @@ export async function updateMachineSupervisorsAction(
 ): Promise<{
   success?: boolean;
   error?: string;
+  code?: string;
+  status?: number;
   supervisor_ids?: string[];
   current_supervisor_id?: string | null;
   supervisors?: Array<{
@@ -921,7 +983,8 @@ export async function updateMachineSupervisorsAction(
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager");
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+    await requireMachineRecordAccess(user, machineId);
     const supabase = await createSupabaseServerClient();
     const validSups = Array.isArray(supervisorIds) ? supervisorIds.filter(isValidUuid) : [];
     const current_supervisor_id = validSups[0] || null;
@@ -1010,12 +1073,11 @@ export async function updateMachineSupervisorsAction(
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update supervisor assignment";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to reassign supervisors."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to update supervisor assignment",
+      "Permission denied: Your account role does not have authorization to reassign supervisors."
+    );
   }
 }
 
@@ -1068,6 +1130,8 @@ export async function updateMachineOperatorsAction(
 ): Promise<{
   success?: boolean;
   error?: string;
+  code?: string;
+  status?: number;
   operator_ids?: string[];
   current_operator_id?: string | null;
   operators?: Array<{
@@ -1086,7 +1150,8 @@ export async function updateMachineOperatorsAction(
     return { error: "Invalid machine ID format." };
   }
   try {
-    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
+    const { user: caller } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    await requireMachineRecordAccess(caller, machineId);
     const supabase = await createSupabaseServerClient();
     const supabaseAdmin = createSupabaseAdminClient();
 
@@ -1523,12 +1588,11 @@ export async function updateMachineOperatorsAction(
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update operator assignment";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to reassign operators."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to update operator assignment",
+      "Permission denied: Your account role does not have authorization to reassign operators."
+    );
   }
 }
 
@@ -1551,6 +1615,7 @@ export async function updateMachinePersonnelAction(
   success?: boolean;
   error?: string;
   code?: string;
+  status?: number;
   assignment_date?: string;
   supervisor_ids?: string[];
   current_supervisor_id?: string | null;
@@ -1584,13 +1649,12 @@ export async function updateMachinePersonnelAction(
   }
 
   try {
-    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
-    const supabaseAdmin = createSupabaseAdminClient();
-
-    const isSupervisor = caller.role === "supervisor";
-    if (payload.supervisorIds !== undefined && isSupervisor) {
-      return { error: "Permission denied: Supervisors cannot reassign machine supervisors." };
+    const { user: caller } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    await requireMachineRecordAccess(caller, machineId);
+    if (payload.supervisorIds !== undefined) {
+      await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
     }
+    const supabaseAdmin = createSupabaseAdminClient();
 
     // 0. Resolve & validate the assignment date (today - 7 days .. today + 1 day, IST)
     const todayIst = getISTDateString();
@@ -1695,12 +1759,11 @@ export async function updateMachinePersonnelAction(
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update machine personnel";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to update machine personnel."
-        : rawMsg,
-    };
+    return machineActionError(
+      err,
+      "Failed to update machine personnel",
+      "Permission denied: Your account role does not have authorization to update machine personnel."
+    );
   }
 }
 
@@ -1943,12 +2006,13 @@ export async function updateMachineClientAssignmentAction(
   machineId: string,
   clientId: string | null,
   siteId?: string | null
-): Promise<{ success?: boolean; error?: string; client_id?: string | null; site_id?: string | null; status?: "available" | "rented" }> {
+): Promise<{ success?: boolean; error?: string; code?: string; httpStatus?: number; client_id?: string | null; site_id?: string | null; status?: "available" | "rented" }> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "supervisor");
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+    await requireMachineRecordAccess(user, machineId);
     const supabase = await createSupabaseServerClient();
     
     const validClientId = clientId && isValidUuid(clientId) ? clientId : null;
@@ -2018,12 +2082,12 @@ export async function updateMachineClientAssignmentAction(
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
     }
-    const rawMsg = err instanceof Error ? err.message : "Failed to update client assignment";
-    return {
-      error: rawMsg.includes("row-level security")
-        ? "Permission denied: Your account role does not have authorization to update client assignment."
-        : rawMsg,
-    };
+    const mapped = machineActionError(
+      err,
+      "Failed to update client assignment",
+      "Permission denied: Your account role does not have authorization to update client assignment."
+    );
+    return { error: mapped.error, code: mapped.code, httpStatus: mapped.status };
   }
 }
 
@@ -2031,11 +2095,15 @@ export async function getMachineHourLogsAction(machineId: string): Promise<{
   success: boolean;
   logs?: any[];
   error?: string;
+  code?: string;
+  status?: number;
 }> {
   if (!isValidUuid(machineId)) {
     return { success: false, error: "Invalid machine ID format.", logs: [] };
   }
   try {
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.VIEW);
+    await requireMachineRecordAccess(user, machineId);
     const logs = await getMachineHourMeterLogs(machineId);
     return { success: true, logs: logs || [] };
   } catch (err: unknown) {
@@ -2058,6 +2126,8 @@ export async function getPaginatedMachineHourLogsAction(
     availableOperators: { id: string; name: string }[];
   };
   error?: string;
+  code?: string;
+  status?: number;
 }> {
   if (!isValidUuid(params.machineId)) {
     return {
@@ -2075,6 +2145,8 @@ export async function getPaginatedMachineHourLogsAction(
     };
   }
   try {
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.VIEW);
+    await requireMachineRecordAccess(user, params.machineId);
     const res = await getPaginatedMachineHourMeterLogs(params);
     return { success: true, data: res };
   } catch (err: unknown) {
@@ -2100,15 +2172,21 @@ export async function getPaginatedMachineHourLogsAction(
  * Eliminates the need to eagerly fetch supervisors, operators, and clients
  * on the initial server render of the Machine Directory.
  */
-export async function getMachineModalOptionsAction(userId?: string, userRole?: string) {
-  const caller = await getCurrentUser();
-  const targetUserId = userId || caller?.id;
-  const targetRole = userRole || caller?.role;
+export async function getMachineModalOptionsAction(_userId?: string, _userRole?: string) {
+  // Never trust client-supplied identity/role: scope from the verified session only.
+  const { user: caller, auth } = await requireMachineCapability(MACHINE_CAPABILITIES.VIEW);
+  if (!auth.can(MACHINE_CAPABILITIES.ASSIGN_OPERATOR)) {
+    return { supervisors: [], operators: [], clients: [], activeAssignments: [] };
+  }
   const [supervisors, operators, clients, activeAssignments] = await Promise.all([
-    getActiveSupervisors(),
-    getActiveOperatorsForUser(targetUserId, targetRole),
-    getClientOptions(),
-    getActiveOperatorMachineAssignments(),
+    auth.can(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR) ? getActiveSupervisors() : Promise.resolve([]),
+    getActiveOperatorsForUser(caller.id, caller.role),
+    auth.can(MACHINE_CAPABILITIES.ASSIGN_CLIENT) ? getClientOptions() : Promise.resolve([]),
+    getActiveOperatorMachineAssignments(
+      null,
+      auth.scope === "all" ? null : caller.id,
+      auth.scope === "all" ? null : caller.role
+    ),
   ]);
   return { supervisors, operators, clients, activeAssignments };
 }
@@ -2116,11 +2194,10 @@ export async function getMachineModalOptionsAction(userId?: string, userRole?: s
 /**
  * Dedicated server action to fetch active operators scoped by caller role (e.g., supervisor).
  */
-export async function getActiveOperatorsForUserAction(userId?: string, userRole?: string) {
-  const caller = await getCurrentUser();
-  const targetUserId = userId || caller?.id;
-  const targetRole = userRole || caller?.role;
-  return getActiveOperatorsForUser(targetUserId, targetRole);
+export async function getActiveOperatorsForUserAction(_userId?: string, _userRole?: string) {
+  // Identity and role always come from the session, never from the caller's arguments.
+  const { user: caller } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+  return getActiveOperatorsForUser(caller.id, caller.role);
 }
 
 /**
@@ -2131,9 +2208,17 @@ export async function getActiveOperatorAssignmentsAction(targetDate?: string | n
   success: boolean;
   data: ActiveOperatorOtherAssignment[];
   error?: string;
+  code?: string;
+  status?: number;
 }> {
   try {
-    const data = await getActiveOperatorMachineAssignments(targetDate || null);
+    await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    const { user: caller, auth } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    const data = await getActiveOperatorMachineAssignments(
+      targetDate || null,
+      auth.scope === "all" ? null : caller.id,
+      auth.scope === "all" ? null : caller.role
+    );
     return { success: true, data };
   } catch (err: unknown) {
     const rawMsg = err instanceof Error ? err.message : "Failed to load active operator assignments";
@@ -2148,6 +2233,8 @@ export async function getActiveOperatorAssignmentsAction(targetDate?: string | n
  * Typical query execution time < 5ms.
  */
 export async function getClientSelectOptionsAction() {
+  const { auth } = await requireMachineCapability(MACHINE_CAPABILITIES.VIEW);
+  if (!auth.can(MACHINE_CAPABILITIES.ASSIGN_CLIENT)) return [];
   return getClientOptions();
 }
 
@@ -2156,6 +2243,7 @@ export async function getClientSelectOptionsAction() {
  * Optimized for supervisor assignment modal dropdowns.
  */
 export async function getActiveSupervisorsOnlyAction() {
+  await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
   return getActiveSupervisorsOnly();
 }
 
@@ -2163,6 +2251,7 @@ export async function getActiveSupervisorsOnlyAction() {
  * Lazily loads active supervisors on-demand for filter dropdowns.
  */
 export async function getSupervisorFilterOptionsAction() {
+  await requireMachineCapability(MACHINE_CAPABILITIES.FLEET_VIEW);
   return getActiveSupervisors();
 }
 
@@ -2172,9 +2261,13 @@ export async function getSupervisorFilterOptionsAction() {
  */
 export async function getMachineExportDataAction(params: MachineExportParams = {}) {
   try {
+    await requireMachineCapability(MACHINE_CAPABILITIES.EXPORT);
     const data = await getMachineExportData(params);
     return { success: true, data };
   } catch (err: unknown) {
+    if (isMachineForbiddenError(err)) {
+      return { ...machineForbiddenResult(err), data: [] };
+    }
     const rawMsg = err instanceof Error ? err.message : "Failed to load export data";
     return { success: false, error: rawMsg, data: [] };
   }
@@ -2189,116 +2282,16 @@ export async function getMachineAssignmentsAction(machineId: string) {
     return { success: false, error: "Invalid machine ID format.", assignments: [] };
   }
   try {
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.VIEW);
+    await requireMachineRecordAccess(user, machineId);
     const assignments = await getMachineAssignments(machineId);
     return { success: true, assignments };
   } catch (err: unknown) {
+    if (isMachineForbiddenError(err)) {
+      return { ...machineForbiddenResult(err), assignments: [] };
+    }
     const rawMsg = err instanceof Error ? err.message : "Failed to load machine assignments";
     return { success: false, error: rawMsg, assignments: [] };
-  }
-}
-
-/**
- * M7: Machine Detail Drawer Section Actions
- */
-export async function getMachineSummaryAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", notFound: true };
-  }
-  try {
-    const summary = await getMachineSummaryOnly(machineId);
-    if (!summary) {
-      return { success: false, error: "Machine not found or has been deleted.", notFound: true };
-    }
-    return { success: true, summary };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load machine summary";
-    return { success: false, error: msg };
-  }
-}
-
-export async function getMachineClientAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", client: null };
-  }
-  try {
-    const client = await getMachineClientOnly(machineId);
-    return { success: true, client };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load client details";
-    return { success: false, error: msg, client: null };
-  }
-}
-
-export async function getMachineSupervisorAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", supervisors: [] };
-  }
-  try {
-    const supervisors = await getMachineSupervisorsOnly(machineId);
-    return { success: true, supervisors };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load supervisor details";
-    return { success: false, error: msg, supervisors: [] };
-  }
-}
-
-export async function getMachineMaintenanceAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", logs: [] };
-  }
-  try {
-    const logs = await getMachineMaintenanceLogs(machineId);
-    return { success: true, logs };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load maintenance logs";
-    return { success: false, error: msg, logs: [] };
-  }
-}
-
-export async function getMachineBreakdownAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", breakdowns: [] };
-  }
-  try {
-    const breakdowns = await getMachineBreakdownLogs(machineId);
-    return { success: true, breakdowns };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load breakdown history";
-    return { success: false, error: msg, breakdowns: [] };
-  }
-}
-
-export async function getMachineAuditAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", auditLogs: [] };
-  }
-  try {
-    const res = await getMachineAuditLogs(machineId);
-    if (res.unauthorized) {
-      return {
-        success: false,
-        unauthorized: true,
-        error: "Restricted: Administrator access required to view system audit logs.",
-        auditLogs: [],
-      };
-    }
-    return { success: true, auditLogs: res.data };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load audit logs";
-    return { success: false, error: msg, auditLogs: [] };
-  }
-}
-
-export async function getMachineDocumentsAction(machineId: string) {
-  if (!isValidUuid(machineId)) {
-    return { success: false, error: "Invalid machine ID format.", documents: [] };
-  }
-  try {
-    const documents = await getMachineDocuments(machineId);
-    return { success: true, documents };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed to load machine documents";
-    return { success: false, error: msg, documents: [] };
   }
 }
 
@@ -2314,8 +2307,7 @@ export async function searchMachinesServerAction(
   query: string,
   params: Omit<MachineListParams, "search"> = {}
 ): Promise<{ machines: Machine[]; total: number; totalPages: number }> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) throw new Error("Unauthorized");
+  await requireMachineCapability(MACHINE_CAPABILITIES.FLEET_VIEW);
 
   const trimmed = query.trim();
   if (!trimmed) {
@@ -2352,12 +2344,11 @@ export async function getPaginatedMachinesAction(
   pageSize: number;
   totalPages: number;
   error?: string;
+  code?: string;
+  status?: number;
 }> {
   try {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-      return { machines: [], total: 0, page: 1, pageSize: 25, totalPages: 0, error: "Unauthorized" };
-    }
+    await requireMachineCapability(MACHINE_CAPABILITIES.FLEET_VIEW);
 
     const result = await getMachineList(params);
     return {
@@ -2367,7 +2358,17 @@ export async function getPaginatedMachinesAction(
       pageSize: result.pageSize,
       totalPages: result.totalPages,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    if (isMachineForbiddenError(err)) {
+      return {
+        ...machineForbiddenResult(err),
+        machines: [],
+        total: 0,
+        page: 1,
+        pageSize: 25,
+        totalPages: 0,
+      };
+    }
     console.error("[getPaginatedMachinesAction] Exception:", err);
     return {
       machines: [],
@@ -2375,7 +2376,44 @@ export async function getPaginatedMachinesAction(
       page: 1,
       pageSize: 25,
       totalPages: 0,
-      error: err?.message || "Failed to load machines.",
+      error: err instanceof Error ? err.message : "Failed to load machines.",
     };
   }
 }
+
+/**
+ * Machine audit trail. Capability + record scope checked before the query runs.
+ */
+export async function getMachineAuditAction(machineId: string): Promise<{
+  success: boolean;
+  auditLogs?: any[];
+  error?: string;
+  unauthorized?: boolean;
+  code?: string;
+  status?: number;
+}> {
+  if (!isValidUuid(machineId)) {
+    return { success: false, error: "Invalid machine ID format.", auditLogs: [] };
+  }
+  try {
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.AUDIT_VIEW);
+    await requireMachineRecordAccess(user, machineId);
+    const res = await getMachineAuditLogs(machineId);
+    if (res.unauthorized) {
+      return {
+        success: false,
+        unauthorized: true,
+        error: "Restricted: your role cannot view machine audit logs.",
+        auditLogs: [],
+      };
+    }
+    return { success: true, auditLogs: res.data };
+  } catch (err: unknown) {
+    if (isMachineForbiddenError(err)) {
+      return { ...machineForbiddenResult(err), auditLogs: [] };
+    }
+    const msg = err instanceof Error ? err.message : "Failed to load audit logs";
+    return { success: false, error: msg, auditLogs: [] };
+  }
+}
+

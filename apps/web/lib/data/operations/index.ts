@@ -9,6 +9,10 @@
  */
 
 export * from "./keys";
+// `./keys` re-exports all of `@reachinternational/utils`, which now also provides a
+// `dedupeShiftMonitorRows`. Re-export the operations-specific one explicitly so the two
+// star exports stay unambiguous and this barrel keeps its current behaviour.
+export { dedupeShiftMonitorRows } from "./today-shift-monitor";
 export * from "./operations-filters";
 export * from "./operations-machine-logs";
 export * from "./operations-client-logs";

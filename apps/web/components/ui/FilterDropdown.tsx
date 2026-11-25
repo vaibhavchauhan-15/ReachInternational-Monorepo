@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronDown, Search, X } from "lucide-react";
 import { AnimatedCheck } from "./animated-icons";
 
@@ -49,6 +49,7 @@ export function FilterDropdown({
   ariaLabel,
 }: FilterDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
   const [searchTerm, setSearchTerm] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -121,8 +122,8 @@ export function FilterDropdown({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`w-full flex items-center justify-between gap-1.5 rounded-lg border text-xs font-semibold select-none transition-all cursor-pointer shadow-2xs ${
-          buttonClassName ? buttonClassName : compact ? "h-8 px-2.5" : "h-11 sm:h-9 px-3"
+        className={`w-full flex items-center justify-between gap-1.5 rounded-lg border text-xs font-semibold select-none motion-press cursor-pointer shadow-2xs ${
+          buttonClassName ? buttonClassName : compact ? "h-8 px-2.5" : "h-11 lg:h-9 px-3"
         } ${
           isFiltered
             ? "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500/20"
@@ -181,9 +182,9 @@ export function FilterDropdown({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
+            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className={`absolute top-full mt-1.5 min-w-[200px] sm:min-w-[220px] max-w-[calc(100vw-24px)] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xl p-1 max-h-64 overflow-y-auto custom-scrollbar backdrop-blur-md z-50 ${
               align === "right" ? "right-0 left-auto" : "left-0 right-auto"

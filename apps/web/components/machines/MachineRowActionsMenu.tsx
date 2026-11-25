@@ -26,6 +26,9 @@ export interface MachineRowActionsMenuProps {
   canEdit: boolean;
   isSupervisor: boolean;
   isAdmin: boolean;
+  /** Optional capability overrides (default to the legacy booleans). */
+  canAssignClient?: boolean;
+  canViewAudit?: boolean;
   onEditMachine?: (m: Machine) => void;
   onAssignSupervisor?: (m: Machine) => void;
   onAssignOperator?: (m: Machine) => void;
@@ -33,7 +36,7 @@ export interface MachineRowActionsMenuProps {
   onEditClient?: (m: Machine) => void;
   onViewAudit?: (m: Machine) => void;
   onViewLogs?: (m: Machine) => void;
-  onDelete: (m: Machine) => void;
+  onDelete?: (m: Machine) => void;
   // Backward compatibility fallbacks
   onEdit?: (m: Machine) => void;
   onViewAssignments?: (m: Machine) => void;
@@ -61,6 +64,8 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
   canEdit,
   isSupervisor,
   isAdmin,
+  canAssignClient,
+  canViewAudit,
   onEditMachine,
   onAssignSupervisor,
   onAssignOperator,
@@ -225,7 +230,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
     if (onViewAudit) {
       onViewAudit(machine);
     } else {
-      router.push(`/machines/${machine.id}?tab=audit_trail`);
+      router.push(`/machines/${machine.machine_id || machine.id}?tab=audit_trail`);
     }
   };
 
@@ -236,13 +241,14 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
     } else if (onViewHistory) {
       onViewHistory(machine);
     } else {
-      router.push(`/machines/${machine.id}?tab=running_hours`);
+      router.push(`/machines/${machine.machine_id || machine.id}?tab=running_hours`);
     }
   };
 
   const allowSupervisorEdit = canEdit;
   const allowOperatorEdit = canEdit || isSupervisor;
-  const allowClientEdit = canEdit;
+  const allowClientEdit = canAssignClient ?? canEdit;
+  const allowAuditView = canViewAudit ?? true;
 
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -332,14 +338,16 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                 <div className="my-1 border-t border-[var(--color-hairline)]" />
 
                 {/* 4. Audit Option */}
-                <button
-                  type="button"
-                  onClick={handleViewAuditAction}
-                  className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
-                >
-                  <Shield size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
-                  <span>Audit</span>
-                </button>
+                {allowAuditView && (
+                  <button
+                    type="button"
+                    onClick={handleViewAuditAction}
+                    className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
+                  >
+                    <Shield size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                    <span>Audit</span>
+                  </button>
+                )}
 
                 {/* 5. Running Logs Option */}
                 <button
@@ -352,14 +360,14 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                 </button>
 
                 {/* 6. Delete Machine: Admin Only */}
-                {isAdmin && (
+                {isAdmin && onDelete && (
                   <>
                     <div className="my-1 border-t border-[var(--color-hairline)]" />
                     <button
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        onDelete(machine);
+                        onDelete?.(machine);
                       }}
                       className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 active:scale-[0.98] transition-all cursor-pointer min-h-[44px] sm:min-h-[36px] outline-none focus-visible:ring-1 focus-visible:ring-rose-500"
                     >

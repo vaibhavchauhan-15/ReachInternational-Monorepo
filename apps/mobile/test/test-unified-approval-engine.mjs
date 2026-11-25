@@ -114,6 +114,39 @@ try {
   assert(!rawTypePattern.test(sheetCode), 'BottomSheet contains 0 raw typography properties in styles');
   assert(!rawTypePattern.test(modalCode), 'Modal contains 0 raw typography properties in styles');
 
+  // --- 8. Keyset-Cursor Queue Contract (Web RPC parity) ---
+  console.log('\n--- 8. Keyset-Cursor Queue Contract ---');
+  assert(hookCode.includes('useInfiniteQuery'), 'Queue is driven by TanStack useInfiniteQuery');
+  assert(hookCode.includes('listApprovals') && hookCode.includes('cursor_created_at') && hookCode.includes('cursor_id'), 'Queue consumes the shared approval_list RPC with keyset cursor params');
+  assert(hookCode.includes('APPROVALS_QUEUE_PAGE_SIZE = 20'), 'Queue page size is 20');
+  assert(hookCode.includes('APPROVALS_PREFETCH_THRESHOLD = 5'), 'Next-page prefetch threshold is 5 remaining rows');
+  assert(hookCode.includes('initialPageParam: null') && hookCode.includes('getNextPageParam'), 'Infinite query derives the next cursor from the last keyset page');
+  assert(hookCode.includes('approvalCounts') && hookCode.includes('useApprovalCountsQuery'), 'Grouped counts come from the approval_counts RPC');
+  assert(hookCode.includes('overflow') && hookCode.includes('dedupeApprovalItems'), 'Optimistic removal refills from the buffered look-ahead row and dedupes by id');
+  assert(hookCode.includes('mapApprovalDecisionError') && hookCode.includes('42501'), 'Decision errors map 42501 permission denials to a clear message');
+  assert(/CONFLICT_PATTERN|terminal state|already decided/i.test(hookCode), 'Decision errors map version-conflict / already-decided rejections to a clear message');
+  assert(hookCode.includes('refetchOnWindowFocus: false') || hookCode.includes('refetchOnWindowFocus:false'), 'Queue disables window-focus refetch storms');
+
+  // --- 9. List Performance & Native Guardrails ---
+  console.log('\n--- 9. List Performance & Native Guardrails ---');
+  assert(screenCode.includes('keyExtractor'), 'FlatList uses a stable keyExtractor');
+  assert(screenCode.includes('windowSize') && screenCode.includes('maxToRenderPerBatch'), 'FlatList has tuned windowSize / maxToRenderPerBatch');
+  assert(screenCode.includes('removeClippedSubviews'), 'FlatList enables removeClippedSubviews on Android');
+  assert(screenCode.includes('onViewableItemsChanged') && screenCode.includes('APPROVALS_PREFETCH_THRESHOLD'), 'Next keyset page prefetches when ~5 rows remain');
+  assert(screenCode.includes('AppRefreshControl'), 'Pull-to-refresh uses the canonical themed RefreshControl');
+  assert(screenCode.includes('newCount') && screenCode.includes('handleNewPillPress'), 'Screen surfaces an "N new" pill instead of reordering the list');
+  assert(screenCode.includes('ApprovalsQueueSkeleton') && screenCode.includes('ListFooterComponent'), 'Screen implements skeleton and end-of-list footer states');
+  assert(screenCode.includes('isOffline') && screenCode.includes('canDecideNow'), 'Offline state disables decision actions (server stays authoritative)');
+  assert(screenCode.includes('ReduceMotion.System') && screenCode.includes('DUR.'), 'Row enter/exit motion uses lib/motion tokens with ReduceMotion.System');
+  assert(cardCode.includes('from "../ui/touch/Pressable"'), 'Card press feedback uses components/ui/touch/Pressable');
+  assert(sheetCode.includes('Sheet') && sheetCode.includes('../ui/overlay/Sheet'), 'Detail opens in the canonical Reanimated bottom Sheet');
+
+  // --- 10. Offline decisions are never queued ---
+  console.log('\n--- 10. Approval Decisions Are Never Queued Offline ---');
+  for (const [label, code] of [['Screen', screenCode], ['Hook', hookCode], ['Card', cardCode]]) {
+    assert(!/OfflineQueueManager|useOfflineQueue|enqueueMutation/.test(code), `${label} never enqueues approval decisions into the offline queue`);
+  }
+
   console.log(`\n----------------------------------------------------------------`);
   console.log(`  RESULT: ${passed} PASSED / ${failed} FAILED`);
   console.log(`================================================================\n`);

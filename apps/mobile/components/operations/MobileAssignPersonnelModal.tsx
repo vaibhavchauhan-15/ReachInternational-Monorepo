@@ -46,6 +46,7 @@ import {
 } from '../ui';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
+import { PRESS } from '../../lib/motion/tokens';
 import { supabase } from '../../lib/supabase';
 import { broadcastMobileAssignmentChanged } from '../../lib/realtime-roster';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -390,7 +391,7 @@ const AssignPersonnelModalSkeleton: React.FC = () => {
   );
 };
 
-export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProps> = ({
+const MobileAssignPersonnelModalBase: React.FC<MobileAssignPersonnelModalProps> = ({
   visible,
   onClose,
   initialMachineId,
@@ -1250,6 +1251,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                 <Pressable
                   variant="card"
                   haptic="select"
+                  pressScale={PRESS.scale}
                   onPress={toggleMachineDropdown}
                   style={[
                     styles.selectTriggerBtn,
@@ -1342,6 +1344,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                 key={m.id}
                                 variant="listRow"
                                 haptic="select"
+                                pressScale={PRESS.scale}
                                 onPress={() => {
                                   setSelectedMachineId(m.id);
                                   setIsMachineDropdownOpen(false);
@@ -1562,6 +1565,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                 <Pressable
                   variant="card"
                   haptic="select"
+                  pressScale={PRESS.scale}
                   disabled={!canEditSupervisor}
                   onPress={toggleSupervisorDropdown}
                   style={[
@@ -1729,6 +1733,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                 key={staff.id}
                                 variant="listRow"
                                 haptic="select"
+                                pressScale={PRESS.scale}
                                 onPress={() => toggleSupervisor(staff.id)}
                                 style={[
                                   styles.staffCardItem,
@@ -1969,6 +1974,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                     <Pressable
                       variant="card"
                       haptic="select"
+                      pressScale={PRESS.scale}
                       onPress={toggleAddOperator}
                       style={[
                         styles.addOperatorAccordionTrigger,
@@ -2058,6 +2064,7 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
                                     key={op.id}
                                     variant="listRow"
                                     haptic="select"
+                                    pressScale={PRESS.scale}
                                     onPress={() => handleAddOperator(op)}
                                     style={[
                                       styles.operatorCandidateItem,
@@ -2191,6 +2198,13 @@ export const MobileAssignPersonnelModal: React.FC<MobileAssignPersonnelModalProp
     </AppModal>
   );
 };
+
+/**
+ * Memoized: this modal stays mounted while closed (so the shared Sheet keeps its exit
+ * animation) — memo prevents the ~2.6k-line tree from re-rendering on every
+ * Operations parent render.
+ */
+export const MobileAssignPersonnelModal = React.memo(MobileAssignPersonnelModalBase);
 
 const styles = StyleSheet.create({
   drawerContainer: {

@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   Calendar,
   ChevronLeft,
@@ -216,6 +216,7 @@ export function CustomDatePicker({
   showIcon = false,
 }: CustomDatePickerProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -539,7 +540,7 @@ export function CustomDatePicker({
           type="button"
           disabled={disabled}
           onClick={handleOpenToggle}
-          className={`w-full px-3.5 py-2.5 rounded-xl border bg-[var(--color-canvas)] text-sm font-semibold text-[var(--color-ink)] flex items-center justify-between transition-all cursor-pointer shadow-2xs min-h-[44px] ${
+          className={`w-full px-3.5 py-2.5 rounded-xl border bg-[var(--color-canvas)] text-sm font-semibold text-[var(--color-ink)] flex items-center justify-between motion-press cursor-pointer shadow-2xs min-h-[44px] ${
             isCalendarOpen
               ? "border-sky-500 ring-2 ring-sky-500/20 bg-[var(--color-canvas-elevated)]"
               : "border-[var(--color-hairline)] hover:border-sky-500/50"
@@ -587,8 +588,8 @@ export function CustomDatePicker({
               key="custom-datepicker-popover"
               initial={{
                 opacity: 0,
-                scale: 0.97,
-                y: position.placement === "top" ? 6 : -6,
+                scale: shouldReduceMotion ? 1 : 0.97,
+                y: shouldReduceMotion ? 0 : position.placement === "top" ? 6 : -6,
               }}
               animate={{
                 opacity: 1,
@@ -597,8 +598,8 @@ export function CustomDatePicker({
               }}
               exit={{
                 opacity: 0,
-                scale: 0.97,
-                y: position.placement === "top" ? 4 : -4,
+                scale: shouldReduceMotion ? 1 : 0.97,
+                y: shouldReduceMotion ? 0 : position.placement === "top" ? 4 : -4,
               }}
               transition={{
                 duration: 0.16,
@@ -626,7 +627,7 @@ export function CustomDatePicker({
                   disabled={!canGoPrevMonth}
                   onClick={handlePrevMonth}
                   aria-label="Previous Month"
-                  className={`p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-all cursor-pointer ${
+                  className={`motion-press-tight motion-press p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer ${
                     !canGoPrevMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""
                   }`}
                 >
@@ -644,7 +645,7 @@ export function CustomDatePicker({
                   disabled={!canGoNextMonth}
                   onClick={handleNextMonth}
                   aria-label="Next Month"
-                  className={`p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-all cursor-pointer ${
+                  className={`motion-press-tight motion-press p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer ${
                     !canGoNextMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""
                   }`}
                 >

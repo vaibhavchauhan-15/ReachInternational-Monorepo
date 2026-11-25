@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Card, Text, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
+import { PRESS } from '../../lib/motion/tokens';
 import { Icon, AlertTriangle } from '../ui/icon';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate } from '@reachinternational/utils';
@@ -50,6 +51,7 @@ export const RunningLogDayGroup: React.FC<RunningLogDayGroupProps> = ({
       <Pressable
         variant="card"
         haptic="select"
+        pressScale={PRESS.scale}
         onPress={onToggle}
         style={styles.dayGroupHeader}
         accessibilityLabel={`Toggle shift logs for ${date}`}

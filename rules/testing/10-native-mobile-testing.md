@@ -1,7 +1,7 @@
 # Native Mobile Application Testing Standards
 
 > **VERIFICATION STANDARDS FOR EXPO SDK 57, REACT NATIVE, ANDROID & IOS APPS**  
-> *Cross-references [`apps/mobile/AGENTS.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/AGENTS.md) and the agent skill [`.agents/skills/native-backend-architecture/SKILL.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/.agents/skills/native-backend-architecture/SKILL.md). Mobile testing requires physical touch and platform-specific device validation.*
+> *Cross-references [`apps/mobile/AGENTS.md`](../../apps/mobile/AGENTS.md) and the agent skill [`.agents/skills/native-backend-architecture/SKILL.md`](../../.agents/skills/native-backend-architecture/SKILL.md). Mobile testing requires physical touch and platform-specific device validation.*
 
 ---
 

@@ -2,7 +2,7 @@
 
 > Reference specification for Vercel Geist design tokens, colors, typography scales, spacing, border radii, and 100% Web & Native consistency.
 
-For the binding authoritative policy, see [DESIGN.md](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/DESIGN.md) and [AI/RULES/DESIGN-SYSTEM.md](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/AI/RULES/DESIGN-SYSTEM.md).
+For the binding authoritative policy, see [DESIGN.md](../../DESIGN.md) and [AI/RULES/DESIGN-SYSTEM.md](../../AI/RULES/DESIGN-SYSTEM.md).
 
 ---
 

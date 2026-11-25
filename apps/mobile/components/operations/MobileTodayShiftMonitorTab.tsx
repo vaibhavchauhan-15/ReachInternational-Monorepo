@@ -6,8 +6,9 @@
  *
  * Implements:
  * - High-performance virtualized FlatList with initialNumToRender={6}, windowSize={5}
- * - Server-side keyset/page pagination via useTodayShiftMonitorInfiniteQuery
- * - Decoupled sub-2ms summary counts via useTodayShiftSummary
+ * - Single authoritative day roster fetch via get_today_shift_log_monitor (~5.8ms)
+ * - Canonical row dedupe via @reachinternational/utils dedupeShiftMonitorRows
+ * - Realtime roster broadcasts patch the TanStack cache, then coalesce into one reconcile
  * - Frame-0 static-first rendering (zero blank screens, non-blocking UI)
  * - 280ms debounced server-side search and server-side filtering
  * - Pure memoized MobileTodayShiftCard leaf components
@@ -22,8 +23,10 @@ import {
   Platform,
   Modal,
   RefreshControl,
-  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useTheme,
   KPICard,
@@ -46,8 +49,8 @@ import { SearchInput } from '../ui/SearchInput';
 import { TodayShiftMonitorKPIStrip } from './TodayShiftMonitorKPIStrip';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import {
-  useTodayShiftMonitorInfiniteQuery,
-  useTodayShiftSummary,
+  useTodayShiftMonitor,
+  patchTodayShiftMonitorRoster,
 } from '../../lib/hooks/useOperationsData';
 import { ShiftRosterListSkeleton } from './OperationsSkeleton';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -68,10 +71,17 @@ import {
 import { MobileAssignPersonnelModal } from './MobileAssignPersonnelModal';
 import { MobileTodayShiftCard } from './MobileTodayShiftCard';
 import { isManagerOrAbove, isSupervisorOrAbove } from '@reachinternational/permissions';
-import { getISTDateString, formatDate, addDaysToDateStr } from '@reachinternational/utils';
+import {
+  getISTDateString,
+  formatDate,
+  addDaysToDateStr,
+  dedupeShiftMonitorRows,
+  parseTimeToMinutes,
+} from '@reachinternational/utils';
 import { useAuth } from '../../lib/auth/useAuth';
 import { haptics } from '../../lib/haptics';
 import { Pressable } from '../ui/touch/Pressable';
+import { PRESS } from '../../lib/motion/tokens';
 
 export interface MobileTodayShiftMonitorTabProps {
   actorId?: string;
@@ -94,7 +104,8 @@ const STATUS_FILTER_OPTIONS: FilterOption[] = [
 ];
 
 const SORT_FILTER_OPTIONS: FilterOption[] = [
-  { id: 'default', label: 'Default Order' },
+  { id: 'time_asc', label: 'Shift Timing (Earliest First)' },
+  { id: 'time_desc', label: 'Shift Timing (Latest First)' },
   { id: 'operator_asc', label: 'Operator (A → Z)' },
   { id: 'operator_desc', label: 'Operator (Z → A)' },
   { id: 'machine_asc', label: 'Machine (A → Z)' },
@@ -102,7 +113,13 @@ const SORT_FILTER_OPTIONS: FilterOption[] = [
   { id: 'status_entered', label: 'Entered First' },
 ];
 
-export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProps> = ({
+/**
+ * A roster broadcast patches the cache instantly; this debounce only coalesces the
+ * follow-up server reconcile, so a burst of assignments from several devices costs one fetch.
+ */
+const ROSTER_RECONCILE_DEBOUNCE_MS = 1200;
+
+const MobileTodayShiftMonitorTabBase: React.FC<MobileTodayShiftMonitorTabProps> = ({
   actorId,
   userRole,
   initialDate,
@@ -113,6 +130,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   onCloseAssignModal,
 }) => {
   const { theme, isDark } = useTheme();
+  const queryClient = useQueryClient();
   const { role: authRole, userProfile } = useAuth();
   const effectiveRole = (userRole || authRole || userProfile?.role || '').toLowerCase().replace(/[\s-]/g, '_');
   const canEnterLog = isSupervisorOrAbove(effectiveRole) || ['super_admin', 'admin', 'manager', 'supervisor'].includes(effectiveRole);
@@ -130,7 +148,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'entered' | 'unassigned' | 'breakdown' | 'maintenance'>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [shiftFilter, setShiftFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('default');
+  const [sortBy, setSortBy] = useState<string>('time_asc');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
 
@@ -167,37 +185,24 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     onCloseAssignModal?.();
   }, [onCloseAssignModal]);
 
-  // Phase 7: Decoupled ultra-fast KPI summary query (<2ms, ~100 bytes)
+  // Fast authoritative day roster via get_today_shift_log_monitor RPC (~5.8ms)
   const {
-    data: summaryData,
-    refetch: refetchSummary,
-  } = useTodayShiftSummary(actorId, selectedDate, clientFilter);
-
-  // Phase 3 & 5: Server-side paginated infinite query (12 items per batch)
-  const {
-    data: infiniteData,
+    data: rawRows,
     isLoading,
     isFetching,
-    isFetchingNextPage,
-    isRefetching,
     isError,
     error,
-    refetch: refetchInfinite,
-    fetchNextPage,
-    hasNextPage,
-  } = useTodayShiftMonitorInfiniteQuery({
-    actorId,
-    logDate: selectedDate,
-    clientId: clientFilter,
-    searchQuery: debouncedSearchQuery,
-    statusFilter,
-    shiftFilter,
-    sortBy,
-    pageSize: 12,
-  });
+    refetch: refetchMonitor,
+  } = useTodayShiftMonitor(actorId, selectedDate, true);
+
+  const flatRows = useMemo(() => dedupeShiftMonitorRows(rawRows || []), [rawRows]);
+  const rows = flatRows;
+  const totalCount = flatRows.length;
 
   const [isSlowNetwork, setIsSlowNetwork] = useState(false);
   const [isSlowDismissed, setIsSlowDismissed] = useState(false);
+  // Spinner is driven strictly by an explicit user refresh (never by background polling)
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -215,113 +220,233 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   }, [isLoading]);
 
   const broadcastDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refetchSummaryRef = useRef(refetchSummary);
-  refetchSummaryRef.current = refetchSummary;
-  const refetchInfiniteRef = useRef(refetchInfinite);
-  refetchInfiniteRef.current = refetchInfinite;
+  const refetchMonitorRef = useRef(refetchMonitor);
+  refetchMonitorRef.current = refetchMonitor;
 
-  // Real-time broadcast listener for instant roster revalidation
-  // Subscribed once on mount with 400ms debounce to prevent websocket teardown churn
+  // Real-time roster sync
   useEffect(() => {
-    const rosterChannel = supabase.channel('operations-roster');
-
-    const triggerDebouncedRefresh = () => {
-      if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
-      broadcastDebounceRef.current = setTimeout(() => {
-        void Promise.all([refetchSummaryRef.current?.(), refetchInfiniteRef.current?.()]);
-      }, 400);
-    };
-
-    rosterChannel
-      .on('broadcast', { event: 'assignment_changed' }, triggerDebouncedRefresh)
-      .on('broadcast', { event: 'roster_updated' }, triggerDebouncedRefresh)
-      .on('broadcast', { event: 'log_entered' }, triggerDebouncedRefresh)
-      .subscribe();
-
     return () => {
       if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
-      supabase.removeChannel(rosterChannel);
+      broadcastDebounceRef.current = null;
     };
   }, []);
 
-  // Flattened and deduplicated rows from paginated responses
-  const flatRows = useMemo(() => {
-    if (!infiniteData?.pages) return [];
-    const map = new Map<string, TodayShiftMonitorRow>();
-    for (const page of infiniteData.pages) {
-      for (const row of page.rows) {
-        const shiftCode = (row.shift_code || 'S1').toUpperCase();
-        const key = `${row.machine_id}-${shiftCode}`;
-        const existing = map.get(key);
-        if (!existing) {
-          map.set(key, row);
-        } else {
-          if (row.status === 'entered' && existing.status !== 'entered') {
-            map.set(key, row);
-          } else if (row.status === 'pending' && existing.status === 'unassigned') {
-            map.set(key, row);
-          } else if (row.status === existing.status && row.log_id && !existing.log_id) {
-            map.set(key, row);
-          }
-        }
-      }
-    }
-    return Array.from(map.values());
-  }, [infiniteData]);
+  const scheduleRosterReconcile = useCallback(() => {
+    if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+    broadcastDebounceRef.current = setTimeout(() => {
+      broadcastDebounceRef.current = null;
+      void refetchMonitorRef.current?.();
+    }, ROSTER_RECONCILE_DEBOUNCE_MS);
+  }, []);
 
-  const rows = flatRows;
+  useFocusEffect(
+    useCallback(() => {
+      const rosterChannel = supabase.channel('operations-roster');
 
-  // Total count from pagination metadata
-  const totalCount = infiniteData?.pages?.[0]?.totalCount ?? flatRows.length;
+      const handleLogEntered = (eventPayload: any) => {
+        const payload = eventPayload?.payload || {};
+        patchTodayShiftMonitorRoster(queryClient, payload, 'log_entered');
+        scheduleRosterReconcile();
+      };
 
-  // Active KPI Summary: prefer dedicated RPC data, fallback to page-0 summary, then fallback to 0
+      const handleAssignmentChanged = (eventPayload: any) => {
+        const payload = eventPayload?.payload || {};
+        patchTodayShiftMonitorRoster(queryClient, payload, 'assignment_changed');
+        scheduleRosterReconcile();
+      };
+
+      rosterChannel
+        .on('broadcast', { event: 'assignment_changed' }, handleAssignmentChanged)
+        .on('broadcast', { event: 'roster_updated' }, scheduleRosterReconcile)
+        .on('broadcast', { event: 'log_entered' }, handleLogEntered)
+        .subscribe();
+
+      return () => {
+        if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+        broadcastDebounceRef.current = null;
+        supabase.removeChannel(rosterChannel);
+      };
+    }, [queryClient, scheduleRosterReconcile])
+  );
+
+  // Active KPI Summary computed in-memory directly from authoritative rows
   const summary = useMemo(() => {
-    if (summaryData) return summaryData;
-    const firstPageSummary = infiniteData?.pages?.[0]?.summary;
-    if (firstPageSummary) return firstPageSummary;
-    return { total: 0, entered: 0, pending: 0, unassigned: 0 };
-  }, [summaryData, infiniteData]);
+    const total = rows.length;
+    const entered = rows.filter((r) => r.status === 'entered').length;
+    const pending = rows.filter((r) => r.status === 'pending').length;
+    const unassigned = rows.filter((r) => r.status === 'unassigned').length;
+    const breakdown = rows.filter((r) => r.machine_health_status === 'breakdown').length;
+    const maintenance = rows.filter(
+      (r) =>
+        r.machine_health_status === 'under_maintenance' ||
+        r.machine_status === 'under_maintenance'
+    ).length;
+    return { total, entered, pending, unassigned, breakdown, maintenance };
+  }, [rows]);
 
-  // Dynamic Shift filter options provided by server, falling back to loaded rows
+  // Dynamic Shift filter options derived from loaded rows with exact counts
   const shiftOptions = useMemo<FilterOption[]>(() => {
-    const serverOptions = infiniteData?.pages?.[0]?.shiftOptions;
-    if (serverOptions && serverOptions.length > 0) {
-      return serverOptions;
-    }
-    const list: FilterOption[] = [{ id: 'all', label: 'All Shifts' }];
-    const shiftCodes = Array.from(new Set(flatRows.map((r) => r.shift_code).filter(Boolean)));
-    shiftCodes.sort().forEach((code) => {
-      const sample = flatRows.find((r) => r.shift_code === code);
-      list.push({
-        id: code as string,
-        label: sample?.shift_name || `Shift ${code}`,
-      });
+    const counts = new Map<string, number>();
+    rows.forEach((r) => {
+      const rawCode = (r.shift_code || 'S1').trim();
+      const norm = rawCode.toUpperCase().replace(/^SHIFT\s*/i, '') || 'S1';
+      counts.set(norm, (counts.get(norm) || 0) + 1);
     });
-    return list;
-  }, [infiniteData, flatRows]);
 
-  // Dynamic Client filter options provided by server, falling back to loaded rows
+    const list: FilterOption[] = [{ id: 'all', label: `All Shifts (${rows.length})` }];
+    Array.from(counts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .forEach(([code, count]) => {
+        list.push({ id: code, label: `Shift ${code} (${count})` });
+      });
+    return list;
+  }, [rows]);
+
+  // Dynamic Client filter options derived from loaded rows with exact counts
   const clientOptions = useMemo<FilterOption[]>(() => {
-    const serverOptions = infiniteData?.pages?.[0]?.clientOptions;
-    if (serverOptions && serverOptions.length > 0) {
-      return serverOptions;
-    }
-    const list: FilterOption[] = [{ id: 'all', label: 'All Clients' }];
-    const clientMap = new Map<string, string>();
-    flatRows.forEach((r) => {
+    const counts = new Map<string, number>();
+    const clientNames = new Map<string, string>();
+    rows.forEach((r) => {
       const key = r.client_id || (r.client_name ? `name:${r.client_name}` : 'unassigned');
-      const name = r.client_name || (r.client_id ? 'Client' : 'Available / Unassigned');
-      if (!clientMap.has(key)) {
-        clientMap.set(key, name);
+      counts.set(key, (counts.get(key) || 0) + 1);
+      if (r.client_name && !clientNames.has(key)) {
+        clientNames.set(key, r.client_name);
       }
     });
-    Array.from(clientMap.entries())
-      .sort((a, b) => a[1].localeCompare(b[1]))
-      .forEach(([id, name]) => {
-        list.push({ id, label: name });
-      });
+
+    const list: FilterOption[] = [{ id: 'all', label: `All Clients (${rows.length})` }];
+    const clientEntries = Array.from(clientNames.entries())
+      .filter(([id]) => (counts.get(id) || 0) > 0)
+      .sort((a, b) => a[1].localeCompare(b[1]));
+
+    clientEntries.forEach(([id, name]) => {
+      list.push({ id, label: `${name} (${counts.get(id) || 0})` });
+    });
+
+    if ((counts.get('unassigned') || 0) > 0) {
+      list.push({ id: 'unassigned', label: `Unassigned (${counts.get('unassigned') || 0})` });
+    }
+
     return list;
-  }, [infiniteData, flatRows]);
+  }, [rows]);
+
+  // Dynamic Status filter options with live counts
+  const statusOptions = useMemo<FilterOption[]>(
+    () => [
+      { id: 'all', label: `All Status (${summary.total})` },
+      { id: 'pending', label: `Pending (${summary.pending})`, dotColor: '#f59e0b' },
+      { id: 'entered', label: `Entered (${summary.entered})`, dotColor: '#10b981' },
+      { id: 'unassigned', label: `Unassigned (${summary.unassigned})`, dotColor: '#ef4444' },
+      ...(summary.breakdown > 0
+        ? [{ id: 'breakdown', label: `Breakdown (${summary.breakdown})`, dotColor: '#ef4444' }]
+        : []),
+      ...(summary.maintenance > 0
+        ? [{ id: 'maintenance', label: `Maintenance (${summary.maintenance})`, dotColor: '#f59e0b' }]
+        : []),
+    ],
+    [summary]
+  );
+
+  // In-memory filtered and sorted day roster
+  const filtered = useMemo(() => {
+    let r = rows;
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'breakdown') {
+        r = r.filter((row) => row.machine_health_status === 'breakdown');
+      } else if (statusFilter === 'maintenance') {
+        r = r.filter(
+          (row) =>
+            row.machine_health_status === 'under_maintenance' ||
+            row.machine_status === 'under_maintenance'
+        );
+      } else {
+        r = r.filter((row) => row.status === statusFilter);
+      }
+    }
+    if (clientFilter !== 'all') {
+      r = r.filter((row) => {
+        if (clientFilter === 'unassigned') {
+          return !row.client_id && (!row.client_name || row.client_name === 'Available / Unassigned');
+        }
+        if (clientFilter.startsWith('name:')) {
+          return row.client_name === clientFilter.replace('name:', '');
+        }
+        return row.client_id === clientFilter;
+      });
+    }
+    if (shiftFilter !== 'all') {
+      const target = shiftFilter.toUpperCase().replace(/^SHIFT\s*/i, '');
+      r = r.filter((row) => {
+        const rowShift = (row.shift_code || 'S1').toUpperCase().replace(/^SHIFT\s*/i, '');
+        return rowShift === target;
+      });
+    }
+    const search = debouncedSearchQuery.trim().toLowerCase();
+    if (search) {
+      r = r.filter((row) =>
+        [
+          row.operator_name,
+          row.operator_phone,
+          row.operator_employee_id,
+          row.machine_code,
+          row.machine_serial_number,
+          row.machine_model,
+          row.client_name,
+          row.client_code,
+          row.client_city,
+          row.site_name,
+        ].some((value) => typeof value === 'string' && value.toLowerCase().includes(search))
+      );
+    }
+
+    // Timing sort by default (time_asc) matching Web
+    r = [...r].sort((a, b) => {
+      if (sortBy === 'operator_asc') {
+        return (a.operator_name || '').localeCompare(b.operator_name || '');
+      }
+      if (sortBy === 'operator_desc') {
+        return (b.operator_name || '').localeCompare(a.operator_name || '');
+      }
+      if (sortBy === 'machine_asc') {
+        return (a.machine_code || '').localeCompare(b.machine_code || '');
+      }
+      if (sortBy === 'status_pending') {
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (a.status !== 'pending' && b.status === 'pending') return 1;
+      }
+      if (sortBy === 'status_entered') {
+        if (a.status === 'entered' && b.status !== 'entered') return -1;
+        if (a.status !== 'entered' && b.status === 'entered') return 1;
+      }
+      const ta = parseTimeToMinutes(a.shift_start) ?? 9999;
+      const tb = parseTimeToMinutes(b.shift_start) ?? 9999;
+      if (ta !== tb) {
+        return sortBy === 'time_desc' ? tb - ta : ta - tb;
+      }
+      const mComp = (a.machine_code || '').localeCompare(b.machine_code || '');
+      if (mComp !== 0) return mComp;
+      return (a.shift_code || '').localeCompare(b.shift_code || '');
+    });
+
+    return r;
+  }, [rows, statusFilter, clientFilter, shiftFilter, sortBy, debouncedSearchQuery]);
+
+  // Dynamic quick status pills with live counts and status dots (100% Web Parity)
+  const quickStatusTabs = useMemo(
+    () => [
+      { id: 'all', label: 'All', count: summary.total, dotColor: undefined },
+      { id: 'pending', label: 'Pending', count: summary.pending, dotColor: '#f59e0b' },
+      { id: 'entered', label: 'Entered', count: summary.entered, dotColor: '#10b981' },
+      { id: 'unassigned', label: 'Unassigned', count: summary.unassigned, dotColor: '#ef4444' },
+      ...(summary.breakdown > 0
+        ? [{ id: 'breakdown', label: 'Breakdown', count: summary.breakdown, dotColor: '#ef4444' }]
+        : []),
+      ...(summary.maintenance > 0
+        ? [{ id: 'maintenance', label: 'Maintenance', count: summary.maintenance, dotColor: '#f59e0b' }]
+        : []),
+    ],
+    [summary]
+  );
 
   const selectedDateLabel = useMemo(() => {
     if (selectedDate === todayStr) return 'Today';
@@ -331,7 +456,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   }, [selectedDate, todayStr]);
 
   const currentStatusLabel =
-    STATUS_FILTER_OPTIONS.find((opt) => opt.id === statusFilter)?.label || 'Status';
+    statusOptions.find((opt) => opt.id === statusFilter)?.label || 'Status';
   const currentClientLabel =
     clientOptions.find((opt) => opt.id === clientFilter)?.label || 'Client';
   const currentShiftLabel =
@@ -345,7 +470,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     if (statusFilter !== 'all') count++;
     if (clientFilter !== 'all') count++;
     if (shiftFilter !== 'all') count++;
-    if (sortBy !== 'default') count++;
+    if (sortBy !== 'time_asc') count++;
     return count;
   }, [selectedDate, todayStr, statusFilter, clientFilter, shiftFilter, sortBy]);
 
@@ -355,16 +480,26 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     setStatusFilter('all');
     setClientFilter('all');
     setShiftFilter('all');
-    setSortBy('default');
+    setSortBy('time_asc');
     setSearchQuery('');
     setDebouncedSearchQuery('');
   }, [todayStr]);
 
   const handleRefresh = useCallback(async () => {
     haptics.tap();
-    await Promise.all([refetchSummary(), refetchInfinite()]);
-    onRefresh?.();
-  }, [refetchSummary, refetchInfinite, onRefresh]);
+    setIsManualRefreshing(true);
+    try {
+      if (onRefresh) {
+        // The parent owns the canonical operations refresh cascade (entry context,
+        // history, monitor). Reusing it avoids fetching the same roster keys twice.
+        await onRefresh();
+      } else {
+        await refetchMonitor();
+      }
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }, [refetchMonitor, onRefresh]);
 
   const handleCardEnterLog = useCallback(
     (row: TodayShiftMonitorRow) => {
@@ -407,7 +542,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         return;
       }
       haptics.confirm();
-      void Promise.all([refetchSummary(), refetchInfinite()]);
+      void refetchMonitor();
       setRowToReactivate(null);
       handleOpenAssignModal(row.machine_id);
     } catch (err: any) {
@@ -415,13 +550,24 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     } finally {
       setIsReactivating(false);
     }
-  }, [rowToReactivate, actorId, refetchSummary, refetchInfinite, handleOpenAssignModal]);
+  }, [rowToReactivate, actorId, refetchMonitor, handleOpenAssignModal]);
 
-  const handleEndReached = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) {
-      void fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  // Stable handler: identity changes would defeat React.memo on the roster cards
+  const handleOpenRowMenu = useCallback((row: TodayShiftMonitorRow) => {
+    setMenuRow(row);
+  }, []);
+
+  // Stable handler for the nested Assign Personnel modal (also keeps it memo-skippable)
+  const handleAssignSuccess = useCallback(
+    (_ops?: any, savedDate?: string) => {
+      if (savedDate && savedDate !== selectedDate) {
+        setSelectedDate(savedDate);
+      } else {
+        void refetchMonitor();
+      }
+    },
+    [selectedDate, refetchMonitor]
+  );
 
   const renderActiveFilterBadges = () => {
     if (activeFilterCount === 0 && searchQuery.trim() === '') return null;
@@ -484,13 +630,13 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           />
         )}
 
-        {sortBy !== 'default' && (
+        {sortBy !== 'time_asc' && (
           <Badge
             variant="outline"
             size="sm"
             solid={false}
             label={`Sort: ${currentSortLabel}`}
-            onRemove={() => setSortBy('default')}
+            onRemove={() => setSortBy('time_asc')}
           />
         )}
 
@@ -740,6 +886,84 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
             )}
           </View>
 
+          {/* Quick Horizontal Status Filter Strip — 1-tap filtering with live counts */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickStatusScroll}
+          >
+            {quickStatusTabs.map((tab) => {
+              const isActive = statusFilter === tab.id;
+              return (
+                <Pressable
+                  key={tab.id}
+                  variant="plain"
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => {
+                    setStatusFilter(tab.id as any);
+                  }}
+                  style={[
+                    styles.quickStatusPill,
+                    {
+                      backgroundColor: isActive
+                        ? '#0284c7'
+                        : isDark
+                        ? '#171717'
+                        : '#ffffff',
+                      borderColor: isActive
+                        ? '#0284c7'
+                        : theme.colors.hairline,
+                    },
+                  ]}
+                  accessibilityLabel={`Filter by ${tab.label} (${tab.count})`}
+                >
+                  {tab.dotColor && (
+                    <View
+                      style={[
+                        styles.quickStatusDot,
+                        {
+                          backgroundColor: tab.dotColor,
+                        },
+                      ]}
+                    />
+                  )}
+                  <Text
+                    variant="caption"
+                    weight={isActive ? 'bold' : 'medium'}
+                    style={{
+                      color: isActive ? '#ffffff' : theme.colors.ink,
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.quickStatusCountBadge,
+                      {
+                        backgroundColor: isActive
+                          ? 'rgba(255, 255, 255, 0.25)'
+                          : isDark
+                          ? '#262626'
+                          : '#f1f5f9',
+                      },
+                    ]}
+                  >
+                    <Text
+                      variant="micro"
+                      weight="bold"
+                      style={{
+                        color: isActive ? '#ffffff' : theme.colors.mute,
+                      }}
+                    >
+                      {tab.count}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
           {/* Active Filter Badges */}
           {renderActiveFilterBadges()}
         </View>
@@ -753,14 +977,14 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
               <Text variant="caption" style={{ color: theme.colors.mute }}>
                 Showing{' '}
                 <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
-                  {flatRows.length}
+                  {filtered.length}
                 </Text>{' '}
                 of{' '}
                 <Text variant="caption" weight="bold" style={{ color: theme.colors.ink }}>
                   {totalCount}
                 </Text>{' '}
                 shifts
-                {activeFilterCount > 0 && totalCount > flatRows.length && (
+                {activeFilterCount > 0 && totalCount > filtered.length && (
                   <Text variant="caption" style={{ color: theme.colors.mute }}>
                     {' '}(filtered)
                   </Text>
@@ -778,10 +1002,13 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
       handleRefresh,
       isError,
       flatRows.length,
+      filtered.length,
+      totalCount,
       isDark,
       selectedDate,
       todayStr,
       summary,
+      quickStatusTabs,
       searchQuery,
       debouncedSearchQuery,
       isFetching,
@@ -879,57 +1106,11 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     handleOpenAssignModal,
   ]);
 
-  // ListFooterComponent renders pagination loader or load more button
-  const renderFooter = useCallback(() => {
-    if (isFetchingNextPage) {
-      return (
-        <View style={styles.footerLoader}>
-          <ActivityIndicator size="small" color={theme.colors.link} />
-          <Text variant="caption" style={{ color: theme.colors.mute }}>
-            Loading more shifts...
-          </Text>
-        </View>
-      );
-    }
-
-    if (hasNextPage && flatRows.length > 0) {
-      const remaining = Math.max(0, totalCount - flatRows.length);
-      return (
-        <Pressable
-          variant="outline"
-          haptic="tap"
-          hitSlopToMin48
-          onPress={() => {
-            void fetchNextPage();
-          }}
-          style={[
-            styles.showMoreBtn,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-          accessibilityLabel={`Load ${remaining} more shifts`}
-        >
-          <Text variant="caption" weight="semibold" style={{ color: '#0284c7' }}>
-            Load more shifts ({remaining} remaining)
-          </Text>
-        </Pressable>
-      );
-    }
-
-    return <View style={styles.bottomSpacer} />;
-  }, [
-    isFetchingNextPage,
-    theme.colors.link,
-    theme.colors.mute,
-    theme.colors.canvasElevated,
-    theme.colors.hairline,
-    hasNextPage,
-    flatRows.length,
-    totalCount,
-    fetchNextPage,
-  ]);
+  // ListFooterComponent keeps a stable bottom spacer for the floating bottom navigation
+  const renderFooter = useCallback(
+    () => <View style={styles.bottomSpacer} />,
+    []
+  );
 
   // Pure memoized renderItem using MobileTodayShiftCard
   const renderItem = useCallback(
@@ -941,10 +1122,10 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         canEnterLog={canEnterLog}
         onInitiateAssign={handleInitiateAssign}
         onEnterLog={handleCardEnterLog}
-        onOpenMenu={(r) => setMenuRow(r)}
+        onOpenMenu={handleOpenRowMenu}
       />
     ),
-    [debouncedSearchQuery, canEnterLog, handleInitiateAssign, handleCardEnterLog]
+    [debouncedSearchQuery, canEnterLog, handleInitiateAssign, handleCardEnterLog, handleOpenRowMenu]
   );
 
   const keyExtractor = useCallback(
@@ -956,7 +1137,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
   return (
     <View style={styles.container}>
       <FlatList
-        data={flatRows}
+        data={filtered}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={renderHeader}
@@ -966,11 +1147,10 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         maxToRenderPerBatch={8}
         windowSize={5}
         removeClippedSubviews={Platform.OS === 'android'}
-        onEndReached={handleEndReached}
-        onEndReachedThreshold={0.4}
+        updateCellsBatchingPeriod={50}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing || (isRefetching && !isFetchingNextPage)}
+            refreshing={refreshing || isManualRefreshing}
             onRefresh={handleRefresh}
             tintColor={theme.colors.link}
           />
@@ -986,13 +1166,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
         onClose={handleCloseAssignModal}
         initialMachineId={assignMachineId}
         initialAssignmentDate={selectedDate}
-        onSuccess={(_ops?: any, savedDate?: string) => {
-          if (savedDate && savedDate !== selectedDate) {
-            setSelectedDate(savedDate);
-          } else {
-            void Promise.all([refetchSummary(), refetchInfinite()]);
-          }
-        }}
+        onSuccess={handleAssignSuccess}
       />
 
       {/* Equipment Reactivation Confirmation Dialog */}
@@ -1184,7 +1358,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
           <DropdownFilterSelector
             label="Entry Status"
             selectedId={statusFilter}
-            options={STATUS_FILTER_OPTIONS}
+            options={statusOptions}
             onSelect={(id: string) => setStatusFilter(id as any)}
             placeholder="Select Status"
             minMenuWidth={280}
@@ -1227,7 +1401,7 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
 
         <FilterCategoryCard
           title="Sort By"
-          isFiltered={sortBy !== 'default'}
+          isFiltered={sortBy !== 'time_asc'}
           badgeLabel="Custom"
           testID="category-sorting-order"
         >
@@ -1244,6 +1418,12 @@ export const MobileTodayShiftMonitorTab: React.FC<MobileTodayShiftMonitorTabProp
     </View>
   );
 };
+
+/**
+ * Memoized so parent re-renders (pull-to-refresh flags, tab switches, modal state in
+ * operations.tsx) never re-render the roster, KPI strip and filter tree.
+ */
+export const MobileTodayShiftMonitorTab = React.memo(MobileTodayShiftMonitorTabBase);
 
 const styles = StyleSheet.create({
   container: {
@@ -1293,8 +1473,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
-    height: 34,
-    minHeight: 34,
+    minHeight: 44,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
@@ -1314,7 +1493,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 36,
+    minHeight: 44,
+    paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
@@ -1334,13 +1514,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    height: 36,
+    minHeight: 44,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: radiusNumeric.lg,
     borderWidth: 1,
     flexShrink: 0,
   },
   quickResetBtnText: {},
+  quickStatusScroll: {
+    gap: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
+  quickStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+    minHeight: 44,
+  },
+  quickStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  quickStatusCountBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.full,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   resultsCountRow: {
     paddingHorizontal: 2,
     marginTop: 2,
@@ -1427,7 +1636,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   sheetCancelBtn: {
-    height: 44,
+    minHeight: 44,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     alignItems: 'center',

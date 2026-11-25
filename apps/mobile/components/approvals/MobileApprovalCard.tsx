@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  View,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Image,
-  ActivityIndicator,
-} from "react-native";
+import { View, StyleSheet, ScrollView, Image, ActivityIndicator } from "react-native";
 import type {
   ApprovalRequestListItem,
   AttachedDocumentSummary,
@@ -36,6 +29,7 @@ import {
   XCircle,
 } from "lucide-react-native";
 import { useTheme } from "../../lib/theming";
+import { Pressable } from "../ui/touch/Pressable";
 import { haptics } from "../../lib/haptics";
 
 export interface MobileApprovalCardProps {
@@ -82,6 +76,15 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
   const machineCategory = item.machine_category;
   const documents = item.documents || [];
   const payload = (item.payload || {}) as Record<string, any>;
+
+  const isOperator =
+    role?.toLowerCase() === "operator" ||
+    payload.role?.toLowerCase() === "operator";
+  const supervisorName =
+    item.supervisor_name ||
+    payload.supervisor_name ||
+    payload.supervisorName ||
+    null;
 
   // Type categorization
   const isRegistration = item.type_key === "registration";
@@ -162,7 +165,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         },
       ]}
     >
-      {/* ── Top Header: Badges & Relative Registration Time ── */}
+      {/* ── Top Header: Badges ── */}
       <View style={styles.headerRow}>
         <View style={styles.badgeGroup}>
           <Badge variant="outline">
@@ -184,12 +187,12 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               style={[
                 styles.roleBadge,
                 {
-                  backgroundColor: "rgba(2, 132, 199, 0.12)",
-                  borderColor: "rgba(2, 132, 199, 0.25)",
+                  backgroundColor: colors.linkSoft,
+                  borderColor: colors.linkSoft,
                 },
               ]}
             >
-              <Text variant="micro" style={{ color: "#0284c7" }}>
+              <Text variant="micro" style={{ color: colors.primary }}>
                 {role.toUpperCase()}
               </Text>
             </View>
@@ -199,23 +202,16 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               style={[
                 styles.priorityBadge,
                 {
-                  backgroundColor: "rgba(239, 68, 68, 0.12)",
-                  borderColor: "rgba(239, 68, 68, 0.25)",
+                  backgroundColor: colors.errorSoft,
+                  borderColor: colors.errorSoft,
                 },
               ]}
             >
-              <Text variant="micro" style={{ color: "#ef4444" }}>
+              <Text variant="micro" style={{ color: colors.error }}>
                 HIGH
               </Text>
             </View>
           ) : null}
-        </View>
-
-        <View style={styles.timeRow}>
-          <Clock size={12} color={colors.mute} />
-          <Text variant="micro" style={{ color: colors.mute }}>
-            {formatTinyRelativeTime(item.created_at)}
-          </Text>
         </View>
       </View>
 
@@ -243,17 +239,17 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                 },
               ]}
             >
-              <Hash size={11} color="#a855f7" />
+              <Hash size={11} color={colors.violet} />
               <Text variant="mono">{empId}</Text>
             </View>
           ) : null}
         </View>
 
-        {/* Contact Info (Email, Phone & Machine Category) */}
+        {/* Contact Info (Email, Phone, Machine Category & Operator Supervisor) */}
         <View style={styles.contactGrid}>
           {email ? (
             <View style={styles.contactItem}>
-              <Mail size={12} color="#10b981" />
+              <Mail size={12} color={colors.success} />
               <Text variant="caption" numberOfLines={1} style={styles.contactText}>
                 {email}
               </Text>
@@ -261,7 +257,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           ) : null}
           {phone ? (
             <View style={styles.contactItem}>
-              <Phone size={12} color="#f59e0b" />
+              <Phone size={12} color={colors.warning} />
               <Text variant="caption" numberOfLines={1} style={styles.contactText}>
                 {phone}
               </Text>
@@ -269,9 +265,17 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           ) : null}
           {machineCategory ? (
             <View style={styles.contactItemFull}>
-              <Wrench size={12} color="#f97316" />
+              <Wrench size={12} color={colors.warning} />
               <Text variant="caption" numberOfLines={1} style={styles.contactText}>
                 Fleet: {machineCategory}
+              </Text>
+            </View>
+          ) : null}
+          {isOperator ? (
+            <View style={styles.contactItemFull}>
+              <User size={12} color={colors.primary} />
+              <Text variant="caption" numberOfLines={1} style={styles.contactText}>
+                Supervisor: {supervisorName || "Unassigned"}
               </Text>
             </View>
           ) : null}
@@ -294,7 +298,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           >
             <View style={styles.docsHeader}>
               <View style={styles.docsHeaderLeft}>
-                <FileCheck2 size={13} color="#0284c7" />
+                <FileCheck2 size={13} color={colors.primary} />
                 <Text variant="label" style={{ color: colors.ink }}>
                   Documents for Verification ({documents.length})
                 </Text>
@@ -341,7 +345,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                         </View>
                       )}
                       <View style={styles.docThumbOverlay}>
-                        <Eye size={12} color="#ffffff" />
+                        <Eye size={12} color={colors.onPrimary} />
                       </View>
                     </Pressable>
 
@@ -360,28 +364,26 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                         <Pressable
                           onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
-                          style={({ pressed }) => [
+                          style={[
                             styles.docActionBtn,
-                            styles.docRejectBtn,
-                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                            { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Reject ${doc.label}`}
                         >
-                          <X size={15} color="#ef4444" strokeWidth={2.5} />
+                          <X size={15} color={colors.error} strokeWidth={2.5} />
                         </Pressable>
                         <Pressable
                           onPress={() => onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
                           style={({ pressed }) => [
                             styles.docActionBtn,
-                            styles.docApproveBtn,
-                            { backgroundColor: pressed ? "#059669" : "#10b981" },
+                            { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Verify ${doc.label}`}
                         >
-                          <Check size={15} color="#ffffff" strokeWidth={2.5} />
+                          <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
                         </Pressable>
                       </View>
                     ) : (
@@ -390,10 +392,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           styles.docStatusPill,
                           {
                             backgroundColor: isVerified
-                              ? "rgba(16, 185, 129, 0.12)"
+                              ? colors.successSoft
                               : isRejected
-                              ? "rgba(239, 68, 68, 0.12)"
-                              : "rgba(245, 158, 11, 0.12)",
+                              ? colors.errorSoft
+                              : colors.warningSoft,
                           },
                         ]}
                       >
@@ -401,10 +403,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           variant="micro"
                           style={{
                             color: isVerified
-                              ? "#10b981"
+                              ? colors.success
                               : isRejected
-                              ? "#ef4444"
-                              : "#d97706",
+                              ? colors.error
+                              : colors.warningDeep,
                           }}
                         >
                           {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
@@ -428,7 +430,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           >
             <View style={styles.docsHeader}>
               <View style={styles.docsHeaderLeft}>
-                <FileCheck2 size={13} color="#0284c7" />
+                <FileCheck2 size={13} color={colors.primary} />
                 <Text variant="label" style={{ color: colors.ink }}>
                   Documents for Verification ({documents.length || 1})
                 </Text>
@@ -476,7 +478,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                         </View>
                       )}
                       <View style={styles.docThumbOverlay}>
-                        <Eye size={12} color="#ffffff" />
+                        <Eye size={12} color={colors.onPrimary} />
                       </View>
                     </Pressable>
 
@@ -494,28 +496,26 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                         <Pressable
                           onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
-                          style={({ pressed }) => [
+                          style={[
                             styles.docActionBtn,
-                            styles.docRejectBtn,
-                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                            { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Reject ${doc.label}`}
                         >
-                          <X size={15} color="#ef4444" strokeWidth={2.5} />
+                          <X size={15} color={colors.error} strokeWidth={2.5} />
                         </Pressable>
                         <Pressable
                           onPress={() => onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
                           style={({ pressed }) => [
                             styles.docActionBtn,
-                            styles.docApproveBtn,
-                            { backgroundColor: pressed ? "#059669" : "#10b981" },
+                            { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Verify ${doc.label}`}
                         >
-                          <Check size={15} color="#ffffff" strokeWidth={2.5} />
+                          <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
                         </Pressable>
                       </View>
                     ) : (
@@ -524,10 +524,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           styles.docStatusPill,
                           {
                             backgroundColor: isVerified
-                              ? "rgba(16, 185, 129, 0.12)"
+                              ? colors.successSoft
                               : isRejected
-                              ? "rgba(239, 68, 68, 0.12)"
-                              : "rgba(245, 158, 11, 0.12)",
+                              ? colors.errorSoft
+                              : colors.warningSoft,
                           },
                         ]}
                       >
@@ -535,10 +535,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           variant="micro"
                           style={{
                             color: isVerified
-                              ? "#10b981"
+                              ? colors.success
                               : isRejected
-                              ? "#ef4444"
-                              : "#d97706",
+                              ? colors.error
+                              : colors.warningDeep,
                           }}
                         >
                           {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
@@ -562,7 +562,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           >
             <View style={styles.docsHeader}>
               <View style={styles.docsHeaderLeft}>
-                <FileCheck2 size={13} color="#0284c7" />
+                <FileCheck2 size={13} color={colors.primary} />
                 <Text variant="label" style={{ color: colors.ink }}>
                   Document Verification
                 </Text>
@@ -591,7 +591,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         >
           <View style={styles.docsHeader}>
             <View style={styles.docsHeaderLeft}>
-              <RefreshCw size={13} color="#0284c7" />
+              <RefreshCw size={13} color={colors.primary} />
               <Text variant="label" style={{ color: colors.ink }}>
                 Replacement: {(payload.document_type_code || singleDocTarget?.label || "Document").replace(/_/g, " ")}
               </Text>
@@ -631,7 +631,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                     </View>
                   )}
                   <View style={styles.docThumbOverlay}>
-                    <Eye size={12} color="#ffffff" />
+                    <Eye size={12} color={colors.onPrimary} />
                   </View>
                 </Pressable>
 
@@ -646,28 +646,26 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                     <Pressable
                       onPress={() => onRejectDocumentPrompt?.(replacementDocTarget, payload.user_id || item.requested_by)}
                       disabled={isActionLoading || isRejectLoading}
-                      style={({ pressed }) => [
+                      style={[
                         styles.docActionBtn,
-                        styles.docRejectBtn,
-                        { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                        { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
                       ]}
                       accessibilityRole="button"
                       accessibilityLabel={`Reject ${replacementDocTarget.label}`}
                     >
-                      <X size={15} color="#ef4444" strokeWidth={2.5} />
+                      <X size={15} color={colors.error} strokeWidth={2.5} />
                     </Pressable>
                     <Pressable
                       onPress={() => onVerifyDocument?.(replacementDocTarget.id, payload.user_id || item.requested_by)}
                       disabled={isActionLoading || isRejectLoading}
                       style={({ pressed }) => [
                         styles.docActionBtn,
-                        styles.docApproveBtn,
-                        { backgroundColor: pressed ? "#059669" : "#10b981" },
+                        { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
                       ]}
                       accessibilityRole="button"
                       accessibilityLabel={`Approve ${replacementDocTarget.label}`}
                     >
-                      <Check size={15} color="#ffffff" strokeWidth={2.5} />
+                      <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
                     </Pressable>
                   </View>
                 ) : (
@@ -677,10 +675,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                       {
                         backgroundColor:
                           replacementDocTarget.verification_status === "verified"
-                            ? "rgba(16, 185, 129, 0.12)"
+                            ? colors.successSoft
                             : replacementDocTarget.verification_status === "rejected"
-                            ? "rgba(239, 68, 68, 0.12)"
-                            : "rgba(245, 158, 11, 0.12)",
+                            ? colors.errorSoft
+                            : colors.warningSoft,
                       },
                     ]}
                   >
@@ -689,10 +687,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                       style={{
                         color:
                           replacementDocTarget.verification_status === "verified"
-                            ? "#10b981"
+                            ? colors.success
                             : replacementDocTarget.verification_status === "rejected"
-                            ? "#ef4444"
-                            : "#d97706",
+                            ? colors.error
+                            : colors.warningDeep,
                       }}
                     >
                       {replacementDocTarget.verification_status.toUpperCase()}
@@ -730,7 +728,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                     </View>
                   )}
                   <View style={styles.docThumbOverlay}>
-                    <Eye size={12} color="#ffffff" />
+                    <Eye size={12} color={colors.onPrimary} />
                   </View>
                 </Pressable>
 
@@ -741,10 +739,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                 <View
                   style={[
                     styles.docStatusPill,
-                    { backgroundColor: "rgba(2, 132, 199, 0.12)" },
+                    { backgroundColor: colors.linkSoft },
                   ]}
                 >
-                  <Text variant="micro" style={{ color: "#0284c7" }}>
+                  <Text variant="micro" style={{ color: colors.primary }}>
                     ACTIVE
                   </Text>
                 </View>
@@ -767,7 +765,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         >
           <View style={styles.docsHeader}>
             <View style={styles.docsHeaderLeft}>
-              <UserCog size={13} color="#0284c7" />
+              <UserCog size={13} color={colors.primary} />
               <Text variant="label" style={{ color: colors.ink }}>
                 Profile Modifications Requested
               </Text>
@@ -807,7 +805,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                     </Text>
                     <View style={styles.diffValuesRow}>
                       {oldVal ? (
-                        <Text variant="mono" numberOfLines={1} style={styles.diffOld}>
+                        <Text variant="mono" numberOfLines={1} style={[styles.diffOld, { color: colors.error }]}>
                           {oldVal}
                         </Text>
                       ) : null}
@@ -816,7 +814,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           &rarr;
                         </Text>
                       ) : null}
-                      <Text variant="mono" numberOfLines={1} style={styles.diffNew}>
+                      <Text variant="mono" numberOfLines={1} style={[styles.diffNew, { color: colors.success }]}>
                         {newVal || "(empty)"}
                       </Text>
                     </View>
@@ -845,18 +843,18 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         >
           <View style={styles.docsHeader}>
             <View style={styles.docsHeaderLeft}>
-              <ShieldAlert size={14} color="#ef4444" />
-              <Text variant="label" style={{ color: "#ef4444" }}>
+              <ShieldAlert size={14} color={colors.error} />
+              <Text variant="label" style={{ color: colors.error }}>
                 Account Deletion Request
               </Text>
             </View>
             <View
               style={[
                 styles.docStatusPill,
-                { backgroundColor: "rgba(239, 68, 68, 0.12)" },
+                { backgroundColor: colors.errorSoft },
               ]}
             >
-              <Text variant="micro" style={{ color: "#ef4444" }}>
+              <Text variant="micro" style={{ color: colors.error }}>
                 7-DAY GRACE
               </Text>
             </View>
@@ -891,8 +889,8 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         >
           <View style={styles.docsHeader}>
             <View style={styles.docsHeaderLeft}>
-              <AlertTriangle size={14} color="#f59e0b" />
-              <Text variant="label" style={{ color: "#d97706" }}>
+              <AlertTriangle size={14} color={colors.warning} />
+              <Text variant="label" style={{ color: colors.warningDeep }}>
                 Shift Conflict / Override
               </Text>
             </View>
@@ -947,7 +945,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           >
             <View style={styles.docsHeader}>
               <View style={styles.docsHeaderLeft}>
-                <FileText size={13} color="#0284c7" />
+                <FileText size={13} color={colors.primary} />
                 <Text variant="label" style={{ color: colors.ink }}>
                   Attached Documents ({documents.length})
                 </Text>
@@ -994,7 +992,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                         </View>
                       )}
                       <View style={styles.docThumbOverlay}>
-                        <Eye size={12} color="#ffffff" />
+                        <Eye size={12} color={colors.onPrimary} />
                       </View>
                     </Pressable>
 
@@ -1008,28 +1006,26 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                         <Pressable
                           onPress={() => onRejectDocumentPrompt?.(doc, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
-                          style={({ pressed }) => [
+                          style={[
                             styles.docActionBtn,
-                            styles.docRejectBtn,
-                            { backgroundColor: pressed ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.12)" },
+                            { borderColor: colors.errorSoft, backgroundColor: colors.errorSoft },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Reject ${doc.label}`}
                         >
-                          <X size={15} color="#ef4444" strokeWidth={2.5} />
+                          <X size={15} color={colors.error} strokeWidth={2.5} />
                         </Pressable>
                         <Pressable
                           onPress={() => void onVerifyDocument?.(doc.id, payload.user_id || item.requested_by)}
                           disabled={isActionLoading || isRejectLoading}
                           style={({ pressed }) => [
                             styles.docActionBtn,
-                            styles.docApproveBtn,
-                            { backgroundColor: pressed ? "#059669" : "#10b981" },
+                            { borderColor: colors.success, backgroundColor: pressed ? colors.successDeep : colors.success },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Approve ${doc.label}`}
                         >
-                          <Check size={15} color="#ffffff" strokeWidth={2.5} />
+                          <Check size={15} color={colors.onPrimary} strokeWidth={2.5} />
                         </Pressable>
                       </View>
                     ) : (
@@ -1038,10 +1034,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           styles.docStatusPill,
                           {
                             backgroundColor: isVerified
-                              ? "rgba(16, 185, 129, 0.12)"
+                              ? colors.successSoft
                               : isRejected
-                              ? "rgba(239, 68, 68, 0.12)"
-                              : "rgba(245, 158, 11, 0.12)",
+                              ? colors.errorSoft
+                              : colors.warningSoft,
                           },
                         ]}
                       >
@@ -1049,10 +1045,10 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                           variant="micro"
                           style={{
                             color: isVerified
-                              ? "#10b981"
+                              ? colors.success
                               : isRejected
-                              ? "#ef4444"
-                              : "#d97706",
+                              ? colors.error
+                              : colors.warningDeep,
                           }}
                         >
                           {isVerified ? "APPROVED" : isRejected ? "REJECTED" : "PENDING"}
@@ -1096,7 +1092,7 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           >
             <View style={styles.docsHeader}>
               <View style={styles.docsHeaderLeft}>
-                <FileText size={13} color="#0284c7" />
+                <FileText size={13} color={colors.primary} />
                 <Text variant="label" style={{ color: colors.ink }}>
                   Attached Documents ({documents.length})
                 </Text>
@@ -1157,17 +1153,14 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         ) : null
       )}
 
-      {/* ── Bottom Action Bar (View Details on left, Quick Actions on right) ── */}
+      {/* ── Bottom Action Bar (Timestamp on bottom left, Quick Actions on right) ── */}
       <View style={[styles.actionBar, { borderTopColor: colors.hairline }]}>
-        <Button
-          variant="outline"
-          size="sm"
-          onPress={handleCardPress}
-          style={styles.detailsBtn}
-        >
-          <Text variant="label">View Details</Text>
-          <ChevronRight size={14} color={colors.ink} style={{ marginLeft: 4 }} />
-        </Button>
+        <View style={styles.timeRow}>
+          <Clock size={12} color={colors.mute} />
+          <Text variant="micro" style={{ color: colors.mute }}>
+            {formatTinyRelativeTime(item.created_at)}
+          </Text>
+        </View>
 
         {showDecideActions ? (
           <View style={styles.decideGroup}>
@@ -1180,17 +1173,17 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               style={[
                 styles.rejectBtn,
                 {
-                  borderColor: "rgba(239, 68, 68, 0.35)",
-                  backgroundColor: isDark ? "rgba(239, 68, 68, 0.12)" : "rgba(239, 68, 68, 0.06)",
+                  borderColor: colors.errorSoft,
+                  backgroundColor: isDark ? colors.errorSoft : colors.errorSoft,
                 },
               ]}
             >
               {isRejectLoading ? (
-                <ActivityIndicator size="small" color="#ef4444" />
+                <ActivityIndicator size="small" color={colors.error} />
               ) : (
                 <>
-                  <XCircle size={14} color="#ef4444" />
-                  <Text variant="label" style={{ color: "#ef4444", marginLeft: 4 }}>
+                  <XCircle size={14} color={colors.error} />
+                  <Text variant="label" style={{ color: colors.error, marginLeft: 4 }}>
                     Reject
                   </Text>
                 </>
@@ -1203,14 +1196,14 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               size="sm"
               onPress={handleApprovePress}
               disabled={isActionLoading || isRejectLoading}
-              style={styles.approveBtn}
+              style={[styles.approveBtn, { backgroundColor: colors.success }]}
             >
               {isActionLoading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (
                 <>
-                  <CheckCircle2 size={14} color="#ffffff" />
-                  <Text variant="label" style={{ color: "#ffffff", marginLeft: 4 }}>
+                  <CheckCircle2 size={14} color={colors.onPrimary} />
+                  <Text variant="label" style={{ color: colors.onPrimary, marginLeft: 4 }}>
                     Approve
                   </Text>
                 </>
@@ -1221,15 +1214,15 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
           <View style={styles.decidedNotice}>
             {item.status === "approved" ? (
               <View style={styles.decidedRow}>
-                <CheckCircle2 size={14} color="#10b981" />
-                <Text variant="label" style={{ color: "#10b981", marginLeft: 4 }}>
+                <CheckCircle2 size={14} color={colors.success} />
+                <Text variant="label" style={{ color: colors.success, marginLeft: 4 }}>
                   Approved
                 </Text>
               </View>
             ) : item.status === "rejected" ? (
               <View style={styles.decidedRow}>
-                <XCircle size={14} color="#ef4444" />
-                <Text variant="label" style={{ color: "#ef4444", marginLeft: 4 }}>
+                <XCircle size={14} color={colors.error} />
+                <Text variant="label" style={{ color: colors.error, marginLeft: 4 }}>
                   Rejected
                 </Text>
               </View>
@@ -1239,7 +1232,17 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
               </Text>
             )}
           </View>
-        ) : null}
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={handleCardPress}
+            style={styles.detailsBtn}
+          >
+            <Text variant="label">View Details</Text>
+            <ChevronRight size={14} color={colors.ink} style={{ marginLeft: 4 }} />
+          </Button>
+        )}
       </View>
     </View>
   );
@@ -1438,11 +1441,9 @@ const styles = StyleSheet.create({
   },
   diffOld: {
     textDecorationLine: "line-through",
-    color: "#ef4444",
     maxWidth: 90,
   },
   diffNew: {
-    color: "#10b981",
     maxWidth: 100,
   },
   shiftConflictGrid: {
@@ -1539,12 +1540,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  docRejectBtn: {
-    borderColor: "rgba(239, 68, 68, 0.3)",
-  },
-  docApproveBtn: {
-    borderColor: "#059669",
-  },
   dashedEmptyCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -1586,7 +1581,6 @@ const styles = StyleSheet.create({
   approveBtn: {
     minHeight: 44,
     paddingHorizontal: 14,
-    backgroundColor: "#10b981",
   },
   decidedNotice: {
     marginLeft: "auto",

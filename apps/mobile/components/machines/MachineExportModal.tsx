@@ -16,9 +16,6 @@ import { showToast } from '../ui';
 import { haptics } from '@/lib/haptics';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Printer, FileSpreadsheet, X, CheckCircle, Clock, ShieldAlert, SlidersHorizontal } from '../ui/icon';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
 import { formatDate, formatTo12Hour } from '@reachinternational/utils';
 import { notifyMachineExported } from '../../lib/notifications';
 import {
@@ -251,6 +248,9 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
     setIsExportingPdf(true);
     try {
       const html = generateReportHtml();
+      // Native export modules are loaded on demand (never registered at app startup)
+      const Print = require('expo-print');
+      const Sharing = require('expo-sharing');
       const { uri } = await Print.printToFileAsync({
         html,
         margins: { top: 20, bottom: 20, left: 20, right: 20 },
@@ -279,6 +279,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
     setIsPrinting(true);
     try {
       const html = generateReportHtml();
+      const Print = require('expo-print');
       await Print.printAsync({ html });
       haptics.success();
     } catch (err: any) {
@@ -323,6 +324,8 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
       const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 
       const fileName = `machine-directory-${activeFilter}-${Date.now()}.csv`;
+      const FileSystem = require('expo-file-system/legacy');
+      const Sharing = require('expo-sharing');
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
       await FileSystem.writeAsStringAsync(fileUri, csvContent, {

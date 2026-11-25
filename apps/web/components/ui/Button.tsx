@@ -54,27 +54,27 @@ export type Props = ButtonProps | LinkProps;
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-sky-700 hover:bg-sky-800 text-white shadow-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-sky-700 hover:bg-sky-800 text-white shadow-xs font-semibold motion-press cursor-pointer",
   "primary-sm":
-    "bg-sky-700 hover:bg-sky-800 text-white shadow-xs text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-sky-700 hover:bg-sky-800 text-white shadow-xs text-xs font-semibold motion-press cursor-pointer",
   secondary:
-    "border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs font-medium active:scale-[0.98] transition-all cursor-pointer",
+    "border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs font-medium motion-press cursor-pointer",
   "ghost-sm":
-    "border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs text-xs font-medium active:scale-[0.98] transition-all cursor-pointer",
+    "border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs text-xs font-medium motion-press cursor-pointer",
   danger:
-    "bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold motion-press cursor-pointer",
   "danger-sm":
-    "bg-rose-600 hover:bg-rose-700 text-white shadow-xs text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-rose-600 hover:bg-rose-700 text-white shadow-xs text-xs font-semibold motion-press cursor-pointer",
   destructive:
-    "bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-rose-600 hover:bg-rose-700 text-white shadow-xs font-semibold motion-press cursor-pointer",
   success:
-    "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-semibold motion-press cursor-pointer",
   "success-sm":
-    "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs text-xs font-semibold active:scale-[0.98] transition-all cursor-pointer",
+    "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs text-xs font-semibold motion-press cursor-pointer",
   outline:
-    "border border-[var(--color-hairline)] bg-transparent hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-medium active:scale-[0.98] transition-all cursor-pointer",
+    "border border-[var(--color-hairline)] bg-transparent hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-medium motion-press cursor-pointer",
   ghost:
-    "bg-transparent hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-medium active:scale-[0.98] transition-all cursor-pointer",
+    "bg-transparent hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-medium motion-press cursor-pointer",
   link:
     "bg-transparent hover:underline text-sky-600 dark:text-sky-400 p-0 h-auto font-medium shadow-none cursor-pointer",
 };

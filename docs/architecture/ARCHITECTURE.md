@@ -2,7 +2,7 @@
 
 > Reference specification for monorepo topology, Next.js Web App Router architecture, Expo Native Mobile architecture, and Supabase PostgreSQL persistence layer.
 
-For the binding authoritative policy, see [ARCHITECTURE.md](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/ARCHITECTURE.md) and [AI/RULES/ARCHITECTURE.md](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/AI/RULES/ARCHITECTURE.md).
+For the binding authoritative policy, see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [AI/RULES/ARCHITECTURE.md](../../AI/RULES/ARCHITECTURE.md).
 
 ---
 

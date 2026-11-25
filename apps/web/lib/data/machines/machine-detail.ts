@@ -2,7 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/dal";
+import { MACHINE_CAPABILITIES, hasMachineCapability } from "@reachinternational/permissions";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { Machine, OperatorMachineAssignment } from "@/lib/types/database";
 
@@ -300,19 +302,33 @@ export async function resolveMachineId(idOrCode: string): Promise<string | null>
  * Fetch detailed machine record by UUID or M/C-XXXX machine ID.
  * Deduplicates in-flight calls via React cache() and caches cross-request with targeted tag TAGS.machineDetail(id).
  */
-export const getMachineById = cache(async (idOrCode: string): Promise<Machine | null> => {
+// Operator projection: no GSTIN/PAN/billing compliance fields, no rates.
+const OPERATOR_MACHINE_DETAIL_COLUMNS = MACHINE_DETAIL_COLUMNS.replace(
+  /client:clients!machines_client_id_fkey\([\s\S]*?\)\n`/,
+  `client:clients!machines_client_id_fkey(id, code, company_name, city, state)\n`
+);
+
+export const getMachineById = cache(async (
+  idOrCode: string,
+  options?: { includeClientCompliance?: boolean }
+): Promise<Machine | null> => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
   const targetId = isValidUuid(idOrCode) ? idOrCode : await resolveMachineId(idOrCode);
   if (!targetId) return null;
 
+  const includeCompliance = options?.includeClientCompliance !== false;
+  const columns = includeCompliance
+    ? MACHINE_DETAIL_COLUMNS
+    : OPERATOR_MACHINE_DETAIL_COLUMNS;
+
   const fetchCached = unstable_cache(
     async (): Promise<Machine | null> => {
       const supabase = createSupabaseAdminClient();
       const { data, error } = await supabase
         .from("machines")
-        .select(MACHINE_DETAIL_COLUMNS)
+        .select(columns)
         .eq("id", targetId)
         .maybeSingle();
 
@@ -324,7 +340,7 @@ export const getMachineById = cache(async (idOrCode: string): Promise<Machine | 
       const hydrated = await hydrateMachinePersonnelSingle(data, supabase);
       return hydrated as unknown as Machine;
     },
-    [`machines-detail-${targetId}`],
+    [`machines-detail-${targetId}-${includeCompliance ? "full" : "operator"}`],
     {
       revalidate: CACHE_TIERS.CLASS_B_FLEET, // 60 seconds SWR
       tags: [TAGS.machineDetail(targetId), TAGS.machines],
@@ -429,7 +445,7 @@ export const getOperatorAssignedMachine = cache(async (operatorId: string): Prom
 
       const { data: machineData, error: mError } = await supabase
         .from("machines")
-        .select(MACHINE_DETAIL_COLUMNS)
+        .select(OPERATOR_MACHINE_DETAIL_COLUMNS)
         .eq("id", targetMachineId)
         .maybeSingle();
 
@@ -452,39 +468,46 @@ export const getOperatorAssignedMachine = cache(async (operatorId: string): Prom
  * Fetch active rental contract metadata for a machine.
  * Deduplicated per-request and cached with 60s SWR under targeted machine detail tag.
  */
-export const getMachineActiveRental = cache(async (machineId: string) => {
+export const getMachineActiveRental = cache(async (idOrCode: string, options?: { includeRate?: boolean }) => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+
+  const targetId = isValidUuid(idOrCode) ? idOrCode : await resolveMachineId(idOrCode);
+  if (!targetId) return null;
+
+  // Commercial rates are only projected for roles with machine.rental_rates_view.
+  const includeRate = options?.includeRate === true;
+  const rentalColumns = `
+    id,
+    contract_number,
+    client_id,
+    start_date,
+    end_date,
+    ${includeRate ? "monthly_rate," : ""}
+    status,
+    client:clients(
+      id, code, company_name, city, district, state, pincode, phone,
+      contact_person, street, gstin, pan_number, is_billing_address_different,
+      billing_address, billing_city, billing_district, billing_state, billing_pincode, status
+    )
+  `;
 
   const fetchCached = unstable_cache(
     async () => {
       const supabase = createSupabaseAdminClient();
       const { data } = await supabase
         .from("rental_contracts")
-        .select(`
-          id,
-          contract_number,
-          client_id,
-          start_date,
-          end_date,
-          monthly_rate,
-          status,
-          client:clients(
-            id, code, company_name, city, district, state, pincode, phone,
-            contact_person, street, gstin, pan_number, is_billing_address_different,
-            billing_address, billing_city, billing_district, billing_state, billing_pincode, status
-          )
-        `)
-        .eq("machine_id", machineId)
+        .select(rentalColumns)
+        .eq("machine_id", targetId)
         .eq("status", "active")
         .maybeSingle();
 
       return data || null;
     },
-    [`machines-active-rental-${machineId}`],
+    [`machines-active-rental-${targetId}-${includeRate ? "rate" : "no-rate"}`],
     {
       revalidate: CACHE_TIERS.CLASS_B_FLEET, // 60 seconds SWR
-      tags: [TAGS.machineDetail(machineId), TAGS.machines],
+      tags: [TAGS.machineDetail(targetId), TAGS.machines],
     }
   );
 
@@ -631,19 +654,12 @@ export async function getPaginatedMachineHourMeterLogs(
   const to = from + pageSize - 1;
   query = query.range(from, to);
 
-  // 8. Execute in parallel with operator & total hours metadata
+  // 8. Execute in parallel with the bounded operator/hours aggregate RPC
+  //    (previously this downloaded every log row for the machine on every page).
+  const sessionClient = await createSupabaseServerClient();
   const [dataResult, metadataResult] = await Promise.all([
     query,
-    supabase
-      .from("machine_hour_logs")
-      .select(
-        `
-        running_hours,
-        operator_id,
-        operator:users!machine_hour_logs_operator_id_fkey(id, full_name)
-      `
-      )
-      .eq("machine_id", machineId),
+    sessionClient.rpc("get_machine_hour_log_summary", { p_machine_id: machineId }),
   ]);
 
   const { data, count, error } = dataResult;
@@ -651,20 +667,13 @@ export async function getPaginatedMachineHourMeterLogs(
     console.error("Error fetching paginated machine hour logs:", error.message || error);
   }
 
-  // Aggregate total running hours and unique operators
-  let totalHoursRun = 0;
-  const opsMap = new Map<string, string>();
-
-  if (metadataResult.data && Array.isArray(metadataResult.data)) {
-    metadataResult.data.forEach((row: any) => {
-      totalHoursRun += Number(row.running_hours) || 0;
-      const opId = row.operator_id || row.operator?.id;
-      const opName = row.operator?.full_name;
-      if (opId && opName) {
-        opsMap.set(opId, opName);
-      }
-    });
-  }
+  // Aggregate summary is computed inside PostgreSQL (single indexed aggregate).
+  const summary = (metadataResult.data || {}) as {
+    total_hours?: number;
+    operators?: Array<{ id: string; name: string }>;
+  };
+  const totalHoursRun = Number(summary.total_hours || 0);
+  const availableOperators = (summary.operators || []).filter((op) => op?.id && op?.name);
 
   const total = count || 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -676,7 +685,7 @@ export async function getPaginatedMachineHourMeterLogs(
     pageSize,
     totalPages,
     totalHoursRun: Number(totalHoursRun.toFixed(1)),
-    availableOperators: Array.from(opsMap.entries()).map(([id, name]) => ({ id, name })),
+    availableOperators,
   };
 }
 
@@ -728,186 +737,14 @@ export async function getMachineHourMeterLogs(machineId: string, limit = 50) {
 }
 
 /**
- * M7: Fetch lightweight machine summary only (0 extra relations).
- */
-export const getMachineSummaryOnly = cache(async (id: string) => {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("machines")
-    .select(`
-      id,
-      machine_id,
-      model,
-      serial_number,
-      year_of_mfg,
-      manufacturer,
-      status,
-      health_status,
-      hour_meter,
-      client_id,
-      current_supervisor_id,
-      current_operator_id,
-      created_at,
-      updated_at
-    `)
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
-  }
-  return data;
-});
-
-/**
- * M7: Fetch client information linked to a machine.
- */
-export const getMachineClientOnly = cache(async (machineId: string) => {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  const supabase = createSupabaseAdminClient();
-
-  const { data: machine } = await supabase
-    .from("machines")
-    .select("client_id")
-    .eq("id", machineId)
-    .maybeSingle();
-
-  if (!machine?.client_id) return null;
-
-  const { data: client, error } = await supabase
-    .from("clients")
-    .select(`
-      id, code, company_name, city, district, state, pincode, phone,
-      contact_person, street, gstin, pan_number, is_billing_address_different,
-      billing_address, billing_city, billing_district, billing_state, billing_pincode, status
-    `)
-    .eq("id", machine.client_id)
-    .maybeSingle();
-
-  if (error) return null;
-  return client;
-});
-
-/**
- * M7: Fetch supervisor details linked to a machine.
- */
-export const getMachineSupervisorsOnly = cache(async (machineId: string) => {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  const supabase = createSupabaseAdminClient();
-
-  const { data: machine } = await supabase
-    .from("machines")
-    .select("current_supervisor_id, supervisor_ids")
-    .eq("id", machineId)
-    .maybeSingle();
-
-  if (!machine) return [];
-
-  const supIds = new Set<string>();
-  if (machine.current_supervisor_id) supIds.add(machine.current_supervisor_id);
-  if (Array.isArray(machine.supervisor_ids)) {
-    machine.supervisor_ids.forEach((id: string) => id && supIds.add(id));
-  }
-
-  if (supIds.size === 0) return [];
-
-  const { data: users, error } = await supabase
-    .from("users")
-    .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
-    .in("id", Array.from(supIds));
-
-  if (error) return [];
-  return (users || []).map((u) => ({
-    ...u,
-    is_primary: u.id === machine.current_supervisor_id,
-  }));
-});
-
-/**
- * M7: Fetch maintenance records for a machine.
- */
-export const getMachineMaintenanceLogs = cache(async (machineId: string, limit = 50) => {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("machine_hour_logs")
-    .select(`
-      id,
-      machine_id,
-      operator_id,
-      supervisor_id,
-      log_date,
-      start_meter,
-      end_meter,
-      running_hours,
-      machine_condition,
-      remarks,
-      created_at,
-      operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone)
-    `)
-    .eq("machine_id", machineId)
-    .or("machine_condition.eq.needs_attention,machine_condition.eq.under_maintenance,remarks.ilike.%service%,remarks.ilike.%maintenance%,remarks.ilike.%repair%")
-    .order("log_date", { ascending: false })
-    .limit(limit);
-
-  if (error) return [];
-  return data || [];
-});
-
-/**
- * M7: Fetch breakdown history for a machine.
- */
-export const getMachineBreakdownLogs = cache(async (machineId: string, limit = 50) => {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("machine_hour_logs")
-    .select(`
-      id,
-      machine_id,
-      operator_id,
-      supervisor_id,
-      log_date,
-      start_time,
-      end_time,
-      is_breakdown,
-      breakdown_hours,
-      breakdown_duration,
-      machine_condition,
-      remarks,
-      created_at,
-      operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone)
-    `)
-    .eq("machine_id", machineId)
-    .or("is_breakdown.eq.true,machine_condition.eq.breakdown,breakdown_hours.gt.0")
-    .order("log_date", { ascending: false })
-    .limit(limit);
-
-  if (error) return [];
-  return data || [];
-});
-
-/**
- * M7: Fetch audit history for a machine (restricted to manager or above).
+ * Fetch machine audit history. Visibility derives from the shared capability
+ * matrix (manager tier + supervisor), not a hardcoded role list.
  */
 export const getMachineAuditLogs = cache(async (machineId: string, limit = 50) => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
 
-  const canViewAudit =
-    user.role === "super_admin" ||
-    user.role === "admin" ||
-    user.role === "manager";
-
-  if (!canViewAudit) {
+  if (!hasMachineCapability(user.role, MACHINE_CAPABILITIES.AUDIT_VIEW)) {
     return { unauthorized: true, data: [] };
   }
 
@@ -931,6 +768,7 @@ export const getMachineAuditLogs = cache(async (machineId: string, limit = 50) =
       created_at,
       user:users(id, full_name, role)
     `)
+    .eq("entity_type", "machine")
     .eq("entity_id", machineId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -939,43 +777,3 @@ export const getMachineAuditLogs = cache(async (machineId: string, limit = 50) =
   return { unauthorized: false, data: data || [] };
 });
 
-/**
- * M7: Fetch documents & compliance certificates for a machine.
- */
-export const getMachineDocuments = cache(async (machineId: string) => {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-
-  return [
-    {
-      id: `doc-fitness-${machineId}`,
-      title: "Annual Fitness Certificate",
-      type: "pdf",
-      category: "compliance",
-      status: "verified",
-      issue_date: "2026-01-15",
-      expiry_date: "2027-01-14",
-      url: null,
-    },
-    {
-      id: `doc-insurance-${machineId}`,
-      title: "Equipment Comprehensive Insurance",
-      type: "pdf",
-      category: "insurance",
-      status: "verified",
-      issue_date: "2026-03-01",
-      expiry_date: "2027-02-28",
-      url: null,
-    },
-    {
-      id: `doc-manual-${machineId}`,
-      title: "OEM Operator & Safety Manual",
-      type: "pdf",
-      category: "manual",
-      status: "available",
-      issue_date: null,
-      expiry_date: null,
-      url: null,
-    },
-  ];
-});

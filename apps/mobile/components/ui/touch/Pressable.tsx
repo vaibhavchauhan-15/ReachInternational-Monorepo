@@ -19,11 +19,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSpring,
   type SharedValue,
 } from 'react-native-reanimated';
 import { motion } from '@reachinternational/design-tokens';
 import { haptics, type HapticKind } from '../../../lib/haptics';
+import { PRESS } from '../../../lib/motion/tokens';
 import { useTheme } from '../ThemeProvider';
 import { useReducedMotion } from '../../../lib/preferences/useReducedMotion';
 import { getTouchFeedback, type TouchVariant } from './feedback';
@@ -48,6 +48,17 @@ export interface PressableProps extends Omit<RNPressableProps, 'style' | 'childr
   hitSlopToMin48?: boolean;
   /** Visual & interaction loading state */
   loading?: boolean;
+  /**
+   * Opt-in UI-thread press scale override (e.g. PRESS.scale = 0.97).
+   * Leave undefined to inherit the variant's matrix scale from feedback.ts.
+   * Backward compatible: variants that intentionally hold 1.0 (cards, list rows,
+   * tabs) are unaffected unless a caller explicitly opts in.
+   */
+  pressScale?: number;
+  /** Opt-in press-in duration in ms (defaults to PRESS.inMs = 90). */
+  pressInMs?: number;
+  /** Opt-in press-out duration in ms (defaults to PRESS.outMs = 110). */
+  pressOutMs?: number;
   /** Legacy compatibility for components migrated from TouchableOpacity */
   activeOpacity?: number;
   style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
@@ -67,6 +78,9 @@ export const Pressable = memo(
       rippleRadius,
       hitSlopToMin48 = true,
       loading = false,
+      pressScale,
+      pressInMs = PRESS.inMs,
+      pressOutMs = PRESS.outMs,
       disabled = false,
       activeOpacity: _activeOpacity,
       style,
@@ -87,6 +101,10 @@ export const Pressable = memo(
     const isInteractive = !disabled && !loading;
     const progress = useSharedValue(0);
 
+    // Resolved micro-scale: explicit opt-in override wins, otherwise the variant matrix value
+    const scaleTarget = pressScale ?? config.scale;
+    const hasScaleFeedback = scaleTarget !== 1.0;
+
     // Reset progress and pressed state when component unmounts or interaction state changes
     useEffect(() => {
       progress.value = 0;
@@ -97,13 +115,13 @@ export const Pressable = memo(
       };
     }, [disabled, loading, progress]);
 
-    // Micro-scale running on the UI thread (strictly 1.0 on cards, list items, and tabs)
+    // Micro-scale running on the UI thread (strictly 1.0 unless a variant or caller opts in)
     const animStyle = useAnimatedStyle(() => {
       'worklet';
-      if (reduceMotion || config.scale === 1.0) {
+      if (reduceMotion || !hasScaleFeedback) {
         return {};
       }
-      const currentScale = 1 - (1 - config.scale) * progress.value;
+      const currentScale = 1 - (1 - scaleTarget) * progress.value;
       return {
         transform: [{ scale: currentScale }],
       };
@@ -168,33 +186,33 @@ export const Pressable = memo(
     const handlePressIn = (_e: GestureResponderEvent) => {
       if (!isInteractive) return;
       setIsPressed(true);
-      if (config.scale !== 1.0 && !reduceMotion) {
-        progress.value = withTiming(1, { duration: 80 });
+      if (hasScaleFeedback && !reduceMotion) {
+        progress.value = withTiming(1, { duration: pressInMs });
+      }
+    };
+
+    const releaseScale = () => {
+      if (hasScaleFeedback && !reduceMotion) {
+        progress.value = withTiming(0, { duration: pressOutMs });
       }
     };
 
     const handlePressOut = (_e: GestureResponderEvent) => {
       if (!isInteractive) return;
       setIsPressed(false);
-      if (config.scale !== 1.0 && !reduceMotion) {
-        progress.value = withSpring(0, { damping: 15, stiffness: 300 });
-      }
+      releaseScale();
     };
 
     const handleResponderTerminate = () => {
       setIsPressed(false);
-      if (config.scale !== 1.0 && !reduceMotion) {
-        progress.value = withSpring(0, { damping: 15, stiffness: 300 });
-      }
+      releaseScale();
     };
 
     const handlePress = (e: GestureResponderEvent) => {
       if (!isInteractive) return;
 
       setIsPressed(false);
-      if (config.scale !== 1.0 && !reduceMotion) {
-        progress.value = withSpring(0, { damping: 15, stiffness: 300 });
-      }
+      releaseScale();
 
       // Resolve semantic haptic trigger
       const targetHaptic = haptic !== undefined ? haptic : config.defaultHaptic;

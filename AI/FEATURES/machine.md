@@ -74,3 +74,39 @@ Manages machine fleet registry, serial numbers, client assignments, supervisor a
 - **Real-Time Frontend Validation**: `MachineModal.tsx` and `machine-edit-client.tsx` validate `serial_number` on blur using `checkMachineSerialNumberAvailable`, displaying instant inline feedback before form submission.
 - **Server Action Pre-Validation**: `createMachine()` and `updateMachine()` query existing records case-insensitively and block duplicates with human-readable error messages identifying the existing machine ID.
 - **Excel Bulk Import Duplicate Detection**: `importMachinesFromExcel()` performs dual-stage duplicate validation: (1) intra-file duplicate detection across rows in the spreadsheet, and (2) database pre-fetched serial number checks.
+## Native RBAC, Interaction & Performance Pass (2026-11-23)
+
+Full pre-edit audit: [`machine-native-rbac-audit.md`](./machine-native-rbac-audit.md).
+
+- **Capability source of truth**: `packages/permissions/src/machines.ts` — `MACHINE_CAPABILITIES`, `MACHINE_ROLE_CAPABILITIES`,
+  `hasMachineCapability`, `getMachineCapabilities`, `getMachineScope`, `canAccessMachinesRoute`, `isOperatorMachineView`.
+  HR/sales/marketing hold no machine capability; operator holds `machine.view` + `machine.operator_view` only.
+- **Native enforcement**: route redirect (`getMobileRoleHomeRoute`), capability-gated header actions/cards/modals (unmounted, not hidden),
+  lazily mounted modal/drawer trees, capability-gated audit fetch and exports.
+- **Operator contract**: `public.get_operator_assigned_machines(p_machine_id uuid default null)` (migration 232) — SECURITY DEFINER,
+  operators only (SQLSTATE 42501 otherwise), returns machine_id/model/serial/manufacturer/year/health/HMR/rental status/worksite/
+  site supervisor/shift codes. No rates, audit, personnel arrays or customer PII.
+- **Supervisor editor**: `MachineModal` gains an OPERATIONAL STATUS section (HMR + health) for supervisors; rental status remains
+  derived from `client_id` by `sync_machine_rental_status`, and an `inactive` machine is no longer downgraded to `available` on save.
+- **Cache discipline**: TanStack cache is the single source of truth (`patchMachine`, `removeMachineFromCache`, `resyncMachines`);
+  filter hydration gates the first query; delete is optimistic with authoritative rollback.
+- **Tests**: `apps/mobile/test/test-machines-rbac.mjs` (five enforcement layers + live Dev negative tests per role),
+  updated `test-machines-workflows.mjs`, `test-machine-detail-mobile-opt.mjs`, `test-ui-states.mjs`, `run-tests.mjs`.
+- **DB profiling (Dev)**: fleet p1 0.18 ms / p2 0.15 ms, trigram search 0.24 ms, detail 0.10 ms (Index Scan), personnel join 0.29 ms,
+  operator RPC warm ≈2.5 ms, supervisor list 5.66 ms (per-row RLS helper — set-based rewrite recommended at fleet scale).
+
+## Web RBAC, Bug & Performance Pass (2026-11-23)
+
+- **Capability source of truth**: `packages/permissions/src/machines.ts` (14 codes) + `apps/web/lib/machines/authorization.ts`.
+  Server actions return `{ code: "MACHINE_FORBIDDEN", status: 403 }`; pages redirect HR/sales/marketing to `/dashboard`;
+  `canAccessMachineRecord` binds record scope to `public.check_user_can_access_machine`.
+- **Routes/DAL**: `/machines` operator branch reads one assigned machine and skips fleet list/KPI/client queries.
+  `/machines/[...id]` redirects out-of-scope records, hides metadata for unauthorized roles, and projects rental rates/client
+  compliance only with the matching capability. Module layout: `machine-list`, `machine-detail`, `machine-kpis`, `machine-mutations`
+  (thin actions: validate → authorize → DAL → invalidate).
+- **UI**: capability props from the server; operator table/cards with Log Entry + History, no KPI/filter/export/audit mounted;
+  detail modals loaded with `next/dynamic`/`ssr:false` only when open; rental rate cell and audit tab gated.
+- **DB**: `231_machines_rbac_and_query_hardening.sql` (helper/RLS/trigger/KPI 42501/indexes/bounded HMR summary) and
+  `233_set_based_machines_rls.sql` (set-based supervisor predicate); rollbacks in `supabase/rollbacks/`.
+- **Tests**: `apps/web/scripts/test-machines-web-rbac.mjs` (85 static guards), `packages/permissions/src/machines.test.ts` (36),
+  Dev RLS harness (`scratch/rls-test.mjs`) for per-role positive/negative behavior.

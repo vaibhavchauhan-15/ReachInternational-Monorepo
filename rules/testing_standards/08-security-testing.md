@@ -1,7 +1,7 @@
 # Security Testing & Vulnerability Verification Standards
 
 > **AUTOMATED AND NEGATIVE SECURITY TESTING PROTOCOLS COMPLIANT WITH OWASP ASVS**  
-> *Cross-references the monorepo security baseline in [`security/SECURITY-TESTING.md`](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/security/SECURITY-TESTING.md). Security is verified through rigorous negative testing and zero-trust verification.*
+> *Cross-references the monorepo security baseline in [`security/SECURITY-TESTING.md`](../../security/SECURITY-TESTING.md). Security is verified through rigorous negative testing and zero-trust verification.*
 
 ---
 

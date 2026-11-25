@@ -628,7 +628,10 @@ try {
   assert(pressableCheck.includes('sanitizedChildren'), 'Pressable implements sanitizedChildren defense-in-depth against empty strings');
 
   const mobileMachineCardCheck = fs.readFileSync(path.join(__dirname, 'components/machines/MobileMachineCard.tsx'), 'utf8');
-  assert(mobileMachineCardCheck.includes('Boolean(machine.serial_number || machine.year_of_mfg)'), 'MobileMachineCard uses Boolean check for metadata row');
+  assert(
+    mobileMachineCardCheck.includes('Boolean(machine.model || machine.serial_number || machine.year_of_mfg || machine.manufacturer)'),
+    'MobileMachineCard uses Boolean check for metadata row (model / serial / manufacturer / year)'
+  );
 
   // Test 225: Optimized In-App Document & Native PDF Viewer (Zero Google Drive Redirects, @kishannareshpal/expo-pdf, Shared Cache)
   const viewerModalCheck = fs.readFileSync(path.join(__dirname, 'components/documents/MobileDocumentViewerModal.tsx'), 'utf8');

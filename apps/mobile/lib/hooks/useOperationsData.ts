@@ -1,5 +1,11 @@
 import React, { useMemo } from 'react';
-import { useQuery, useInfiniteQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import {
+  useQuery,
+  useInfiniteQuery,
+  useQueryClient,
+  keepPreviousData,
+  type QueryClient,
+} from '@tanstack/react-query';
 import {
   normalizeOperationsFilter,
   RawOperationsFilterInput,
@@ -19,6 +25,15 @@ import type {
 } from '@reachinternational/types';
 import type { QueuedMutation, MutationStatus } from '../offline/types';
 import { supabase } from '../supabase';
+
+/**
+ * Live operations surfaces (Today's Shift Monitor + roster counters).
+ * Realtime broadcast events patch the cache instantly, so these TTLs only act as a
+ * safety net: a 20s freshness window prevents refetch-on-focus storms, and the
+ * 60s poll never runs while the app is backgrounded.
+ */
+export const OPERATIONS_LIVE_TTL_MS = 20_000;
+export const OPERATIONS_LIVE_POLL_MS = 60_000;
 
 export interface ActiveShiftAssignment {
   id: string;
@@ -555,8 +570,9 @@ export function useTodayShiftMonitor(
       return (data as TodayShiftMonitorRow[]) || [];
     },
     placeholderData: keepPreviousData,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: OPERATIONS_LIVE_TTL_MS,
+    refetchInterval: OPERATIONS_LIVE_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -622,8 +638,9 @@ export function useTodayShiftSummary(
       return (data as TodayShiftSummaryData) || { total: 0, entered: 0, pending: 0, unassigned: 0 };
     },
     placeholderData: keepPreviousData,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: OPERATIONS_LIVE_TTL_MS,
+    refetchInterval: OPERATIONS_LIVE_POLL_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -663,8 +680,9 @@ export function useTodayShiftMonitorInfiniteQuery({
     ],
     enabled: Boolean(actorId) && enabled,
     initialPageParam: 1,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: OPERATIONS_LIVE_TTL_MS,
+    refetchInterval: OPERATIONS_LIVE_POLL_MS,
+    refetchIntervalInBackground: false,
     placeholderData: keepPreviousData,
     getNextPageParam: (lastPage) => {
       return lastPage.hasMore ? lastPage.page + 1 : undefined;
@@ -1243,3 +1261,169 @@ export function useOperationsClientShifts(clientId?: string | null) {
 }
 
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Realtime roster cache patching (Operations — Today's Shift Monitor)
+//
+// Broadcast events from `operations-roster` carry enough information to patch the
+// cached roster row in place. Patching keeps the first paint instant (0 network
+// round-trips) and turns a burst of roster events into a single coalesced
+// reconcile instead of one full refetch per event.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OperationsRosterEvent {
+  action?: 'assigned' | 'unassigned' | 'updated';
+  machineId?: string | null;
+  operatorId?: string | null;
+  shiftCode?: string | null;
+  logDate?: string | null;
+  startMeter?: number | null;
+  endMeter?: number | null;
+  runningHours?: number | null;
+}
+
+function normalizeRosterShiftCode(code?: string | null): string {
+  if (!code || typeof code !== 'string') return '';
+  return code.trim().replace(/^shift\s*/i, '').toUpperCase();
+}
+
+function rosterRowMatches(
+  row: TodayShiftMonitorRow,
+  machineId?: string | null,
+  shiftCode?: string | null,
+  logDate?: string | null
+): boolean {
+  if (!machineId || row.machine_id !== machineId) return false;
+  const rowShift = normalizeRosterShiftCode(row.shift_code);
+  const targetShift = normalizeRosterShiftCode(shiftCode);
+  if (targetShift && rowShift && rowShift !== targetShift) return false;
+  // Guard against patching a cached roster for a different calendar day
+  if (logDate && row.log_date && row.log_date !== logDate) return false;
+  return true;
+}
+
+function shiftSummaryForTransition(
+  summary: TodayShiftMonitorPaginatedPage['summary'],
+  from: TodayShiftMonitorRow['status'],
+  to: TodayShiftMonitorRow['status']
+): TodayShiftMonitorPaginatedPage['summary'] {
+  if (from === to) return summary;
+  const next = { ...summary };
+  if (from === 'entered') next.entered = Math.max(0, next.entered - 1);
+  if (from === 'pending') next.pending = Math.max(0, next.pending - 1);
+  if (from === 'unassigned') next.unassigned = Math.max(0, next.unassigned - 1);
+  if (to === 'entered') next.entered += 1;
+  if (to === 'pending') next.pending += 1;
+  if (to === 'unassigned') next.unassigned += 1;
+  return next;
+}
+
+/**
+ * Applies a broadcast event to a single roster row.
+ * Returns the original row reference when nothing changed, so cache notifications are
+ * skipped for unrelated rows (keeps FlatList cells from re-rendering needlessly).
+ */
+function applyRosterEventToRow(
+  row: TodayShiftMonitorRow,
+  event: OperationsRosterEvent,
+  kind: 'log_entered' | 'assignment_changed'
+): TodayShiftMonitorRow {
+  if (!rosterRowMatches(row, event.machineId, event.shiftCode, event.logDate)) return row;
+
+  if (kind === 'log_entered') {
+    if (row.status === 'entered') return row;
+    return {
+      ...row,
+      status: 'entered' as const,
+      operator_id: event.operatorId ?? row.operator_id,
+      start_meter: event.startMeter ?? row.start_meter,
+      end_meter: event.endMeter ?? row.end_meter,
+      running_hours: event.runningHours ?? row.running_hours,
+      current_meter: event.endMeter ?? row.current_meter,
+    };
+  }
+
+  if (event.action === 'unassigned') {
+    if (row.status === 'unassigned') return row;
+    return {
+      ...row,
+      status: 'unassigned' as const,
+      operator_id: null,
+      operator_name: null,
+      operator_phone: null,
+      operator_employee_id: null,
+      log_id: null,
+      entered_by: null,
+      entered_by_name: null,
+      entry_source: null,
+      start_meter: null,
+      end_meter: null,
+      running_hours: null,
+    };
+  }
+
+  // 'assigned' / 'updated': the broadcast carries no operator identity, so a guessed patch
+  // would render the wrong name. Leave the row and let the coalesced reconcile fetch it.
+  return row;
+}
+
+/**
+ * Patches the cached shift monitor roster from a `log_entered` / `assignment_changed`
+ * broadcast payload.
+ *
+ * Handles both cache shapes:
+ *  - `['operations','today-shift-monitor']`            -> TodayShiftMonitorRow[]  (current)
+ *  - `['operations','today-shift-monitor-infinite']`   -> paginated pages         (legacy)
+ *
+ * Returns true when at least one cached row actually changed (the caller then schedules a
+ * single coalesced reconcile to materialise server-authoritative fields).
+ */
+export function patchTodayShiftMonitorRoster(
+  queryClient: QueryClient,
+  event: OperationsRosterEvent,
+  kind: 'log_entered' | 'assignment_changed'
+): boolean {
+  if (!event?.machineId) return false;
+  let patched = false;
+
+  // Shape 1: plain day-roster array (authoritative on mobile)
+  queryClient.setQueriesData<TodayShiftMonitorRow[]>(
+    { queryKey: ['operations', 'today-shift-monitor'] },
+    (rows) => {
+      if (!Array.isArray(rows) || rows.length === 0) return rows;
+      let changed = false;
+      const next = rows.map((row) => {
+        const patchedRow = applyRosterEventToRow(row, event, kind);
+        if (patchedRow !== row) changed = true;
+        return patchedRow;
+      });
+      if (!changed) return rows;
+      patched = true;
+      return next;
+    }
+  );
+
+  // Shape 2: legacy paginated pages (kept so older cached entries stay consistent)
+  queryClient.setQueriesData<TodayShiftMonitorPaginatedPage>(
+    { queryKey: ['operations', 'today-shift-monitor-infinite'] },
+    (page) => {
+      if (!page || !Array.isArray(page.rows) || page.rows.length === 0) return page;
+      let pageChanged = false;
+      let summary = page.summary;
+
+      const rows = page.rows.map((row) => {
+        const patchedRow = applyRosterEventToRow(row, event, kind);
+        if (patchedRow === row) return row;
+        summary = shiftSummaryForTransition(summary, row.status, patchedRow.status);
+        pageChanged = true;
+        return patchedRow;
+      });
+
+      if (!pageChanged) return page;
+      patched = true;
+      return { ...page, rows, summary };
+    }
+  );
+
+  return patched;
+}

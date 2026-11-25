@@ -30,10 +30,10 @@ const itemStyles: Record<AccordionVariant, string> = {
 
 const triggerStyles: Record<AccordionVariant, string> = {
   default:
-    'gap-4 py-4 text-base font-semibold hover:text-foreground [&[data-state=open]]:text-foreground cursor-pointer',
-  card: 'gap-4 px-6 py-4.5 text-base font-bold hover:text-foreground text-foreground cursor-pointer',
-  filled: 'gap-4 px-4 py-3.5 text-base font-semibold hover:text-foreground cursor-pointer',
-  ghost: 'gap-3 rounded-lg py-3 text-base font-semibold hover:text-foreground cursor-pointer',
+    'motion-press gap-4 rounded-lg py-4 text-base font-semibold hover:text-foreground [&[data-state=open]]:text-foreground cursor-pointer',
+  card: 'motion-press gap-4 px-6 py-4.5 text-base font-bold hover:text-foreground text-foreground cursor-pointer',
+  filled: 'motion-press gap-4 px-4 py-3.5 text-base font-semibold hover:text-foreground cursor-pointer',
+  ghost: 'motion-press gap-3 rounded-lg py-3 text-base font-semibold hover:text-foreground cursor-pointer',
 }
 
 const contentStyles: Record<AccordionVariant, string> = {

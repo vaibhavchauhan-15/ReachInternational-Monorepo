@@ -139,6 +139,15 @@
   - `get_operator_dashboard(p_operator_id UUID)`: Assigned machine, client worksite, today's entry status, last HMR reading, shift + alerts.
 - `084_operator_entry_context_rpc.sql`: `get_operator_entry_context(p_operator_id UUID)` returns assigned machine, client, and last HMR.
 
+### Approvals Engine RPCs (`approval_*`)
+All are `SECURITY DEFINER` with `SET search_path = 'public', 'pg_temp'`. Execute is revoked from `anon`/`PUBLIC` everywhere; the client contract (`approval_list`, `approval_counts`, `approval_get`, `approval_submit`, `approval_cancel`, `approval_approve_all`, `approval_decide`) is granted to `authenticated` + `service_role` only, and the internal domain handlers plus `approval_expire_due()` are service-role only.
+- `approval_list(p_status, p_type_key, p_cursor_created_at, p_cursor_id, p_limit)` -> `{ items, next_cursor, has_more, pending_total }`. Keyset cursor `(created_at, id)`, no `OFFSET`, top-level rows only (`parent_id IS NULL`), each row carries `bound_request_ids` for its group.
+- `approval_counts()` -> `{ total, by_type }` over top-level pending rows only, so badges match the queue.
+- `approval_decide(p_request_id, p_decision, p_note, p_expected_version, p_actor_id, p_idempotency_key)` -> new state. One transaction: `auth.uid()`, approver-pool check against `approval_types.approver_roles`, self-approval block, `FOR UPDATE` row lock + status re-check, dual-control votes, then decision/event/audit/outbox and an atomic cascade to `parent_id` children. Errors: `42501` unauthorised, `P0002` unknown id, `P0003` version conflict, `P0004` already decided.
+- `approval_approve_all(...)` bulk path, top-level rows only, cascades children, skips the actor's own requests unless the type allows self-approve, returns `skipped_ids`.
+- `approval_apply_registration/document_verify/document_replace/profile_change/account_deletion`, `approval_apply_handler`, `approval_expire_due()` internal only.
+- `approval_uuid_or_null(text)` IMMUTABLE helper: a malformed `payload` uuid value can no longer abort a queue read or a decision with `22P02`.
+
 ## Migrations Log
 - `001_initial_schema.sql`: Core tables, indexes, RLS policies.
 - `002_update_notifications_channel.sql`: Updated notification channel to allow `whatsapp` and `sms`.
@@ -184,6 +193,15 @@
 - `153_update_rpcs_for_site_id.sql`: Client Sites Normalization Phase C:
   - Updated `submit_operator_hour_log_atomic` RPC to automatically resolve and insert `site_id` from machines.
   - Updated `get_clients_directory_summary` RPC to return `sites_count` from `client_sites`.
+- `235_rebuild_approvals_engine_grouping_and_pagination.sql`: Approvals engine rebuild:
+  - `approval_requests.parent_id` (FK `approval_requests.id` ON DELETE CASCADE) links a registration to its document-verification requests so one applicant = one queue item.
+  - `trg_auto_create_document_verification_approval` links new document requests to the pending registration.
+  - Partial keyset indexes `idx_approval_queue_toplevel`, `idx_approval_queue_toplevel_type`, `idx_approval_queue_all_toplevel` (all `WHERE parent_id IS NULL`).
+  - Rebuilt `approval_list` / `approval_counts` / `approval_decide` with keyset pagination, grouped counts and atomic group decisions.
+- `236_approvals_rbac_null_role_guard_and_execute_hardening.sql`: Closed three privilege escalations (NULL-role RBAC bypass, `approval_get` `OR v_role IS NULL`, forged `p_actor_id` bulk approve), replaced the always-true `current_user = 'postgres'` check with the session role GUC, cascaded `approve_all`/`cancel`/`expire_due` to child rows, and revoked `anon`/`PUBLIC` execute across all `approval_*` functions.
+- `237_approval_payload_uuid_cast_safety.sql`: Replaced every `(payload->>'key')::uuid` cast with `approval_uuid_or_null()` so one malformed payload row can no longer make the queue unreadable or a request undecidable.
+- `238_approvals_supervisor_metadata.sql`: `approval_list` additionally resolves `supervisor_name` / `supervisor_id` (users.supervisor_id -> payload metadata -> `user_supervisors` junction) and returns them per row.
+- `239_approval_counts_service_role_identity.sql`: `approval_counts()` resolves a service-role identity before its deny-by-default guard, so the service-role data-access layer sees counts again (regression introduced by 236). Numbered 239 to leave 238 to the supervisor-metadata migration; the two touch disjoint functions.
 
 ## Schema Constraints & Triggers Summary
 

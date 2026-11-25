@@ -9,7 +9,9 @@ const results = [];
 console.log(`Starting 3 Lighthouse Mobile runs on ${url}...\n`);
 
 for (let i = 1; i <= runs; i++) {
-  const outputPath = path.resolve(`apps/web/scripts/lh-report-run-${i}.json`);
+  const reportsDir = path.resolve('apps/web/docs/reports');
+  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+  const outputPath = path.join(reportsDir, `lh-report-run-${i}.json`);
   console.log(`--- RUN ${i} of ${runs} ---`);
 
   // Flags for mobile emulation with standard Lighthouse mobile throttling

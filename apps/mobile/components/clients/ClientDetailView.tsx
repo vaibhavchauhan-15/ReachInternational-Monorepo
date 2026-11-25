@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   StyleSheet,
@@ -52,6 +53,7 @@ import { ClientDetailSkeleton } from './ClientDetailSkeleton';
 import { ClientModal } from './ClientModal';
 import { ClientSiteModal } from './ClientSiteModal';
 import { AssignClientSupervisorModal } from './AssignClientSupervisorModal';
+import { MobileMachineCard } from '../machines/MobileMachineCard';
 
 export interface ClientDetailViewProps {
   id: string;
@@ -68,6 +70,7 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({
   initialTab = 'machines',
   initialAction,
 }) => {
+  const router = useRouter();
   const { theme, isDark } = useTheme();
   const { toast } = useToast();
   const { width: windowWidth } = useWindowDimensions();
@@ -787,34 +790,16 @@ export const ClientDetailView: React.FC<ClientDetailViewProps> = ({
                     description="There are currently no industrial machinery units assigned to this client."
                   />
                 ) : (
-                  machines.map((m) => (
-                    <Card
-                      key={m.id}
-                      style={[
-                        styles.itemCard,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text variant="mono" weight="bold" style={{ color: theme.colors.primary }}>
-                          {m.machine_id}
-                        </Text>
-                        <Text variant="body" weight="semibold" style={{ color: theme.colors.ink, marginTop: 2 }}>
-                          {m.model}
-                        </Text>
-                        <Text variant="caption" style={{ color: theme.colors.mute, marginTop: 2 }}>
-                          SN: {m.serial_number || '—'} {m.hour_meter !== null ? `• ${m.hour_meter} hrs` : ''}
-                        </Text>
-                      </View>
-                      <Badge
-                        status={m.status === 'rented' || m.status === 'active' ? 'active' : 'inactive'}
-                        customLabel={m.status.toUpperCase()}
+                  <View style={{ gap: spacingNumeric.sm }}>
+                    {machines.map((m) => (
+                      <MobileMachineCard
+                        key={m.id}
+                        machine={m}
+                        onViewDetails={() => router.push(`/machines?id=${m.machine_id || m.id}` as any)}
+                        onViewHistory={() => router.push(`/machines?id=${m.machine_id || m.id}&tab=running_hours` as any)}
                       />
-                    </Card>
-                  ))
+                    ))}
+                  </View>
                 )}
               </View>
             )}

@@ -175,3 +175,10 @@ Before modifying any mobile code, every AI agent MUST:
    - Offline shift queue idempotency keys (`buildShiftLogIdempotencyKey`) and capacity limits (`MAX_QUEUE_CAPACITY: 50`).
    - Android backup disabled (`android.allowBackup: false`) and unnecessary permissions stripped in `app.json` and `app.config.js`.
 
+### 11. Strict Monorepo Cross-Platform Parity Contract
+
+> **ABSOLUTE RULE**: Any change that affects shared product functionality, business logic, UI/UX, user workflows, API integration, data handling, validation, permissions, or application behavior in Native Mobile MUST be evaluated and implemented consistently in Web (`apps/web`).
+>
+> Follow the 10-point directive in `AI/RULES/WEB-MOBILE-PARITY.md` and `.agents/rules/web_mobile_parity.md`. Web and Native Mobile must remain 100% functionally equivalent, visually consistent, and behaviorally aligned.
+
+

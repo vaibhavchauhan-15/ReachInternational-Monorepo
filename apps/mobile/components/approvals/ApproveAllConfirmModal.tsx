@@ -55,9 +55,9 @@ export function ApproveAllConfirmModal({
           <View style={[styles.header, { borderBottomColor: colors.hairline }]}>
             <View style={styles.headerTitle}>
               <View style={styles.iconBadge}>
-                <CheckCheck size={18} color="#10b981" />
+                <CheckCheck size={18} color={colors.success} />
               </View>
-              <Text variant="heading" style={{ color: "#10b981" }}>
+              <Text variant="heading" style={{ color: colors.success }}>
                 Approve All Pending
               </Text>
             </View>
@@ -84,7 +84,7 @@ export function ApproveAllConfirmModal({
                 Scope of Bulk Approval:
               </Text>
               <View style={styles.countBadge}>
-                <Text variant="caption" style={{ color: "#10b981" }}>
+                <Text variant="caption" style={{ color: colors.success }}>
                   {count} {count === 1 ? "Request" : "Requests"} {typeLabel ? `(${typeLabel})` : ""}
                 </Text>
               </View>
@@ -96,12 +96,12 @@ export function ApproveAllConfirmModal({
 
           {/* Statutory Documents Rule Notice */}
           <View style={styles.warningBox}>
-            <AlertCircle size={18} color="#d97706" style={styles.warningIcon} />
+            <AlertCircle size={18} color={colors.warningDeep} style={styles.warningIcon} />
             <View style={styles.warningContent}>
-              <Text variant="body" style={{ color: "#92400e" }}>
+              <Text variant="body" style={{ color: colors.warningDeep }}>
                 Statutory Documents Remain Pending
               </Text>
-              <Text variant="caption" style={{ color: "#b45309" }}>
+              <Text variant="caption" style={{ color: colors.warningDeep }}>
                 All attached user documents (Aadhaar, Driving License, Bank Details) will remain in pending verification status. Only the user accounts will be activated. Documents can be reviewed and verified individually at any time.
               </Text>
             </View>
@@ -126,17 +126,17 @@ export function ApproveAllConfirmModal({
               style={({ pressed }) => [
                 styles.confirmBtn,
                 {
-                  backgroundColor: isSubmitting || count === 0 ? colors.mute : "#10b981",
+                  backgroundColor: isSubmitting || count === 0 ? colors.mute : colors.success,
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (
                 <View style={styles.btnContent}>
-                  <CheckCheck size={16} color="#ffffff" />
-                  <Text variant="body" style={{ color: "#ffffff" }}>
+                  <CheckCheck size={16} color={colors.onPrimary} />
+                  <Text variant="body" style={{ color: colors.onPrimary }}>
                     Confirm & Approve All
                   </Text>
                 </View>

@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text, Badge, useTheme } from '../ui';
 import { Pressable } from '../ui/touch/Pressable';
+import { PRESS } from '../../lib/motion/tokens';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
   ChevronDown,
@@ -138,6 +139,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
         <Pressable
           variant="card"
           haptic="select"
+          pressScale={PRESS.scale}
           onPress={handleToggle}
           style={styles.headerPressable}
           accessibilityLabel={`Toggle ${client.company_name} summary details`}
@@ -353,6 +355,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
         <Pressable
           variant="card"
           haptic="select"
+          pressScale={PRESS.scale}
           onPress={handleToggle}
           style={styles.headerPressable}
           accessibilityLabel={`Toggle ${model} details`}
@@ -539,6 +542,7 @@ export const RunningLogSummaryCard = React.memo<RunningLogSummaryCardProps>(func
         <Pressable
           variant="card"
           haptic="select"
+          pressScale={PRESS.scale}
           onPress={handleToggle}
           style={styles.headerPressable}
           accessibilityLabel={`Toggle ${operator.full_name} details`}

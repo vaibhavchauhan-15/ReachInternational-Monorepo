@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, useTransition } from "react";
 import { getTodayShiftMonitorAction, activateMachineAction } from "@/app/actions/operators";
 import { Badge, useToast, Button, EmptyState, ErrorState, CustomDatePicker, FilterDropdown, type FilterDropdownOption } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
+import { useActiveViewMode } from "@/lib/hooks/useMediaQuery";
 import { getISTDateString, formatDate, classifyError, parseTimeToMinutes } from "@reachinternational/utils";
 import type { TodayShiftMonitorRow } from "@reachinternational/types";
 import { dedupeShiftMonitorRows } from "@/lib/utils/shift-monitor";
@@ -56,6 +56,40 @@ interface TodayShiftMonitorProps {
   initialDate?: string;
 }
 
+/**
+ * Cheap identity comparison for two roster payloads.
+ *
+ * A date change produces the same rows twice: once from the client server-action fetch and
+ * once from the RSC payload that the URL change streams back. Replacing `rows` with an
+ * equal-but-different array re-renders the whole table (and every card) for no visible
+ * change, so identical payloads keep the existing array identity.
+ */
+function isSameRoster(a: TodayShiftMonitorRow[], b: TodayShiftMonitorRow[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.machine_id !== y.machine_id ||
+      x.shift_code !== y.shift_code ||
+      x.operator_id !== y.operator_id ||
+      x.status !== y.status ||
+      x.log_id !== y.log_id ||
+      x.start_meter !== y.start_meter ||
+      x.end_meter !== y.end_meter ||
+      x.running_hours !== y.running_hours ||
+      x.remarks !== y.remarks ||
+      x.entered_by !== y.entered_by ||
+      x.machine_status !== y.machine_status ||
+      x.machine_health_status !== y.machine_health_status
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function TodayShiftMonitorTab({
   user,
   userRole,
@@ -65,7 +99,6 @@ export function TodayShiftMonitorTab({
   initialDate,
 }: TodayShiftMonitorProps) {
   const { toast } = useToast();
-  const router = useRouter();
   const [rows, setRows] = useState<TodayShiftMonitorRow[]>(() => dedupeShiftMonitorRows(initialRows || []));
   const [loading, setLoading] = useState(!initialRows);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -79,7 +112,20 @@ export function TodayShiftMonitorTab({
   // typing instant on large rosters without a single network round-trip.
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const isSearching = searchQuery !== deferredSearchQuery;
+  // Status / client / shift / sort filtering is also pure in-memory work over an already
+  // loaded day roster, so it is scheduled as a non-blocking transition: the toolbar stays
+  // responsive and a newer click always interrupts an older render.
+  const [isFilterPending, startFilterTransition] = useTransition();
+  // Mount only the rendering that the current viewport can actually show (see hook).
+  const viewMode = useActiveViewMode();
+  const renderTableView = viewMode !== "mobile";
+  const renderCardView = viewMode !== "desktop";
   const [selectedRowForEntry, setSelectedRowForEntry] = useState<TodayShiftMonitorRow | null>(null);
+  // Modal bundles are code-split: they are mounted on first open instead of on page mount,
+  // so the roster paints without waiting for the entry/assign modal chunks. The components
+  // stay mounted afterwards so their exit animations still run on close.
+  const [entryModalMounted, setEntryModalMounted] = useState(false);
+  const [assignModalMounted, setAssignModalMounted] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignModalMachineId, setAssignModalMachineId] = useState<string | undefined>();
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -144,13 +190,21 @@ export function TodayShiftMonitorTab({
   }, [initialDate]);
 
   // Adopt server-streamed rows (initial render + every router.refresh)
+  const adoptedServerRowsRef = useRef<TodayShiftMonitorRow[] | null>(initialRows || null);
   useEffect(() => {
     if (!initialRows) return;
-    setRows(dedupeShiftMonitorRows(initialRows));
-    hasLoadedOnceRef.current = true;
-    lastFetchedAtRef.current = Date.now();
-    serverPayloadDateRef.current = initialDate ?? selectedDateRef.current;
-    setLoading(false);
+    // The state initializer already adopted this exact payload on mount — re-adopting it
+    // would allocate a second roster array and re-render the whole tab for nothing.
+    if (adoptedServerRowsRef.current === initialRows) return;
+    adoptedServerRowsRef.current = initialRows;
+    if (initialRows) {
+      const nextRows = dedupeShiftMonitorRows(initialRows);
+      setRows((prev) => (isSameRoster(prev, nextRows) ? prev : nextRows));
+      hasLoadedOnceRef.current = true;
+      lastFetchedAtRef.current = Date.now();
+      serverPayloadDateRef.current = initialDate ?? selectedDateRef.current;
+      setLoading(false);
+    }
   }, [initialRows, initialDate]);
 
   // Permission Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs
@@ -184,7 +238,7 @@ export function TodayShiftMonitorTab({
               const otherFreshRows = freshRows.filter((r) => r.machine_id !== optimisticMachineId);
               return dedupeShiftMonitorRows([...otherFreshRows, ...editingMachineRows]);
             }
-            return freshRows;
+            return isSameRoster(prev, freshRows) ? prev : freshRows;
           });
           setFetchError(null);
           hasLoadedOnceRef.current = true;
@@ -265,6 +319,10 @@ export function TodayShiftMonitorTab({
     const triggerDebouncedRefresh = () => {
       if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
       broadcastDebounceRef.current = setTimeout(() => {
+        // A local mutation (entry / assignment) already refreshed the roster explicitly and
+        // its own broadcast echoes back here. Skip the echo so one save costs one RPC.
+        if (Date.now() - lastFetchedAtRef.current < 1_200) return;
+        if (inFlightRef.current) return;
         refreshRosterRef.current(true);
       }, 400);
     };
@@ -297,6 +355,7 @@ export function TodayShiftMonitorTab({
 
   const handleAssignOperator = useCallback((machineId?: string) => {
     setAssignModalMachineId(machineId);
+    setAssignModalMounted(true);
     setIsAssignModalOpen(true);
   }, []);
 
@@ -569,6 +628,7 @@ export function TodayShiftMonitorTab({
   );
 
   const handleEnterLog = useCallback((row: TodayShiftMonitorRow) => {
+    setEntryModalMounted(true);
     setSelectedRowForEntry(row);
   }, []);
 
@@ -614,22 +674,16 @@ export function TodayShiftMonitorTab({
   }, [rows.length, toast]);
 
   // Quick-assign listener for desktop header and mobile 3-dot menu
-  useEffect(() => {
-    const handleQuickAssign = () => {
-      setAssignModalMachineId(undefined);
-      setIsAssignModalOpen(true);
-    };
-    window.addEventListener("reach:quick-assign", handleQuickAssign);
-    return () => window.removeEventListener("reach:quick-assign", handleQuickAssign);
-  }, []);
+  // NOTE: this used to be registered twice in this component. The second listener always
+  // reset `assignModalMachineId` to `undefined`, so a machine-targeted `handleInitiateAssign`
+  // click was immediately clobbered by the duplicate handler. One listener owns the event.
 
   // Register typed page actions for layout header
   useRegisterPageActions(
     useMemo(
       () => ({
         onQuickAssign: () => {
-          setAssignModalMachineId(undefined);
-          setIsAssignModalOpen(true);
+          handleAssignOperator(undefined);
         },
         onPrint: () => {
           if (rows.length === 0) {
@@ -704,36 +758,60 @@ export function TodayShiftMonitorTab({
         } else {
           url.searchParams.set("date", newDate);
         }
-        router.replace(url.pathname + url.search, { scroll: false });
+        // Native History API (supported by the App Router) keeps `?date=` deep-linkable
+        // and in sync with `useSearchParams` WITHOUT a second RSC round-trip. `router.replace`
+        // also re-ran the whole server page (a duplicate roster read) on every date change.
+        window.history.replaceState(null, "", url.pathname + url.search);
       } catch {
         // fallback
       }
     },
-    [router]
+    []
   );
+
+  const handleStatusFilterChange = useCallback((value: string) => {
+    startFilterTransition(() => {
+      setStatusFilter(value as typeof statusFilter);
+    });
+  }, []);
+
+  const handleClientFilterChange = useCallback((value: string) => {
+    startFilterTransition(() => setSelectedClient(value));
+  }, []);
+
+  const handleShiftFilterChange = useCallback((value: string) => {
+    startFilterTransition(() => setShiftFilter(value));
+  }, []);
+
+  const handleToggleSort = useCallback(() => {
+    startFilterTransition(() => {
+      setSortBy((prev) => (prev === "time_asc" ? "time_desc" : "time_asc"));
+    });
+  }, []);
 
   const handleResetFilters = useCallback(() => {
     // Every filter below is resolved in memory, so resetting them costs zero requests.
-    setStatusFilter("all");
-    setSelectedClient("all");
-    setShiftFilter("all");
-    setSortBy("time_asc");
-    setSearchQuery("");
+    startFilterTransition(() => {
+      setStatusFilter("all");
+      setSelectedClient("all");
+      setShiftFilter("all");
+      setSortBy("time_asc");
+      setSearchQuery("");
+    });
     const todayStr = getISTDateString();
-    const dateChanged = todayStr !== selectedDateRef.current;
-    if (dateChanged) {
+    // Resetting filters never changes roster data: only a date change needs a DB read,
+    // and that is owned by the date effect. (This used to force an extra uncached RPC.)
+    if (todayStr !== selectedDateRef.current) {
       setSelectedDate(todayStr);
     }
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("date");
-      router.replace(url.pathname + url.search, { scroll: false });
+      window.history.replaceState(null, "", url.pathname + url.search);
     } catch {
       // fallback
     }
-    // Only the date part needs a database read.
-    if (!dateChanged) refreshRoster(true);
-  }, [refreshRoster, router]);
+  }, []);
 
   const isDateFiltered = selectedDate !== getISTDateString();
   const isClientFiltered = selectedClient !== "all";
@@ -745,18 +823,20 @@ export function TodayShiftMonitorTab({
     (isShiftFiltered ? 1 : 0);
 
   if (loading) {
+    // Geometry mirrors the loaded layout (KPI strip → toolbar → roster rows) so the first
+    // roster paint does not move anything: CLS stays 0 while switching dates.
     return (
-      <div className="space-y-3">
-        {/* KPI skeleton */}
+      <div className="space-y-4" aria-busy="true" aria-label="Loading shift roster">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-20 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] animate-pulse" />
+            <div key={i} className="h-20 sm:h-[88px] rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] animate-pulse" />
           ))}
         </div>
-        {/* Table skeleton */}
-        <div className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
+        <div className="h-[68px] sm:h-16 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] animate-pulse" />
+        <div className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
+          <div className="h-[30px] border-b border-[var(--color-hairline)] bg-[var(--color-canvas)] animate-pulse" />
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-12 border-b border-[var(--color-hairline)] animate-pulse" />
+            <div key={i} className="h-[52px] border-b border-[var(--color-hairline)] last:border-b-0 animate-pulse" />
           ))}
         </div>
       </div>
@@ -777,7 +857,7 @@ export function TodayShiftMonitorTab({
           <button
             type="button"
             onClick={() => handleDateChange(getISTDateString())}
-            className="text-xs font-bold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer self-start sm:self-auto"
+            className="inline-flex items-center min-h-[44px] lg:min-h-0 -my-2 lg:my-0 px-1 text-xs font-bold text-sky-700 dark:text-sky-300 hover:underline cursor-pointer self-start sm:self-auto"
           >
             Return to Today
           </button>
@@ -796,9 +876,13 @@ export function TodayShiftMonitorTab({
         onResetFilters={handleResetFilters}
         isLoading={isSearching}
       >
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 w-full">
+        {/* 3-tier responsive filter grid: 1 column ≤639 px, 2 columns on tablet,
+            fixed 4-across only where the content area can actually hold it (≥1280 px).
+            Fixed sm/md widths in a single flex row used to push the open panel to
+            max-content width and overflow the page at 768–1024 px. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 w-full min-w-0">
           {/* Date Picker Filter (Kept only CustomDatePicker as requested) */}
-          <div className="w-full sm:w-60 md:w-64 min-w-0">
+          <div className="w-full min-w-0">
             <CustomDatePicker
               value={selectedDate}
               onChange={handleDateChange}
@@ -810,11 +894,11 @@ export function TodayShiftMonitorTab({
           </div>
 
           {/* Status Dropdown Filter */}
-          <div className="w-full sm:w-52 min-w-0">
+          <div className="w-full min-w-0">
             <FilterDropdown
               label="Status"
               value={statusFilter}
-              onChange={(val) => setStatusFilter(val as any)}
+              onChange={handleStatusFilterChange}
               options={statusOptions}
               className="w-full"
               dropdownClassName="w-full sm:w-56"
@@ -822,11 +906,11 @@ export function TodayShiftMonitorTab({
           </div>
 
           {/* Client Dropdown Filter */}
-          <div className="w-full sm:w-60 md:w-64 min-w-0">
+          <div className="w-full min-w-0">
             <FilterDropdown
               label="Client"
               value={selectedClient}
-              onChange={(val) => setSelectedClient(val)}
+              onChange={handleClientFilterChange}
               options={clientOptions}
               className="w-full"
               dropdownClassName="w-full sm:w-64"
@@ -836,11 +920,11 @@ export function TodayShiftMonitorTab({
           </div>
 
           {/* Shift Dropdown Filter */}
-          <div className="w-full sm:w-52 min-w-0">
+          <div className="w-full min-w-0">
             <FilterDropdown
               label="Shift"
               value={shiftFilter}
-              onChange={(val) => setShiftFilter(val)}
+              onChange={handleShiftFilterChange}
               options={shiftOptions}
               className="w-full"
               dropdownClassName="w-full sm:w-56"
@@ -891,7 +975,7 @@ export function TodayShiftMonitorTab({
                   variant="outline"
                   size="sm"
                   onClick={() => handleDateChange(getISTDateString())}
-                  className="mt-2 flex items-center gap-1.5 h-10 px-4 text-xs font-semibold cursor-pointer"
+                  className="mt-2 flex items-center gap-1.5 min-h-[44px] lg:min-h-0 px-4 text-xs font-semibold cursor-pointer"
                 >
                   <Calendar size={14} />
                   <span>Return to Today</span>
@@ -900,11 +984,8 @@ export function TodayShiftMonitorTab({
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => {
-                    setAssignModalMachineId(undefined);
-                    setIsAssignModalOpen(true);
-                  }}
-                  className="mt-2 flex items-center gap-1.5 h-10 px-4 text-xs font-semibold cursor-pointer"
+                  onClick={() => handleAssignOperator(undefined)}
+                  className="mt-2 flex items-center gap-1.5 min-h-[44px] lg:min-h-0 px-4 text-xs font-semibold cursor-pointer"
                 >
                   <UserPlus size={14} />
                   <span>Assign Personnel</span>
@@ -915,8 +996,14 @@ export function TodayShiftMonitorTab({
         </div>
       ) : (
         <>
-          {/* Desktop Table */}
-          <div className="hidden sm:block rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
+          {/* Desktop Table — mounted only when the viewport can show it (≥ 1024 px).
+              Below that the touch-card view is the only mounted rendering, so a phone or
+              tablet never builds a second, invisible row tree. */}
+          {renderTableView && (
+          <div
+            aria-busy={isFilterPending}
+            className={`hidden lg:block rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden transition-opacity duration-150 ${isFilterPending ? "opacity-60" : ""}`}
+          >
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
@@ -1190,9 +1277,11 @@ export function TodayShiftMonitorTab({
               </tbody>
             </table>
           </div>
+          )}
 
-          {/* Mobile Cards */}
-          <div className="block sm:hidden space-y-2">
+          {/* Mobile / tablet Cards */}
+          {renderCardView && (
+          <div className="block lg:hidden space-y-2">
             {filtered.length === 0 ? (
               <div className="text-center text-muted-foreground text-xs py-8">No matching shifts found</div>
             ) : (
@@ -1201,7 +1290,7 @@ export function TodayShiftMonitorTab({
                   key={`m-${row.machine_id}-${(row.shift_code || "S1").toUpperCase()}-${row.operator_id || "unassigned"}-${row.log_id || idx}`}
                   row={row}
                   idx={idx}
-                  searchQuery={searchQuery}
+                  searchQuery={deferredSearchQuery}
                   canEnterLog={canEnterLog}
                   onInitiateAssign={handleInitiateAssign}
                   onEnterLog={handleEnterLog}
@@ -1212,10 +1301,12 @@ export function TodayShiftMonitorTab({
               ))
             )}
           </div>
+          )}
         </>
       )}
 
-      {/* Assisted Shift Entry Modal */}
+      {/* Assisted Shift Entry Modal (chunk loads on first open) */}
+      {entryModalMounted && (
       <AssistedShiftEntryModal
         open={Boolean(selectedRowForEntry && canEnterLog)}
         onClose={() => setSelectedRowForEntry(null)}
@@ -1224,8 +1315,10 @@ export function TodayShiftMonitorTab({
         selectedDate={selectedDate}
         onSuccess={handleEnterLogSuccess}
       />
+      )}
 
-      {/* Assign Operator Modal */}
+      {/* Assign Operator Modal (chunk loads on first open) */}
+      {assignModalMounted && (
       <AssignOperatorModal
         isOpen={isAssignModalOpen}
         onClose={() => {
@@ -1365,6 +1458,7 @@ export function TodayShiftMonitorTab({
           }, 800);
         }}
       />
+      )}
 
       {/* Machine Status Warning Dialog (Breakdown / Maintenance) */}
       {warningMachine && (

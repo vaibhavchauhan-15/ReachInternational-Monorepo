@@ -116,7 +116,10 @@ assert(payrollContent.includes('<FormError'), 'payroll.tsx renders inline FormEr
 
 // Machines
 const machinesContent = fs.readFileSync(path.join(mobileDir, 'app/(app)/machines.tsx'), 'utf-8');
-assert(machinesContent.includes('<PermissionDeniedView'), 'machines.tsx renders PermissionDeniedView for non-authorized roles');
+assert(
+  machinesContent.includes('canAccessMachinesRoute') && machinesContent.includes('<Redirect'),
+  'machines.tsx redirects non-authorized roles through the shared capability guard'
+);
 assert(machinesContent.includes('<ErrorState'), 'machines.tsx renders ErrorState on query failure');
 assert(machinesContent.includes('<EmptyState'), 'machines.tsx renders EmptyState with filter/search differentiation');
 

@@ -47,7 +47,7 @@ export const MachineRow = memo(function MachineRow({
       <TableCell>
         <div className="flex flex-col">
           <Link
-            href={`/machines/${machine.id}`}
+            href={`/machines/${machine.machine_id || machine.id}`}
             className="label-sm text-[var(--color-ink)] hover:underline font-bold font-mono text-sm flex items-center gap-1.5"
           >
             {highlightText(machine.machine_id, searchTerm)}
@@ -114,7 +114,7 @@ export const MachineRow = memo(function MachineRow({
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
           <TooltipWrapper content="View machine details" side="top">
-            <Link href={`/machines/${machine.id}`}>
+            <Link href={`/machines/${machine.machine_id || machine.id}`}>
               <button
                 aria-label="View machine details"
                 className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] active:scale-[0.95] transition-colors cursor-pointer"

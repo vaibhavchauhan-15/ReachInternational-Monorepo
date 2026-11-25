@@ -28,6 +28,7 @@ import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ScrollCloud } from "@/components/ui/ScrollCloud";
 import { recordAppNavigation, popPreviousAppRoute } from "@/lib/navigation";
 import { usePageActions } from "@/components/layout/PageActionContext";
+import { MACHINE_CAPABILITIES, hasMachineCapability } from "@reachinternational/permissions";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
@@ -105,21 +106,25 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   const router = useRouter();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const title = resolveTitle(pathname);
+  const { actions } = usePageActions();
+  const title = actions?.pageTitle || resolveTitle(pathname);
   const showBack = !ROOT_PAGES.has(pathname);
   const normalizedPath = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
   const showMoreMenu = !HIDE_MORE_MENU_PAGES.has(normalizedPath);
-  const canAddMachine = pathname === "/machines" && userRole !== "supervisor" && userRole !== "operator";
+  // Machine controls derive from the shared capability matrix, never from hardcoded roles.
+  const canAddMachine = pathname === "/machines" && hasMachineCapability(userRole, MACHINE_CAPABILITIES.CREATE);
   const canCreateUser = userRole !== "supervisor" && userRole !== "operator" && userRole !== "client";
   const canAddClient = pathname === "/clients" && canCreateUser;
-  const isMachineDetail = pathname.startsWith("/machines/") && pathname.split("/").filter(Boolean).length === 2;
-  const canEditMachine = isMachineDetail && userRole !== "operator" && userRole !== "client";
+  const isMachineDetail = pathname.startsWith("/machines/") && pathname !== "/machines";
+  const canEditMachineInfo = isMachineDetail && hasMachineCapability(userRole, MACHINE_CAPABILITIES.EDIT_SPECS);
+  const canAssignMachineSupervisor = isMachineDetail && hasMachineCapability(userRole, MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+  const canAssignMachineOperator = isMachineDetail && hasMachineCapability(userRole, MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+  const canAssignMachineClient = isMachineDetail && hasMachineCapability(userRole, MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+  const canDeleteMachine = isMachineDetail && hasMachineCapability(userRole, MACHINE_CAPABILITIES.DELETE);
   const isUserDetail = pathname.startsWith("/users/") && pathname.split("/").filter(Boolean).length === 2;
   const canManageUserDetail = isUserDetail && userRole !== "operator" && userRole !== "client";
   const isClientDetail = pathname.startsWith("/clients/") && pathname.split("/").filter(Boolean).length === 2;
   const canManageClientDetail = isClientDetail && userRole !== "operator" && userRole !== "client";
-
-  const { actions } = usePageActions();
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -324,9 +329,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
           )}
 
           {/* Machine Detail Dedicated Separate Edit Actions for Mobile Users */}
-          {canEditMachine && (
+          {(canEditMachineInfo || canAssignMachineSupervisor || canAssignMachineOperator || canAssignMachineClient || canDeleteMachine) && (
             <div className="py-0.5">
-              {userRole !== "supervisor" && (
+              {canEditMachineInfo && (
                 <button
                   type="button"
                   onClick={() => {
@@ -335,24 +340,40 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                   }}
                   className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedEdit size={16} className="text-amber-500 shrink-0" />
+                  <AnimatedWrench size={16} className="text-amber-500 shrink-0" />
                   <span>Edit Machine Info</span>
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  window.dispatchEvent(new CustomEvent("reach:edit-machine-personnel"));
-                }}
-                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
-              >
-                <AnimatedUserCheck size={16} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                <span>{userRole === "supervisor" ? "Assign Operator" : "Edit Shift Personnel"}</span>
-              </button>
+              {canAssignMachineSupervisor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:edit-machine-supervisor"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedUserCheck size={16} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                  <span>Edit Supervisor</span>
+                </button>
+              )}
 
-              {userRole !== "supervisor" && (
+              {canAssignMachineOperator && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:edit-machine-operator"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedUserPlus size={16} className="text-amber-500 shrink-0" />
+                  <span>Edit Operator</span>
+                </button>
+              )}
+
+              {canAssignMachineClient && (
                 <button
                   type="button"
                   onClick={() => {
@@ -363,6 +384,20 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                 >
                   <AnimatedCheck size={16} className="text-sky-500 shrink-0" />
                   <span>Edit Client Assignment</span>
+                </button>
+              )}
+
+              {canDeleteMachine && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:delete-machine"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                >
+                  <AnimatedTrash2 size={16} className="text-red-600 shrink-0" />
+                  <span>Delete Machine</span>
                 </button>
               )}
             </div>

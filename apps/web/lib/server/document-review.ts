@@ -190,6 +190,7 @@ export async function rejectDocumentReplacementCore(params: {
           p_request_id: appReq.id,
           p_decision: "reject",
           p_note: params.rejectionReason.trim(),
+          p_actor_id: params.reviewerId,
           p_expected_version: appReq.version,
         });
       }
@@ -223,6 +224,7 @@ export async function verifyUserDocumentCore(params: {
       const { error: appErr } = await adminSupabase.rpc("approval_decide", {
         p_request_id: appReq.id,
         p_decision: "approve",
+        p_actor_id: params.reviewerId,
         p_expected_version: appReq.version,
       });
 
@@ -277,6 +279,7 @@ export async function rejectUserDocumentCore(params: {
         p_request_id: appReq.id,
         p_decision: "reject",
         p_note: params.rejectionReason.trim(),
+        p_actor_id: params.reviewerId,
         p_expected_version: appReq.version,
       });
 

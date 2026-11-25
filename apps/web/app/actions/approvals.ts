@@ -11,16 +11,15 @@ import {
   ApprovalDecideInputSchema,
   ApprovalCancelInputSchema,
   ApprovalApproveAllInputSchema,
+  ApprovalListQuerySchema,
   type ApprovalSubmitInput,
   type ApprovalDecideInput,
   type ApprovalCancelInput,
   type ApprovalApproveAllInput,
 } from "@reachinternational/validation";
-import type { ApprovalApproveAllResult } from "@reachinternational/types";
-import {
-  canSubmitApproval,
-  canDecideApproval,
-} from "@reachinternational/permissions";
+import type { ApprovalApproveAllResult, ApprovalListResponse } from "@reachinternational/types";
+import { getApprovalsListDAL } from "@/lib/dal/approvals";
+import { canSubmitApproval } from "@reachinternational/permissions";
 import { sanitizeUserErrorMessage } from "@reachinternational/utils";
 import { processPendingApprovalOutboxItems } from "@/lib/server/approvals-outbox";
 
@@ -29,6 +28,7 @@ export interface ApprovalActionResult<T = any> {
   data?: T;
   error?: string;
   isVersionConflict?: boolean;
+  isAlreadyDecided?: boolean;
 }
 
 /** Pre-authenticated user context from API route — eliminates double auth */
@@ -51,6 +51,8 @@ function revalidateApprovalAndEntityTags(requestId?: string) {
   revalidateApprovalTags(requestId);
   revalidateTag(TAGS.users, "max");
   revalidateTag(TAGS.documents, "max");
+  revalidateTag(TAGS.dashboard, "max");
+  revalidateTag(TAGS.dashboardKpis, "max");
 }
 
 /**
@@ -210,6 +212,7 @@ export async function decideApprovalAction(
       p_note: input.note ?? null,
       p_expected_version: input.expected_version ?? null,
       p_actor_id: userId,
+      p_idempotency_key: input.idempotency_key ?? null,
     });
 
     if (rpcErr) {
@@ -220,8 +223,8 @@ export async function decideApprovalAction(
       if (rpcErr.code === "P0004" || msg.includes("terminal state") || msg.includes("already")) {
         return {
           success: false,
-          isVersionConflict: true,
-          error: "This request is already decided. Refreshing latest status.",
+          isAlreadyDecided: true,
+          error: "This request was already decided by another administrator.",
         };
       }
       if (rpcErr.code === "40001" || rpcErr.code === "P0003" || msg.includes("Concurrency conflict") || msg.includes("modified")) {
@@ -234,24 +237,10 @@ export async function decideApprovalAction(
       return { success: false, error: sanitizeUserErrorMessage(rpcErr) };
     }
 
-    // If bound requests are present, decide other bound requests in parallel
-    if (input.bound_request_ids && input.bound_request_ids.length > 0) {
-      const otherBoundIds = input.bound_request_ids.filter((id) => id !== input.request_id);
-      if (otherBoundIds.length > 0) {
-        await Promise.allSettled(
-          otherBoundIds.map((boundId) =>
-            adminSupabase.rpc("approval_decide", {
-              p_request_id: boundId,
-              p_decision: input.decision,
-              p_note: input.note ?? null,
-              p_actor_id: userId,
-            })
-          )
-        );
-      }
-    }
-
-    // ⚡ Batch revalidate all approval + entity cache tags
+    // Grouped requests are resolved atomically inside approval_decide via
+    // approval_requests.parent_id (migration 235/236). `input.bound_request_ids`
+    // stays part of the wire contract for native, but is advisory only — the
+    // database, not the client, decides which rows move together.
     revalidateApprovalAndEntityTags(input.request_id);
 
     // 🔥 Fire-and-forget audit — does not block response
@@ -426,6 +415,58 @@ export async function approveAllAction(
     return {
       success: true,
       data: result,
+    };
+  } catch (err) {
+    return { success: false, error: sanitizeUserErrorMessage(err) };
+  }
+}
+
+/**
+ * Keyset-paginated approval queue page action for smooth infinite scroll.
+ * Validated via ApprovalListQuerySchema and protected by server-enforced RBAC.
+ */
+export async function getApprovalsListPageAction(
+  rawInput: unknown
+): Promise<ApprovalActionResult<ApprovalListResponse>> {
+  try {
+    const [session, user] = await Promise.all([verifySession(), getCurrentUser()]);
+    if (!session.isAuth) {
+      return { success: false, error: "Unauthorized: Please sign in." };
+    }
+    if (!user) {
+      return { success: false, error: "Authenticated user record not found." };
+    }
+
+    if (!["super_admin", "admin"].includes(user.role)) {
+      return {
+        success: false,
+        error: `Your role (${user.role}) is not authorized to access the approvals queue.`,
+      };
+    }
+
+    const parseResult = ApprovalListQuerySchema.safeParse(rawInput || {});
+    if (!parseResult.success) {
+      const firstErr = parseResult.error.errors[0]?.message || "Invalid pagination query parameters.";
+      return { success: false, error: firstErr };
+    }
+
+    const result = await getApprovalsListDAL(parseResult.data, {
+      id: user.id,
+      role: user.role,
+    });
+
+    if (result.error) {
+      return { success: false, error: result.error };
+    }
+
+    return {
+      success: true,
+      data: {
+        items: result.data,
+        next_cursor: result.next_cursor,
+        has_more: result.has_more,
+        pending_total: result.pending_total,
+      },
     };
   } catch (err) {
     return { success: false, error: sanitizeUserErrorMessage(err) };

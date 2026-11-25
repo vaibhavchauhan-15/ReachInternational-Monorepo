@@ -469,6 +469,7 @@ export async function approveAccountDeletionRequestAction(
         await adminClient.rpc("approval_decide", {
           p_request_id: engineReq.id,
           p_decision: "approve",
+          p_actor_id: currentUser.id,
           p_expected_version: engineReq.version,
         });
       }
@@ -561,6 +562,7 @@ export async function rejectAccountDeletionRequestAction(
           p_request_id: engineReq.id,
           p_decision: "reject",
           p_note: adminNotes || "Request declined by administrator.",
+          p_actor_id: currentUser.id,
           p_expected_version: engineReq.version,
         });
       }

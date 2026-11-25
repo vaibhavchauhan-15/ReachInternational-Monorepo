@@ -5,6 +5,8 @@ import {
   canViewApproval,
   canDecideApproval,
   getDecidableApprovalTypesForRole,
+  canAccessApprovalsRoute,
+  getAllApproverRoles,
 } from "./approvals.ts";
 
 test("canSubmitApproval allows operator to submit profile_change and document_replace", () => {
@@ -54,4 +56,17 @@ test("getDecidableApprovalTypesForRole returns correct types for admin and super
   assert.ok(adminTypes.includes("document_replace"));
   assert.ok(adminTypes.includes("account_deletion"));
   assert.ok(adminTypes.includes("shift_conflict"));
+});
+
+test("canAccessApprovalsRoute and getAllApproverRoles correctly derive route access", () => {
+  assert.equal(canAccessApprovalsRoute("super_admin"), true);
+  assert.equal(canAccessApprovalsRoute("admin"), true);
+  assert.equal(canAccessApprovalsRoute("supervisor"), false);
+  assert.equal(canAccessApprovalsRoute("operator"), false);
+  assert.equal(canAccessApprovalsRoute("manager"), false);
+
+  const approverRoles = getAllApproverRoles();
+  assert.ok(approverRoles.includes("super_admin"));
+  assert.ok(approverRoles.includes("admin"));
+  assert.equal(approverRoles.includes("operator"), false);
 });

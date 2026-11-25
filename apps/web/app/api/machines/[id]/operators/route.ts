@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/dal";
+import {
+  MACHINE_CAPABILITIES,
+  isMachineForbiddenError,
+  requireMachineCapability,
+  requireMachineRecordAccess,
+} from "@/lib/machines/authorization";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
 import {
@@ -69,13 +74,10 @@ export async function GET(
       );
     }
 
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized. Authentication required." },
-        { status: 401, headers: NO_CACHE_HEADERS }
-      );
-    }
+    // Read access to the roster requires the operator-assignment capability and
+    // record scope (supervisor: supervised; operator: assigned; manager tier: all).
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    await requireMachineRecordAccess(user, id);
 
     const supabase = createSupabaseAdminClient();
 
@@ -137,7 +139,7 @@ export async function GET(
             : { is_active: true }
         ),
       getActiveOperatorsForUser(user.id, user.role),
-      getActiveOperatorMachineAssignments(assignmentDate),
+      getActiveOperatorMachineAssignments(assignmentDate, user.id, user.role),
     ]);
 
     if (machineRes.error) {
@@ -224,6 +226,12 @@ export async function GET(
         { status: 401, headers: NO_CACHE_HEADERS }
       );
     }
+    if (isMachineForbiddenError(err)) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
     const msg = err instanceof Error ? err.message : "Failed to load machine operators.";
     return NextResponse.json(
       { error: msg },
@@ -250,20 +258,8 @@ export async function POST(
       );
     }
 
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized. Authentication required." },
-        { status: 401, headers: NO_CACHE_HEADERS }
-      );
-    }
-
-    if (!["admin", "super_admin", "manager", "supervisor"].includes(user.role)) {
-      return NextResponse.json(
-        { error: "Forbidden: You do not have permission to assign equipment operators." },
-        { status: 403, headers: NO_CACHE_HEADERS }
-      );
-    }
+    const { user } = await requireMachineCapability(MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+    await requireMachineRecordAccess(user, id);
 
     const body = await req.json().catch(() => ({}));
     const rawOperators = body.operators || [];
@@ -329,6 +325,12 @@ export async function POST(
       return NextResponse.json(
         { error: "Unauthorized. Authentication required." },
         { status: 401, headers: NO_CACHE_HEADERS }
+      );
+    }
+    if (isMachineForbiddenError(err)) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 403, headers: NO_CACHE_HEADERS }
       );
     }
     const msg = err instanceof Error ? err.message : "Failed to update operators.";

@@ -5,7 +5,7 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, ReduceMotion } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useTheme,
@@ -15,6 +15,7 @@ import {
   Text,
   useToast,
   ConfirmDialog,
+  SegmentedToggle,
 } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
@@ -25,6 +26,7 @@ import {
   useOperatorEntryContext,
   useOperatorHistoryCount,
   type HourLogRecord,
+  type OperatorHistoryPageChunk,
 } from '../../lib/hooks/useOperationsData';
 import { MobileOperatorEntryCard } from '../../components/operations/MobileOperatorEntryCard';
 import { MobileOperatorHistoryTab } from '../../components/operations/MobileOperatorHistoryTab';
@@ -49,6 +51,12 @@ export type OpsTab = 'entry' | 'history' | 'today';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
 
 export type { HourLogRecord };
+
+/**
+ * Module-level constant: an inline `[]` in the render body produces a new identity on every
+ * render, which silently defeats React.memo on the memoized child tabs.
+ */
+const EMPTY_CONFLICTS: HourLogRecord[] = [];
 
 export default function OperationsScreen() {
   const { theme, isDark } = useTheme();
@@ -124,17 +132,20 @@ export default function OperationsScreen() {
   // Edit Log state
   const [editingLogRecord, setEditingLogRecord] = useState<HourLogRecord | null>(null);
 
+  // Single canonical refresh cascade.
+  // Note: invalidateQueries already refetches active queries, so the entry-context query is
+  // NOT additionally refetched imperatively — that duplicated the RPC on every refresh.
   const handleDataRefresh = useCallback(async () => {
     await Promise.all([
-      refetchEntryContext(),
       queryClient.invalidateQueries({ queryKey: ['operator', 'entry-context'] }),
       queryClient.invalidateQueries({ queryKey: ['operator', 'history-infinite'] }),
       queryClient.invalidateQueries({ queryKey: ['operator', 'history-count'] }),
       queryClient.invalidateQueries({ queryKey: ['operator', 'history-logs'] }),
       queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] }),
+      queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-summary'] }),
       queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
     ]);
-  }, [refetchEntryContext, queryClient]);
+  }, [queryClient]);
 
   useScreenSync({
     screen: 'operations',
@@ -160,12 +171,51 @@ export default function OperationsScreen() {
     if (!logToDelete) return;
     const log = logToDelete;
     setIsDeletingLog(true);
+
+    // Optimistic removal: drop the row from every cached history surface before the network
+    // call so the list responds immediately, then roll back on failure / reconcile on success.
+    const historyInfiniteSnapshot = queryClient.getQueriesData<OperatorHistoryPageChunk>({
+      queryKey: ['operator', 'history-infinite'],
+    });
+    const historyListSnapshot = queryClient.getQueriesData<HourLogRecord[]>({
+      queryKey: ['operator', 'history-logs'],
+    });
+    const historyCountSnapshot = queryClient.getQueriesData<number>({
+      queryKey: ['operator', 'history-count'],
+    });
+
+    const rollback = () => {
+      historyInfiniteSnapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      historyListSnapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      historyCountSnapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    };
+
+    queryClient.setQueriesData<OperatorHistoryPageChunk>(
+      { queryKey: ['operator', 'history-infinite'] },
+      (page) =>
+        page
+          ? {
+              ...page,
+              logs: page.logs.filter((l) => l.id !== log.id),
+              totalCount: Math.max(0, page.totalCount - 1),
+            }
+          : page
+    );
+    queryClient.setQueriesData<HourLogRecord[]>(
+      { queryKey: ['operator', 'history-logs'] },
+      (logs) => (Array.isArray(logs) ? logs.filter((l) => l.id !== log.id) : logs)
+    );
+    queryClient.setQueriesData<number>({ queryKey: ['operator', 'history-count'] }, (count) =>
+      typeof count === 'number' ? Math.max(0, count - 1) : count
+    );
+
     try {
       const { error } = await supabase
         .from('machine_hour_logs')
         .delete()
         .eq('id', log.id);
       if (error) {
+        rollback();
         toast('error', 'Delete Failed', sanitizeDatabaseError(error, 'Failed to delete log.').message);
         return;
       }
@@ -189,11 +239,12 @@ export default function OperationsScreen() {
       setLogToDelete(null);
       await handleDataRefresh();
     } catch (err: any) {
+      rollback();
       toast('error', 'Delete Failed', sanitizeDatabaseError(err, 'Failed to delete log.').message);
     } finally {
       setIsDeletingLog(false);
     }
-  }, [logToDelete, handleDataRefresh, toast]);
+  }, [logToDelete, handleDataRefresh, toast, queryClient]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -201,12 +252,38 @@ export default function OperationsScreen() {
     setRefreshing(false);
   }, [handleDataRefresh]);
 
-  const pendingConflicts: HourLogRecord[] = [];
+  const pendingConflicts = EMPTY_CONFLICTS;
 
-  const handleOpenConflictModal = (log: HourLogRecord) => {
+  const handleOpenConflictModal = useCallback((log: HourLogRecord) => {
     setSelectedConflictLog(log);
     setShowConflictModal(true);
-  };
+  }, []);
+
+  // Stable close handlers: these are passed to always-mounted, memoized modals, so an inline
+  // arrow here would re-render the whole modal tree on every Operations render.
+  const handleCloseEditLog = useCallback(() => setEditingLogRecord(null), []);
+  const handleCloseConflictModal = useCallback(() => setShowConflictModal(false), []);
+  const handleCloseExportModal = useCallback(() => setShowExportModal(false), []);
+  const handleCloseAssistedRow = useCallback(() => setAssistedRow(null), []);
+  const handleCloseDeleteDialog = useCallback(() => setLogToDelete(null), []);
+
+  const handleAssignModalSuccess = useCallback(() => {
+    // Prefix invalidation also covers the paginated `today-shift-monitor-infinite` roster
+    queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] });
+    queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-summary'] });
+  }, [queryClient]);
+
+  const handleMonitorEnterLog = useCallback(
+    (row: TodayShiftMonitorRow) => {
+      if (canFillShiftEntry) {
+        setAssistedRow(row);
+      }
+    },
+    [canFillShiftEntry]
+  );
+
+  const handleOpenAssignModal = useCallback(() => setIsAssignModalOpen(true), []);
+  const handleCloseAssignModal = useCallback(() => setIsAssignModalOpen(false), []);
 
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
@@ -216,7 +293,7 @@ export default function OperationsScreen() {
         id: 'assign-operator',
         label: 'Assign Operator',
         icon: <UserPlus size={16} color={theme.colors.link} />,
-        onPress: () => setIsAssignModalOpen(true),
+        onPress: handleOpenAssignModal,
       });
     }
 
@@ -228,7 +305,7 @@ export default function OperationsScreen() {
     });
 
     return list;
-  }, [theme.colors.ink, theme.colors.link, isOperator]);
+  }, [theme.colors.ink, theme.colors.link, isOperator, handleOpenAssignModal]);
 
   // Lazy loading state: History tab is only mounted on first user visit, then preserved in memory
   const [hasLoadedHistory, setHasLoadedHistory] = useState(() => activeTab === 'history');
@@ -263,71 +340,22 @@ export default function OperationsScreen() {
 
       {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
       <MobileHeader
-        title="Operations"
+        title={isOperator ? 'Operations' : "Today's Shift Logs"}
         showBack={true}
         backRoute="/dashboard"
         actions={headerActions}
       />
 
-      {/* 2. TOP NAVBAR (TAB BUTTONS: SHIFT VS LOG HISTORY) */}
-      {(isOperator || activeTab === 'entry' || activeTab === 'history') && (
-        <View style={styles.tabButtonGroup}>
-          <Button
-            variant={activeTab === 'entry' ? 'primary' : 'outline'}
+      {/* 2. TOP NAVBAR (SEGMENTED SLIDING TOGGLE: SHIFT VS LOG HISTORY) */}
+      {(isOperator || activeTab === 'entry' || activeTab === 'history') && activeTab !== 'today' && (
+        <View style={styles.segmentedToggleWrapper}>
+          <SegmentedToggle
+            value={activeTab === 'history' ? 'history' : 'entry'}
+            onChange={(val) => handleTabChange(val as 'entry' | 'history')}
+            options={segmentedItems}
             size="md"
-            shape="rounded"
-            style={styles.tabOptionBtn}
-            onPress={() => handleTabChange('entry')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === 'entry' }}
-            haptic="select"
-          >
-            Shift
-          </Button>
-          <Button
-            variant={activeTab === 'history' ? 'primary' : 'outline'}
-            size="md"
-            shape="rounded"
-            style={styles.tabOptionBtn}
-            onPress={() => handleTabChange('history')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === 'history' }}
-            haptic="select"
-            rightIcon={
-              isOperator && !isHistoryCountLoading && operatorHistoryCount && operatorHistoryCount > 0 ? (
-                <View
-                  style={[
-                    styles.tabBadge,
-                    {
-                      backgroundColor:
-                        activeTab === 'history'
-                          ? 'rgba(255, 255, 255, 0.25)'
-                          : isDark
-                          ? 'rgba(255, 255, 255, 0.12)'
-                          : '#e4e4e7',
-                    },
-                  ]}
-                >
-                  <Text
-                    variant="caption"
-                    weight="semibold"
-                    style={{
-                      color:
-                        activeTab === 'history'
-                          ? '#ffffff'
-                          : isDark
-                          ? '#f4f4f5'
-                          : '#3f3f46',
-                    }}
-                  >
-                    {operatorHistoryCount > 99 ? '99+' : operatorHistoryCount}
-                  </Text>
-                </View>
-              ) : undefined
-            }
-          >
-            Log History
-          </Button>
+            fullWidth
+          />
         </View>
       )}
 
@@ -363,15 +391,15 @@ export default function OperationsScreen() {
 
       {/* 2.5. TODAY'S SHIFT MONITOR (SUPERVISORS / MANAGERS / ADMINS) */}
       {!isOperator && activeTab === 'today' && (
-        <Animated.View key="today-tab" entering={FadeIn.duration(200)} style={styles.todayContainer}>
+        <Animated.View
+          key="today-tab"
+          entering={FadeIn.duration(200).reduceMotion(ReduceMotion.System)}
+          style={styles.todayContainer}
+        >
           <MobileTodayShiftMonitorTab
             actorId={user?.id}
             userRole={role || userProfile?.role}
-            onEnterLog={(row) => {
-              if (canFillShiftEntry) {
-                setAssistedRow(row);
-              }
-            }}
+            onEnterLog={handleMonitorEnterLog}
             refreshing={refreshing}
             onRefresh={onRefresh}
           />
@@ -405,7 +433,7 @@ export default function OperationsScreen() {
       {editingLogRecord && (
         <MeterLogModal
           visible={Boolean(editingLogRecord)}
-          onClose={() => setEditingLogRecord(null)}
+          onClose={handleCloseEditLog}
           existingLog={editingLogRecord}
           machineId={editingLogRecord.machine_id}
           machineCode={editingLogRecord.machine?.machine_id || editingLogRecord.machine_code}
@@ -421,7 +449,7 @@ export default function OperationsScreen() {
       {/* Review Overtime Conflict Modal */}
       <MobileConflictResolutionModal
         visible={showConflictModal}
-        onClose={() => setShowConflictModal(false)}
+        onClose={handleCloseConflictModal}
         log={selectedConflictLog}
         currentUserId={user?.id || ''}
         onSuccess={handleDataRefresh}
@@ -431,7 +459,7 @@ export default function OperationsScreen() {
       {showExportModal && (
         <OperationsExportModal
           visible={showExportModal}
-          onClose={() => setShowExportModal(false)}
+          onClose={handleCloseExportModal}
           fetchParams={{
             viewMode: isOperator ? 'operator' : 'machine',
             operatorId: isOperator ? user?.id : undefined,
@@ -447,7 +475,7 @@ export default function OperationsScreen() {
       {assistedRow && canFillShiftEntry && (
         <MeterLogModal
           visible={Boolean(assistedRow && canFillShiftEntry)}
-          onClose={() => setAssistedRow(null)}
+          onClose={handleCloseAssistedRow}
           machineId={assistedRow.machine_id}
           machineCode={assistedRow.machine_code}
           model={assistedRow.machine_model || undefined}
@@ -507,17 +535,14 @@ export default function OperationsScreen() {
       {/* 5. GLOBAL ASSIGN PERSONNEL MODAL (ACCESSIBLE FROM 3-DOT MENU ACROSS ALL TABS) */}
       <MobileAssignPersonnelModal
         visible={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-monitor'] });
-          queryClient.invalidateQueries({ queryKey: ['operations', 'today-shift-summary'] });
-        }}
+        onClose={handleCloseAssignModal}
+        onSuccess={handleAssignModalSuccess}
       />
 
       {/* Delete Daily Running Hour Log Confirmation Dialog */}
       <ConfirmDialog
         visible={Boolean(logToDelete)}
-        onClose={() => setLogToDelete(null)}
+        onClose={handleCloseDeleteDialog}
         onConfirm={handleConfirmDeleteLog}
         title="Delete Daily Running Hour Log"
         message={

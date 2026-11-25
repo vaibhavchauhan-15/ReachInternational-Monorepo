@@ -26,8 +26,6 @@ import {
   Text,
   showToast,
   type HeaderActionItem,
-  KPICard,
-  KPIGrid,
   Pagination,
   FilterSidebar,
   FilterCategoryCard,
@@ -38,6 +36,11 @@ import { RunningLogShiftCard } from '../operations/RunningLogShiftCard';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import {
+  MACHINE_CAPABILITIES,
+  hasMachineCapability,
+  isOperatorMachineView,
+} from '@reachinternational/permissions';
 import { formatDate, sanitizeDatabaseError } from '@reachinternational/utils';
 import { getWebAppUrl } from '../../lib/env';
 import { MACHINE_SELECT_COLUMNS } from '../../lib/hooks/useMachinesData';
@@ -177,6 +180,18 @@ function formatShiftTimingWithDateMobile(meta: Record<string, any>): string {
   }
 
   return 'Standard Shift';
+}
+
+function getShortShiftLabel(person: any, fallbackIndex: number): string {
+  if (person?.shift_code) {
+    const code = String(person.shift_code).trim();
+    return code.toLowerCase().startsWith('shift') ? code : `Shift ${code}`;
+  }
+  if (person?.shift_name) {
+    const cleaned = String(person.shift_name).replace(/\s*\(.*?\)/g, '').trim();
+    if (cleaned) return cleaned.toLowerCase().startsWith('shift') ? cleaned : `Shift ${cleaned}`;
+  }
+  return `Shift ${fallbackIndex}`;
 }
 
 function formatFieldLabelMobile(key: string): string {
@@ -346,16 +361,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     };
   }, [machine.client_id, fullClient?.company_name, machine.client?.company_name]);
 
+  // ── Single source of truth: @reachinternational/permissions machine capabilities ──
   const normalizedRole = (userRole || '').toLowerCase();
-  const isAdminOrManager =
-    normalizedRole === 'admin' ||
-    normalizedRole === 'super_admin' ||
-    normalizedRole === 'manager';
-  const isSupervisor = normalizedRole === 'supervisor';
-  const canManage = isAdminOrManager;
-  const canAssignOperator = isAdminOrManager || isSupervisor;
-  const canEdit = isAdminOrManager;
-  const canDelete = isAdminOrManager;
+  const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
+  const canEditSpecs = hasMachineCapability(userRole, MACHINE_CAPABILITIES.EDIT_SPECS);
+  const canUpdateStatus = hasMachineCapability(userRole, MACHINE_CAPABILITIES.STATUS_UPDATE);
+  const canAssignSupervisor = hasMachineCapability(userRole, MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR);
+  const canAssignClient = hasMachineCapability(userRole, MACHINE_CAPABILITIES.ASSIGN_CLIENT);
+  const canViewAudit = hasMachineCapability(userRole, MACHINE_CAPABILITIES.AUDIT_VIEW);
+  const canDelete = hasMachineCapability(userRole, MACHINE_CAPABILITIES.DELETE);
+  // Operator assignment is granted to the manager tier and supervisors
+  const canAssignOperator = hasMachineCapability(userRole, MACHINE_CAPABILITIES.ASSIGN_OPERATOR);
+  // Any editor capability opens the machine editor (MachineModal narrows the payload per role)
+  const canManage = canEditSpecs || canUpdateStatus || canAssignClient || canAssignSupervisor;
+  const canManagePersonnel = canAssignSupervisor || canAssignOperator;
+  const canEdit = canManage;
 
   // Active Tab: 'overview' (Basic Info), 'running_hours' (Running Logs), or 'audit_trail' (Audit Trail)
   const [activeTab, setActiveTab] = useState<'overview' | 'running_hours' | 'audit_trail'>(initialTab || 'overview');
@@ -427,7 +447,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         icon: Clock,
         count: hasLoadedLogs && hourLogs && hourLogs.length > 0 ? hourLogs.length : undefined,
       },
-      ...(normalizedRole !== 'operator'
+      ...(canViewAudit
         ? [
             {
               id: 'audit_trail' as const,
@@ -438,7 +458,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           ]
         : []),
     ],
-    [hasLoadedLogs, hourLogs, normalizedRole, hasLoadedAudit, auditLogs]
+    [hasLoadedLogs, hourLogs, canViewAudit, hasLoadedAudit, auditLogs]
   );
   const tabItems = segmentedTabItems;
 
@@ -501,6 +521,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const fullSiteAddress = [clientAddress, clientLocation, clientPincode ? `PIN: ${clientPincode}` : ''].filter(Boolean).join(', ');
   const fullBillingAddress = [billingAddress, [billingCity, billingDistrict, billingState].filter(Boolean).join(', '), billingPincode ? `PIN: ${billingPincode}` : ''].filter(Boolean).join(', ');
   const hasLinkedClient = Boolean(clientCompanyName || fullSiteAddress || clientPhone);
+
+  const machineTitle = useMemo(() => {
+    return (
+      [machine.model, machine.serial_number].filter(Boolean).join(' - ') ||
+      machine.machine_id ||
+      'Machine Details'
+    );
+  }, [machine.model, machine.serial_number, machine.machine_id]);
 
   // Supervisors & Operators (Direct machine assignments + Inherited client-level supervisors)
   const supervisors = useMemo(() => {
@@ -619,7 +647,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
   // Audit Trail Fetcher & Caching
   const fetchAuditLogs = useCallback(async () => {
-    if (!machine.id) return;
+    // Capability gate in the data layer: unauthorized roles never issue the audit query
+    if (!machine.id || !canViewAudit) return;
     setIsLoadingAudit(true);
     setAuditError(null);
     try {
@@ -1292,7 +1321,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
 
-    if (canManage) {
+    if (canEditSpecs) {
       list.push({
         id: 'edit-info',
         label: 'Edit Machine Info',
@@ -1302,6 +1331,19 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           setEditModalVisible(true);
         },
       });
+    } else if (canUpdateStatus) {
+      list.push({
+        id: 'edit-status',
+        label: 'Update HMR & Health',
+        icon: <Clock size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setEditSection('info');
+          setEditModalVisible(true);
+        },
+      });
+    }
+
+    if (canManagePersonnel) {
       list.push({
         id: 'edit-personnel',
         label: 'Manage Shift Personnel',
@@ -1310,6 +1352,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           setAssignPersonnelModalVisible(true);
         },
       });
+    }
+
+    if (canAssignClient) {
       list.push({
         id: 'edit-client',
         label: 'Edit Client Assignment',
@@ -1317,15 +1362,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         onPress: () => {
           setEditSection('client');
           setEditModalVisible(true);
-        },
-      });
-    } else if (isSupervisor) {
-      list.push({
-        id: 'assign-personnel',
-        label: 'Assign Operators',
-        icon: <UserCheck size={16} color={theme.colors.ink} />,
-        onPress: () => {
-          setAssignPersonnelModalVisible(true);
         },
       });
     }
@@ -1355,7 +1391,15 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     }
 
     return list;
-  }, [canManage, isSupervisor, canDelete, theme.colors.ink, handleRefresh]);
+  }, [
+    canAssignClient,
+    canDelete,
+    canEditSpecs,
+    canManagePersonnel,
+    canUpdateStatus,
+    theme.colors.ink,
+    handleRefresh,
+  ]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -1416,43 +1460,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   style={{ color: theme.colors.ink }}
                   numberOfLines={1}
                 >
-                  {machine.model || 'Machine Model'}
+                  {machineTitle}
                 </Text>
-
-                <View style={styles.heroMetaRow}>
-                  {Boolean(machine.serial_number) && (
-                    <Text variant="caption" style={[styles.specBoxValueMono, { color: theme.colors.mute }]}>
-                      {machine.serial_number}
-                    </Text>
-                  )}
-                  {Boolean(machine.serial_number && machine.machine_id) && (
-                    <Text variant="caption" style={{ color: theme.colors.hairline }}>•</Text>
-                  )}
-                  {Boolean(machine.machine_id) && (
-                    <Pressable
-                      variant="plain"
-                      hitSlopToMin48
-                      onPress={() => handleCopy(machine.machine_id, `Machine ID "${machine.machine_id}"`, setCopiedId)}
-                      style={[
-                        styles.heroIdChip,
-                        {
-                          backgroundColor: isDark ? '#262626' : '#f0f0f2',
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                      accessibilityLabel={`Copy machine ID ${machine.machine_id}`}
-                    >
-                      <Text variant="caption" weight="semibold" style={[styles.specBoxValueMono, { color: theme.colors.ink }]}>
-                        {machine.machine_id}
-                      </Text>
-                      {copiedId ? (
-                        <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
-                      ) : (
-                        <Copy size={11} color={theme.colors.mute} />
-                      )}
-                    </Pressable>
-                  )}
-                </View>
               </View>
             </View>
 
@@ -1477,23 +1486,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 customLabel={machine.status === 'rented' ? 'On Rent' : machine.status === 'under_maintenance' ? 'Under Maintenance' : 'Available'}
                 size="md"
               />
-
-              {machine.hour_meter !== undefined && machine.hour_meter !== null && (
-                <View
-                  style={[
-                    styles.heroHmrPill,
-                    {
-                      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : 'rgba(2, 132, 199, 0.08)',
-                      borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : 'rgba(2, 132, 199, 0.2)',
-                    },
-                  ]}
-                >
-                  <Clock size={11} color="#0284c7" />
-                  <Text variant="caption" weight="bold" style={{ color: '#0284c7' }}>
-                    {machine.hour_meter} hrs
-                  </Text>
-                </View>
-              )}
             </View>
           </View>
 
@@ -1759,6 +1751,55 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </Text>
                   </View>
                 </View>
+
+                {/* Row 4: Supervisors & Operators Summary */}
+                <View style={styles.specsRow}>
+                  {/* 7. Supervisors */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        SUPERVISORS
+                      </Text>
+                      {supervisors.length > 0 && (
+                        <Badge variant="info" size="sm" customLabel={String(supervisors.length)} />
+                      )}
+                    </View>
+                    <Text variant="body" weight="bold" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {supervisors.length > 0 ? supervisors.map((s: any) => s.full_name).join(', ') : '—'}
+                    </Text>
+                  </View>
+
+                  {/* 8. Operators */}
+                  <View
+                    style={[
+                      styles.specBox,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <View style={styles.specBoxHeader}>
+                      <Text variant="micro" weight="semibold" style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
+                        OPERATORS
+                      </Text>
+                      {operators.length > 0 && (
+                        <Badge variant="warning" size="sm" customLabel={String(operators.length)} />
+                      )}
+                    </View>
+                    <Text variant="body" weight="bold" style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {operators.length > 0 ? operators.map((o: any) => o.full_name).join(', ') : '—'}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
 
@@ -1779,29 +1820,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     Assigned Shift Personnel
                   </Text>
                 </View>
-
-                {canAssignOperator && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Pressable variant="outline" haptic="tap"
-                      onPress={() => {
-                        setAssignPersonnelModalVisible(true);
-                      }}
-                      style={[
-                        styles.headerActionBtnSm,
-                        {
-                          backgroundColor: theme.colors.canvas,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                      accessibilityLabel="Manage Staff"
-                    >
-                      <Edit2 size={12} color={theme.colors.ink} />
-                      <Text variant="label" style={{ color: theme.colors.ink }}>
-                        {isSupervisor ? 'Assign' : 'Edit'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                )}
               </View>
 
               <View style={[styles.personnelSectionBody, { flexDirection: isMobile ? 'column' : 'row', gap: 12, width: '100%' }]}>
@@ -1826,6 +1844,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         Supervisors ({supervisors.length})
                       </Text>
                     </View>
+                    {canAssignSupervisor && (
+                      <Pressable
+                        variant="outline"
+                        haptic="tap"
+                        hitSlopToMin48
+                        onPress={() => setAssignPersonnelModalVisible(true)}
+                        style={[
+                          styles.headerActionBtnSm,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                        accessibilityLabel="Edit Supervisor Assignments"
+                      >
+                        <Edit2 size={12} color={theme.colors.ink} />
+                        <Text variant="label" style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>
+                          Edit
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
 
                   {supervisors.length === 0 ? (
@@ -1838,7 +1877,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           ? "Supervisors assigned to this client will automatically inherit operational oversight."
                           : "Assign a site supervisor to monitor shifts and daily logs."
                       }
-                      actionLabel={canManage ? (machine.client_id ? "Assign to Client" : "Assign Supervisor") : undefined}
+                      actionLabel={canAssignSupervisor ? (machine.client_id ? "Assign to Client" : "Assign Supervisor") : undefined}
                       onAction={
                         canManage
                           ? () => {
@@ -1947,6 +1986,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         Operators ({operators.length})
                       </Text>
                     </View>
+                    {canAssignOperator && (
+                      <Pressable
+                        variant="outline"
+                        haptic="tap"
+                        hitSlopToMin48
+                        onPress={() => setAssignPersonnelModalVisible(true)}
+                        style={[
+                          styles.headerActionBtnSm,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                        accessibilityLabel="Edit Operator Assignments"
+                      >
+                        <Edit2 size={12} color={theme.colors.ink} />
+                        <Text variant="label" style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}>
+                          Edit
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
 
                   {operators.length === 0 ? (
@@ -1975,8 +2035,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                             <Text variant="body" style={{ color: theme.colors.ink }}>
                               {o.full_name}
                             </Text>
-                            <Text variant="micro" style={{ color: '#d97706' }}>
-                              {o.shift_code ? `Shift ${o.shift_code}` : `Shift ${idx + 1}`}
+                            <Text variant="micro" weight="bold" style={{ color: '#d97706' }}>
+                              {getShortShiftLabel(o, idx + 1)}
                             </Text>
                           </View>
 
@@ -2069,32 +2129,53 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {fullSiteAddress ? (
                     <Pressable
-                      variant="chip"
-                      haptic="select"
-                      activeOpacity={1.0}
+                      variant="outline"
+                      haptic="tap"
                       hitSlopToMin48
                       onPress={handleOpenMap}
                       style={[
                         styles.headerActionBtnSm,
                         {
-                          backgroundColor: '#0284c7',
-                          borderColor: '#0284c7',
-                          borderWidth: 1,
-                          opacity: 1,
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
                         },
                       ]}
                       accessibilityLabel="Open Map Location"
                     >
-                      <MapPin size={12} color="#ffffff" />
+                      <MapPin size={12} color="#0284c7" />
                       <Text
                         variant="label"
-                        style={[styles.headerActionBtnSmText, { color: '#ffffff' }]}
+                        style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}
                       >
-                        Map
+                        Map Location
                       </Text>
                     </Pressable>
                   ) : null}
-                  {canManage && (
+                  {machine.client_id ? (
+                    <Pressable
+                      variant="outline"
+                      haptic="tap"
+                      hitSlopToMin48
+                      onPress={() => router.push(`/clients/${machine.client_id}` as any)}
+                      style={[
+                        styles.headerActionBtnSm,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                      accessibilityLabel="Open Client Directory"
+                    >
+                      <ExternalLink size={12} color="#0284c7" />
+                      <Text
+                        variant="label"
+                        style={[styles.headerActionBtnSmText, { color: theme.colors.ink }]}
+                      >
+                        Directory
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {canAssignClient && (
                     <Pressable variant="outline" haptic="tap"
                       onPress={() => {
                         setEditSection('client');
@@ -2233,7 +2314,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   icon={<Building2 size={24} color={theme.colors.mute} />}
                   title="No Client Assigned"
                   description="This machine is currently available in the fleet inventory and has not been leased to a client account."
-                  actionLabel={canManage ? "Assign Client" : undefined}
+                  actionLabel={canAssignClient ? "Assign Client" : undefined}
                   onAction={canManage ? () => {
                     setEditSection('client');
                     setEditModalVisible(true);
@@ -2324,20 +2405,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               {/* Filter & Data Feed */}
               {!isLoadingLogs && !logsError && hourLogs && hourLogs.length > 0 && (
                 <View style={styles.logsBody}>
-                  {/* Executive Metric Cards Strip */}
-                  <KPIGrid columns={2} style={{ marginBottom: 12 }}>
-                    <KPICard
-                      label="HOURS RUN"
-                      value={`${totalHoursRun} hrs`}
-                      variant="success"
-                    />
-                    <KPICard
-                      label="RECORDED SHIFTS"
-                      value={hourLogs.length}
-                      variant="info"
-                    />
-                  </KPIGrid>
-
                   {/* Search Bar & Filter Toggle */}
                   <View style={[styles.logSearchRow, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                     <Search size={14} color={theme.colors.mute} />
@@ -2470,7 +2537,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         )}
 
         {/* TAB 3: AUDIT TRAIL */}
-        {activeTab === 'audit_trail' && normalizedRole !== 'operator' && (
+        {activeTab === 'audit_trail' && canViewAudit && (
           <Animated.View
             key="tab_audit_trail"
             entering={FadeIn.duration(200)}

@@ -74,8 +74,8 @@ export function RejectReasonModal({
         >
           <View style={styles.header}>
             <View style={styles.headerTitle}>
-              <AlertTriangle size={18} color="#ef4444" />
-              <Text variant="heading" style={{ color: "#ef4444" }}>
+              <AlertTriangle size={18} color={colors.error} />
+              <Text variant="heading" style={{ color: colors.error }}>
                 {title || "Reject Request"}
               </Text>
             </View>
@@ -121,14 +121,14 @@ export function RejectReasonModal({
                 styles.input,
                 {
                   backgroundColor: colors.canvas,
-                  borderColor: error ? "#ef4444" : colors.hairline,
+                  borderColor: error ? colors.error : colors.hairline,
                   color: colors.ink,
                 },
               ]}
               editable={!isSubmitting}
             />
             {error ? (
-              <Text variant="micro" style={styles.errorText}>
+              <Text variant="micro" style={[styles.errorText, { color: colors.error }]}>
                 {error}
               </Text>
             ) : null}
@@ -152,9 +152,9 @@ export function RejectReasonModal({
               style={styles.actionBtn}
             >
               {isSubmitting ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (
-                <Text variant="label" style={{ color: "#ffffff" }}>
+                <Text variant="label" style={{ color: colors.onPrimary }}>
                   Confirm Reject
                 </Text>
               )}
@@ -223,7 +223,6 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   errorText: {
-    color: "#ef4444",
     marginTop: 4,
   },
   footer: {

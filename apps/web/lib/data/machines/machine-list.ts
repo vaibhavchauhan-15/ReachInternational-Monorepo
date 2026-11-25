@@ -187,7 +187,20 @@ const getCachedMachineList = unstable_cache(
         );
       }
     } else if (role === "supervisor" && scopedUserId !== "all") {
-      query = query.or(`current_supervisor_id.eq.${scopedUserId},supervisor_ids.cs.{${scopedUserId}}`);
+      // Supervised scope: direct assignment OR inherited through an allocated client.
+      const { data: clientLinks } = await supabase
+        .from("client_supervisors")
+        .select("client_id")
+        .eq("supervisor_id", scopedUserId);
+      const supervisedClientIds = (clientLinks || [])
+        .map((row: any) => row.client_id)
+        .filter(Boolean);
+      const supervisedClause = `current_supervisor_id.eq.${scopedUserId},supervisor_ids.cs.{${scopedUserId}}`;
+      query = query.or(
+        supervisedClientIds.length > 0
+          ? `${supervisedClause},client_id.in.(${supervisedClientIds.join(",")})`
+          : supervisedClause
+      );
     }
 
     // Full-fleet search across trigram-indexed columns (machine_id, model, serial_number only)

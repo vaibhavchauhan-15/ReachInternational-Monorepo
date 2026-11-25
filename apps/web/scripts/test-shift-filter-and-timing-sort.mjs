@@ -95,10 +95,15 @@ check("today-shift-monitor.ts: roster is read through the single authoritative R
 
 // 6. Canonical Deduplication with Shift Code Normalization
 check("shift-monitor.ts: dedupeShiftMonitorRows normalizes shift codes and prioritizes active operators", () => {
-  const fileContent = fs.readFileSync(path.join(webRoot, "lib/utils/shift-monitor.ts"), "utf8");
+  const localPath = path.join(webRoot, "lib/utils/shift-monitor.ts");
+  let fileContent = fs.readFileSync(localPath, "utf8");
+  if (fileContent.includes('@reachinternational/utils')) {
+    const utilsPath = path.join(webRoot, "../../packages/utils/src/shift.ts");
+    fileContent = fs.readFileSync(utilsPath, "utf8");
+  }
   assert.match(fileContent, /shiftNorm/);
-  assert.match(fileContent, /replace\(\/\^SHIFT\\s\*\/\i,\s*""\)/);
-  assert.match(fileContent, /r\.status === "entered"/);
+  assert.match(fileContent, /replace\(\/\^SHIFT\\s\*\/\i,\s*["']["']\)/);
+  assert.match(fileContent, /r\.status === ['"]entered['"]/);
   assert.match(fileContent, /r\.operator_id && !existing\.operator_id/);
 });
 

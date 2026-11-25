@@ -392,7 +392,29 @@ Existing table, foreign keys, indexes, constraints, RLS policies, triggers, RPCs
 
 ---
 
-## 9. WEB + MOBILE 100% PARITY CONTRACT
+## 9. WEB + MOBILE 100% PARITY CONTRACT & MANDATORY POLICY
+
+> **ONE MONOREPO = ONE PRODUCT = ONE SOURCE OF TRUTH = CONSISTENT WEB & NATIVE EXPERIENCE.**
+> 
+> **ABSOLUTE RULE**: Any change that affects shared product functionality, business logic, UI/UX, user workflows, API integration, data handling, validation, permissions, or application behavior in one platform MUST be evaluated and implemented consistently in the other platform.
+> The web and native applications must remain functionally equivalent, visually consistent, and behaviorally aligned. No AI agent is exempt from this rule.
+
+### The 10 Core Parity Principles:
+1. **Mandatory Cross-Platform Consistency**: Equivalent functionality, visual consistency, and behavioral alignment across Web and Mobile.
+2. **Mandatory Codebase Audit**: Before modifying ANY code, inspect both Web (`apps/web`) and Native (`apps/mobile`) implementations, models, schemas, and logs. Never assume.
+3. **Cross-Platform Change Classification**:
+   - **UI/UX**: Equivalent screens, dialogs, forms, tables/cards, filters, and design tokens.
+   - **Backend / Business Logic**: Both clients consume updated contracts; zero outdated rules or APIs left behind.
+   - **Data and State**: Both platforms correctly read, write, validate, display, and synchronize data.
+4. **No Platform Left Behind**: Strictly prohibit implementing on one platform while ignoring the other, fixing bugs in only one client, or using divergent business logic.
+5. **Exceptions Only When Justified**: Platform-specific adaptations (e.g. native device APIs, responsive table vs card reflow) are permitted, but **never justify platform-specific business behavior**.
+6. **Strict 8-Step Workflow**: UNDERSTAND → AUDIT → EVALUATE → IMPACT ANALYSIS → PLAN → IMPLEMENT → VERIFY → REPORT.
+7. **Shared Code & Architecture**: Maximize reuse from `@reachinternational/*` (types, permissions, validation, design-tokens, utils).
+8. **Testing Requirements**: Run web checks, native checks, backend tests, type checking, and workflow tests before declaring completion. Disclose unexecuted tests; never claim false passes.
+9. **Non-Negotiable Completion Gate**: A task is NOT complete until both platforms are audited, updated, tested, and verified against identical business rules.
+10. **Final Directive**: One monorepo = One product = One source of truth. Parity is a mandatory engineering requirement.
+
+### The 8 Dimensions of 100% Parity:
 
 Web and Native Mobile are two views of **ONE SINGLE SYSTEM**. They must achieve **100% PARITY across all 8 dimensions**:
 

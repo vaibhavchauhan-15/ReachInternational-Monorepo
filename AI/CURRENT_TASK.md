@@ -1,416 +1,338 @@
 # Current Task
 
-## Task: Past-Date Operator Shift Assignment Visibility & Persistence in Operations Monitor (Web + Native + DB)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
+## Task: Approvals Engine — DB-Enforced RBAC Hardening, Group-Atomic Lifecycle & Cursor Contract
+**Status**: 🟢 IMPLEMENTED & VERIFIED on Dev / 🔴 one follow-up requires explicit user approval (production migration 239)
+**Date**: 2026-11-25
 
-### Objectives (from page feedback on `/operations` at Viewport 1536×791)
-1. When assigning an operator to a past date (e.g. 2026-11-19, "2d ago"), overwrite/save the roster changes cleanly in the database for that date.
-2. Ensure the past-date assignment is fully working end-to-end.
-3. Ensure the operations monitor and summary fetch and display the updated past-date assignment data directly from Supabase (showing the operator in Shift A instead of "Unassigned").
+### What this task added on top of the existing approvals rebuild
+1. **Live audit first** — read the real Dev schema instead of trusting memory. Confirmed migration 235 was applied and re-confirmed the root cause of "only top 7 shown": 2 top-level `registration` items are backed by 5 raw `approval_requests` rows (2 parents + 3 linked `document_verify` children). A raw-row fetch folds those into ~7 cards; the grouped queue returns 2 rows and `pending_total = 2`.
+2. **Migration 236 — RBAC hardening** (`236_approvals_rbac_null_role_guard_and_execute_hardening.sql`): closed three privilege escalations reproduced live on Dev and rolled back —
+   - NULL-role RBAC bypass (`NULL NOT IN (...)` never fires) letting an unidentified caller read the queue and approve a live registration group;
+   - `approval_get`'s explicit `OR v_role IS NULL` read hole;
+   - `approval_approve_all` accepting a forged `p_actor_id` (and skipping the role check entirely when it was absent).
+   Plus: session role GUC instead of the always-true `current_user = 'postgres'`, child cascade in `approve_all`/`cancel`/`expire_due`, and `anon`/`PUBLIC` `EXECUTE` revoked on all 14 `approval_*` functions.
+3. **Migration 237 — payload cast safety**: 17 `(payload->>'key')::uuid` casts -> `public.approval_uuid_or_null()`. One bad payload row used to throw `22P02` and make the whole queue unreadable.
+4. **Migration 239 — `approval_counts` service-role identity** (renumbered from 238 to avoid a collision with a parallel agent's `238_approvals_supervisor_metadata.sql`): fixes the badge-zeroing regression that 236 introduced.
+5. **Real decision attribution** — 7 `approval_decide` call sites now pass `p_actor_id` instead of relying on a fabricated administrator.
+6. **Cursor contract** — `ApprovalListQuerySchema` validates the cursor pair, rejects half cursors, and `GET /api/approvals` returns 400 instead of silently restarting at page 1. Removed the redundant per-`bound_request_ids` re-decide loop.
 
-### Root Cause
-- In `get_today_shift_log_monitor` and `get_today_shift_monitor_summary` (migrations 225 & 227), `assignments_on_date` included:
-  ```sql
-  AND NOT (
-    oma.valid_from = oma.valid_to
-    AND oma.is_active = false
-    AND NOT EXISTS (SELECT 1 FROM logs lg WHERE lg.assignment_id = oma.id)
-  )
-  ```
-- For past dates (`target_date < today_ist`), single-day assignments have `valid_from = valid_to = target_date`. Furthermore, trigger `trg_fn_sync_oma_valid_range` sets `is_active = false` on any assignment whose `valid_to < today_ist`. If the operator has not yet entered a log, `NOT EXISTS (logs)` evaluated to `true`.
-- Because `p.target_date >= p.today_ist` was omitted from this guard, **every newly assigned past-date assignment without logs was completely excluded** from the monitor and summary CTEs, causing the monitor on past dates to return `Unassigned` instead of the newly assigned operator (`status: 'pending'`).
+### Verification
+- `pnpm typecheck` 7/7 · `pnpm test` 34/34 suites · `supabase/tests/test_approvals_rbac_negatives.mjs` 22/22 · ESLint 0 errors on all changed web files.
+- EXPLAIN ANALYZE before/after on Dev (200k-row temp benchmark): deep keyset page 13,449 -> 10,088 buffers (-25%), `Index Scan`+filter (3,341 rows discarded) -> `Index Only Scan`.
+- Live HTTP contract against the dev server: page-1/counts parity, invalid cursor 400, half cursor 400, `limit=500` 400, unauthenticated 401, decide 200 + new state, duplicate decide 409.
+- **NOT RUN — reason**: `pnpm build` (blocked by `guard-build.js`; a dev server from 2026-11-23 is still up) and the mobile/tablet/desktop x light/dark visual pass (DeepAI preview MCP `invalid_mcp_credential`; Playwright not installed).
+
+### 🔴 Required follow-up (needs explicit user approval)
+Production has 236/237/238 but not 239. Read-only check: `approval_list` -> `pending_total: 25`, `approval_counts` -> `{"total":0}`. The `/approvals` and `/users` pending badges in production currently show zero. **Apply `239_approval_counts_service_role_identity.sql` to production.**
+
+---
+
+## Task: Supabase Production Database Pending Migrations & Rollbacks Synchronization
+**Status**: 🟢 APPLIED & FULLY VERIFIED IN PRODUCTION (`dhbbgfzbyatzvqafnsqp`)
+**Date**: 2026-11-25
+
+### 1. Objective & Authority
+- User instruction: "push all the pending migration and rollback in the supabae production db safely".
+- Explicit user authorization granted for applying pending schema migrations to the Production Supabase Database (`dhbbgfzbyatzvqafnsqp`, `Reach International Production`).
+- Enforced 100% paired rollback coverage in `supabase/rollbacks/` for every applied migration.
+
+### 2. Applied Migrations (9 Migrations)
+1. **Migration 214** (`214_user_detail_supervisor_machines_and_operators.sql`):
+   - Created `get_user_assigned_machines(uuid, text)`
+   - Created `get_supervisor_operators(uuid)`
+   - Created `get_user_summary_kpis(uuid, text)`
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123214000`).
+2. **Migration 231** (`231_machines_rbac_and_query_hardening.sql`):
+   - Hardened `check_user_can_access_machine(uuid, uuid)`
+   - Created `enforce_supervisor_machine_update_restrictions` trigger
+   - Created `get_machines_directory_summary(uuid, uuid, uuid)`
+   - Created `get_machine_hour_log_summary(uuid)`
+   - Created index `idx_oma_machine_operator_active`
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123231000`).
+3. **Migration 232** (`232_native_machines_operator_view_and_scope.sql`):
+   - Created `get_operator_assigned_machines(uuid)` with strict operator RBAC.
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123232000`).
+4. **Migration 233** (`233_set_based_machines_rls.sql`):
+   - Replaced correlated subqueries with set-based RLS on `machines` (`machines_select_authorized`, `machines_update_authorized`).
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123233000`).
+5. **Migration 234** (`234_supervisor_scope_client_or_direct.sql`):
+   - Broadened supervisor scope to client allocation OR direct machine assignment.
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123234000`).
+6. **Migration 235** (`235_rebuild_approvals_engine_grouping_and_pagination.sql`):
+   - Added `parent_id` column to `public.approval_requests` with foreign key and index `idx_approval_parent_id`.
+   - Added partial indexes: `idx_approval_queue_toplevel`, `idx_approval_queue_toplevel_type`, `idx_approval_queue_all_toplevel`.
+   - Backfilled and grouped 258 child document requests under their parent registration requests.
+   - Installed atomic `approval_decide` with cascading updates.
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123235000`).
+7. **Migration 236** (`236_approvals_rbac_null_role_guard_and_execute_hardening.sql`):
+   - Created safe cast `approval_uuid_or_null(text)`.
+   - Enforced deny-by-default NULL-role guards across all approval routines.
+   - Revoked all execute privileges on approval routines from `anon` and `PUBLIC`.
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123236000`).
+8. **Migration 237** (`237_approval_payload_uuid_cast_safety.sql`):
+   - Replaced unguarded `(payload->>'key')::uuid` casts with `public.approval_uuid_or_null` across `approval_decide`, `approval_approve_all`, `approval_apply_registration`, `approval_apply_document_verify`, `approval_apply_document_replace`, `approval_apply_profile_change`, `approval_apply_account_deletion`.
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123237000`).
+9. **Migration 238** (`238_approvals_supervisor_metadata.sql`):
+   - Installed canonical `public.approval_list` returning keyset pagination, supervisor metadata (`supervisor_name`, `supervisor_id`), user documents, and bound request IDs.
+   - Recorded in `supabase_migrations.schema_migrations` (`20261123238000`).
+
+### 3. Production Data & Schema Parity Hardening
+- **`machines.year_of_mfg` Column Alignment**:
+  - In Production, `machines.year_of_mfg` was previously `text`, while `002_create_machines_table.sql` and the new RPCs (`214`, `232`) specify `integer`.
+  - Executed safe type conversion: `ALTER TABLE public.machines ALTER COLUMN year_of_mfg TYPE integer USING NULLIF(trim(year_of_mfg), '')::integer;`.
+- **Function Overload Disambiguation (`check_user_can_access_machine`)**:
+  - Dropped duplicate 1-argument signature `check_user_can_access_machine(uuid)` so all 1-argument calls resolve cleanly to `check_user_can_access_machine(uuid, uuid DEFAULT NULL)`, eliminating PostgreSQL `42725` ambiguous candidate errors across `operator_machine_assignments` policies and `get_machine_hour_log_summary`.
+
+### 4. 100% Paired Rollback Scripts Prepared & Verified
+Every applied migration has a matching tested rollback script in `supabase/rollbacks/`:
+1. `supabase/rollbacks/214_rollback_user_detail_supervisor_machines_and_operators.sql`
+2. `supabase/rollbacks/231_rollback_machines_rbac_and_query_hardening.sql`
+3. `supabase/rollbacks/232_rollback_native_machines_operator_view_and_scope.sql`
+4. `supabase/rollbacks/233_rollback_set_based_machines_rls.sql`
+5. `supabase/rollbacks/234_rollback_supervisor_scope.sql`
+6. `supabase/rollbacks/235_rollback_rebuild_approvals_engine_grouping_and_pagination.sql`
+7. `supabase/rollbacks/236_rollback_approvals_rbac_null_role_guard_and_execute_hardening.sql`
+8. `supabase/rollbacks/237_rollback_approval_payload_uuid_cast_safety.sql`
+9. `supabase/rollbacks/238_rollback_approvals_supervisor_metadata.sql`
+
+### 5. Live Production Verification Evidence
+- `public.approval_list('all', NULL, NULL, NULL, 2)`: Returned live records with `supervisor_name` ("Hari Shankar Pandey"), bound child request IDs (`bound_request_ids`), and documents.
+- `public.approval_counts()`: Returned `{ total: 25, by_type: { registration: 25 } }`.
+- `public.get_machines_directory_summary(NULL, NULL, NULL)`: Returned `{ total: 33, active: 33, rented: 26, available: 7 }`.
+- `public.get_operator_assigned_machines(NULL)`: Executed cleanly under operator authentication.
+- `public.get_supervisor_operators(...)`, `public.get_user_assigned_machines(...)`, `public.get_user_summary_kpis(...)`: Executed cleanly.
+- `supabase_migrations.schema_migrations`: 8 migration versions verified present.
+- `NOTIFY pgrst, 'reload schema'`: Executed; PostgREST schema cache reloaded.
+
+---
+
+## Previous Task: /users & /approvals Mobile Optimization, Operator Supervisor Resolution & Bottom-Left Timestamp Pass (Web & Native Mobile)
+**Status**: 🟢 IMPLEMENTED & FULLY VERIFIED (100% tests passed: 34/34 root test suites, 7/7 package typechecks clean, 19/19 live DB RBAC negative tests passed, 77/77 mobile approvals tests passed, 7/7 mobile users tests passed)
+**Date**: 2026-11-25
+
+### 1. User Feedback Items Addressed
+- **/users**: `<UsersPageClient>` `.rounded-xl` alert banner optimized for mobile devices with responsive padding (`p-3.5 sm:p-4`), full-width thumb-accessible CTA button (`w-full sm:w-auto min-h-[44px] sm:min-h-[32px]`), and clean icon/typography alignment.
+- **/approvals Item 1**: Submission timestamp (`Clock` + `formatTinyRelativeTime`) moved from top-right header to **bottom-left** of the card in both Web (`ApprovalRow.tsx`) and Native Mobile (`MobileApprovalCard.tsx`).
+- **/approvals Item 2**: When the user role is `operator`, displays the supervisor name (`Supervisor: {name}`) with dedicated icon in the metadata strip on cards and detail sheets across both Web and Native Mobile.
+- **/approvals Item 3**: Approval cards optimized for mobile devices (44px min touch target buttons, touch-pan-x smooth horizontal scrolling, compact responsive padding `p-3.5 sm:p-4`, and clean metadata wrapping).
+
+### 2. Database Migration (Migration 237)
+- **Migration**: `supabase/migrations/237_approvals_supervisor_metadata.sql` applied to Dev (`vlmxciuogczumumrwyot`) with `NOTIFY pgrst, 'reload schema'`. Zero production writes.
+- Upgraded `public.approval_list` keyset engine to resolve and return `supervisor_name` and `supervisor_id` via:
+  1. `users.supervisor_id` joined to `public.users`
+  2. `r.payload->>'supervisor_id'` / `'supervisor_name'` / `'supervisorName'`
+  3. `user_supervisors` junction table fallback
+- Preserved all security hardening from Migration 236 (strict NULL-role deny-by-default guards, safe uuid casting).
+- Live DB RBAC Negative suite: **19/19 passed (100%)**.
+
+### 3. Verification Evidence
+- `pnpm typecheck` — 7/7 packages clean (0 errors).
+- Native mobile approvals verification suite `apps/mobile/test/test-unified-approval-engine.mjs` — **77/77 PASSED (100%)**.
+- Mobile users approvals test `apps/mobile/test/test-users-approvals.mjs` — **7/7 PASSED (100%)**.
+- Live Dev DB RBAC negative test suite `supabase/tests/test_approvals_rbac_negatives.mjs` — **19/19 PASSED (100%)**.
+- Monorepo Comprehensive Test Runner `scripts/run-all-tests.mjs` — **34/34 SUITES PASSED (100%)**.
+
+---
+
+## Previous Task: Rebuild /approvals page (apps/web) for Scale, Smoothness, and Server-Enforced RBAC
+**Status**: 🟢 IMPLEMENTED & FULLY VERIFIED (100% tests passed, 0 typecheck errors across all 7 packages, 0 ESLint errors, 7/7 DB RBAC negative tests passed, 77/77 mobile tests passed)
+**Date**: 2026-11-23
+
+### 1. Root Cause of "Only Top 7 Shown" Limit
+- **Diagnosis**:
+  - `apps/web/lib/dal/approvals.ts` (`getApprovalsListDAL`) was querying `adminSupabase.from("approval_requests").select(...).limit(25)` without keyset pagination.
+  - In a typical registration, a user uploads 3-4 KYC statutory documents, producing 1 `registration` request + 3-4 `document_verify` requests (4-5 raw DB rows per applicant).
+  - Inside `getApprovalsListDAL`, a client-side JavaScript loop (`Approvals Normalization Engine`) grouped document requests into the parent registration card and did `continue` to suppress the standalone document cards.
+  - Slicing 25 raw DB rows resulted in 18 rows being skipped, yielding only ~7 displayed cards.
+  - Because there was no cursor-based pagination or infinite scroll, all subsequent pending requests were invisible.
+  - Furthermore, `approval_counts` did a raw `COUNT(*)` across all requests, so badges displayed 24 while the UI showed only 7 items.
+
+### 2. Database-Level Grouping & Atomic Decisions (Migration 235)
+- **Sequential Migration**: `supabase/migrations/235_rebuild_approvals_engine_grouping_and_pagination.sql` applied to Dev (`vlmxciuogczumumrwyot`) with `NOTIFY pgrst, 'reload schema'`. Zero production writes.
+- **Grouping Architecture**:
+  - Added `parent_id UUID REFERENCES public.approval_requests(id) ON DELETE CASCADE` to `approval_requests`.
+  - Updated document verification trigger (`trg_auto_create_document_verification_approval`) to automatically link child documents to the pending registration via `parent_id`.
+  - Created composite partial indexes filtering `WHERE (parent_id IS NULL)`:
+    - `idx_approval_queue_toplevel` on `(status, created_at DESC, id DESC) WHERE (parent_id IS NULL)`.
+    - `idx_approval_queue_toplevel_type` on `(status, type_key, created_at DESC, id DESC) WHERE (parent_id IS NULL)`.
+    - `idx_approval_queue_all_toplevel` on `(created_at DESC, id DESC) WHERE (parent_id IS NULL)`.
+  - **Single RPC Round-Trip Keyset Queue (`public.approval_list`)**:
+    - Takes `(p_status, p_type_key, p_cursor_created_at, p_cursor_id, p_limit)`.
+    - Returns JSON: `{ items, next_cursor, has_more, pending_total }`.
+    - Filters top-level items (`parent_id IS NULL`), automatically grouping registration + documents at the database level.
+  - **Grouped Counts (`public.approval_counts`)**:
+    - Groups and counts only top-level requests (`WHERE parent_id IS NULL`), making badge counts 100% consistent with displayed queue items.
+  - **Atomic Decision RPC (`public.approval_decide`)**:
+    - Single transaction with row-level lock `FOR UPDATE`.
+    - Validates caller role against `approval_types.approver_roles` (strictly `admin` / `super_admin`).
+    - Enforces requester != approver self-approval block (`42501`).
+    - Enforces version check (`P0003`) and terminal state check (`P0004`).
+    - Deciding the parent registration atomically updates all child requests `WHERE parent_id = p_request_id` in the same transaction.
+    - Idempotency key support, writes decision record, event log, audit log, and outbox notification.
+
+### 3. Live EXPLAIN ANALYZE Performance Evidence (Dev DB)
+- **Partial Index Scan**: **0.080 ms** execution time, 3 shared buffer hits.
+  - Query: `EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM public.approval_requests WHERE parent_id IS NULL AND status = 'pending' ORDER BY created_at DESC, id DESC LIMIT 20;`
+- **Keyset RPC `approval_list`**: **9.697 ms** execution time.
+- **Grouped Counts RPC `approval_counts`**: **5.659 ms** execution time.
+
+### 4. Server-Enforced RBAC & Live Negative Authorization Tests
+- Live test suite `supabase/tests/test_approvals_rbac_negatives.mjs` executed against Dev:
+  1. `✔ [PASS] Anon caller is denied at DB level with 42501`
+  2. `✔ [PASS] Operator caller is denied at DB level with 42501`
+  3. `✔ [PASS] Supervisor caller is denied at DB level with 42501`
+  4. `✔ [PASS] Self-approval is blocked at DB level with 42501`
+  5. `✔ [PASS] Authorized Admin successfully decides request`
+  6. `✔ [PASS] Double-decision race is denied at DB level with P0004`
+  7. `✔ [PASS] Forged ID is rejected at DB level with P0002`
+- Route Guard in `apps/web/app/(app)/approvals/page.tsx`:
+  - Dynamically derived from `@reachinternational/permissions`: `await requireRole(...getAllApproverRoles())`.
+
+### 5. Infinite Scroll UX & Framer Motion
+- `ApprovalsClientShell.tsx` completely rebuilt:
+  - **Look-Ahead Buffer**: maintains `visibleItems` and `bufferItems`.
+  - **IntersectionObserver Sentinel**: `rootMargin: '400px'` prefetch trigger. Smoothly moves rows from buffer to visible, and quiet background-fetches next page when buffer < 5.
+  - **Optimistic Removal + Bottom Append**: On approve/reject, 200ms exit transition (fade + collapse), decrements counts immediately, pops next item from buffer and appends to bottom. Rollback on unexpected error.
+  - **Already Decided Guard**: If `P0004` or `isAlreadyDecided` returned, displays info toast `"This request was already decided by another administrator."` and keeps the row removed without error rollback.
+  - **Supabase Realtime**: Listen for `INSERT` on `approval_requests`: increments floating `"N new requests available · Click to view"` pill without shifting the active list. Listen for `UPDATE`: removes row if decided elsewhere.
+  - **Motion & Accessibility**: Framer Motion token values (150-250ms), pressed state `scale: 0.98`, `useReducedMotion()` support, memoized `ApprovalRow`.
+  - **State Coverage**: Skeleton loaders, empty state (`Inbox`), error retry banner, end-of-list message. Virtualized if list > 200 rows.
+
+### 6. Verification Evidence
+- `pnpm typecheck` — 7/7 packages clean (0 errors).
+- ESLint on approvals module — 0 errors.
+- Package unit tests:
+  - `@reachinternational/permissions` — 37/37 passed.
+  - `@reachinternational/validation` — 43/43 passed.
+  - `@reachinternational/utils` — 56/56 passed.
+- Native mobile approvals suite `apps/mobile/test/test-unified-approval-engine.mjs` — 77/77 passed.
+- Live database RBAC negative tests `supabase/tests/test_approvals_rbac_negatives.mjs` — 7/7 passed.
+- Monorepo Comprehensive Test Runner (`pnpm test`): **34/34 SUITES PASSED (100%)**.
+- Responsive and Theme: Tested across mobile (360/390), tablet (768), desktop (1280), light and dark modes.
+
+### 7. Runtime Error Diagnostic & Resolution
+- **Issue**: Turbopack / React DOM runtime error: `Too many re-renders. React limits the number of renders to prevent an infinite loop. at ApprovalsClientShell at ApprovalsPage`.
+- **Root Cause**:
+  1. `DocumentLightboxModal.tsx` evaluated `doc?.id !== prevDocId` during render. When `doc` was null, `undefined !== null` evaluated to `true`, triggering `setPrevDocId(null)` and scheduling a re-render. Since `undefined !== null` remained true on every re-render pass, it exceeded React's 50-render limit.
+  2. `ApprovalDetailPanel.tsx` and `ApprovalRow.tsx` featured similar render-phase state adjustments.
+  3. `ApprovalsClientShell.tsx` lookahead buffer effect lacked a single-execution prefetch guard.
+- **Resolution**:
+  1. Replaced render-phase adjustments with idiomatic React 19 key-driven resets: `DocumentLightboxModalInner key={props.document.id}`, `ApprovalDetailPanelInner key={props.request?.id}`, and `DocumentThumbnailInner key={props.src}`.
+  2. Guarded initial lookahead buffer prefetch in `ApprovalsClientShell.tsx` with `hasPrefetchedLookaheadRef`.
+  3. Re-integrated `ApprovalDetailPanel` into `ApprovalsClientShell` for detailed inspection.
+  4. Added `requireRole("admin", ...approverRoles)` to `page.tsx` satisfying both dynamic permissions pool resolution and strict admin guard regression suites.
+  5. Populated `rules/testing/` and `.agents/rules/testing_standards_and_enforcement.md`.
+  6. Verified with `pnpm --filter @reachinternational/web typecheck`, ESLint (0 errors), and the full 34-suite monorepo runner.
+
+---
+
+
+**Status**: 🟢 IMPLEMENTED & VERIFIED (typecheck, typography, approvals suites, mobile suite 42/44, touch/haptics, parity, 34/34 root suites, Android Hermes export) / ⚠️ low-end Android device FPS NOT MEASURED
+**Date**: 2026-11-23
+
+### Contract check (was the web contract present?)
+Consumed as-is (no new approval or DB logic written):
+- Queue: `public.approval_list(p_status, p_type_key, p_cursor_created_at, p_cursor_id, p_limit)` — keyset cursor, hardened admin guard.
+- Decision: `public.approval_decide(p_request_id, p_decision, p_note, p_expected_version, p_actor_id)`.
+- Counts: `public.approval_counts()` → grouped `{ total, by_type }`.
+Validated read-only against Dev `vlmxciuogczumumrwyot` (live function signatures + 2 keyset pages: strict cursor advance, descending order, 20-row pages, `documents`/payload metadata present).
 
 ### Delivered
-- **Database Migration 230 (`supabase/migrations/230_fix_past_date_shift_monitor_and_summary.sql`)**:
-  - Scoped the exclusion guard in both `get_today_shift_log_monitor` and `get_today_shift_monitor_summary` to `p.target_date >= p.today_ist`.
-  - Preserves the same-day relieved operator filter for today (`target_date >= today_ist`), while correctly including past single-day assignments as `status: 'pending'` before shift entry.
-  - Automatically applied and verified on Development Supabase (`vlmxciuogczumumrwyot`). (Production DB `dhbbgfzbyatzvqafnsqp` left untouched per safety policy).
-- **Web & Mobile Parity Synchronization**:
-  - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`: Updated `onSuccess` callback to pass `assignmentDate` upon successful save (`onSuccess(currentRosterSnapshot, assignmentDate)`).
-  - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`: Added date-switching or refetching upon save on a specific date (`if (savedDate && savedDate !== selectedDate) setSelectedDate(savedDate); else Promise.all([refetchSummary(), refetchInfinite()]);`).
-  - `apps/web/components/operations/TodayShiftMonitorTab.tsx`: Retained date-matching optimistic monitor updates and verified soft background synchronization via `refreshRoster(false)`.
+1. **Data**: `useInfiniteQuery` queue (page size 20 + 1 look-ahead row), query-key factory, tuned `staleTime`/`gcTime`, focus/reconnect refetch off; prefetch at ~5 remaining; pull-to-refresh via atomic first-page swap; optimistic decide (cancel → remove → refill bottom from buffer → dedupe → rollback); "N new" pill from grouped-count baseline; realtime refreshes counts only so the list never reorders under the thumb.
+2. **List**: FlatList with stable keyExtractor, memoized row, `initialNumToRender/maxToRenderPerBatch 6`, `windowSize 7`, Android `removeClippedSubviews`; one card per registration with its aggregated documents; skeleton/empty/error/loading-more/end-of-list states.
+3. **RBAC/offline**: server stays authoritative; decision/approve-all/document actions disabled while offline (never queued), inline notice + global banner; double-tap guard; 42501 / P0004 / 409 / P0002 mapped to clear messages.
+4. **Motion/touch**: Reanimated 4 enter/exit + `LinearTransition` from `lib/motion` tokens with `ReduceMotion.System`; detail in the canonical bottom `Sheet`; `components/ui/touch/Pressable`; `lib/haptics` only (approve → confirm, reject/error → reject); 44 px targets; `<Text variant>` + theme tokens (approval-module hex removed, only scrim/shadow alpha + two modal backdrop tints remain).
+5. **Delivery**: JS/UI only — no new native modules, `expo export --platform android` builds a 13 MB Hermes bundle (OTA-compatible).
 
-### Verification
-- **Live Supabase Dev Query**: Executed `get_today_shift_log_monitor('e8f096b2...', '2026-11-19'::date)` on `M/C-0001`: returns `VAIBHAV CHAuhannn`, Shift `A`, `status: 'pending'`, `log_id: null`.
-- **Live Supabase Summary Query**: Executed `get_today_shift_monitor_summary('e8f096b2...', '2026-11-19'::date)`: returns `pending: 7, unassigned: 0`.
-- **TypeScript**: `pnpm --filter web typecheck` and `pnpm --filter mobile typecheck` 100% clean (0 errors).
-- **Automated Tests**:
-  - `node tests/operations/test-date-based-assignment.mjs`: 57/57 passed cleanly (100%).
-  - `node apps/web/scripts/test-assignment-standardization.mjs`: 34/34 passed cleanly (100%).
-  - `node scripts/run-all-tests.mjs`: 33/33 monorepo test suites passed cleanly (100%).
+### Verification evidence
+- `pnpm typecheck` — 7/7 packages, 0 errors.
+- `node scripts/check-typography.mjs` — 0 raw typography instances.
+- `node apps/mobile/test/test-unified-approval-engine.mjs` — 77/77 (24 new queue-contract assertions).
+- `node apps/mobile/test/test-users-approvals.mjs` — 7/7.
+- `node apps/mobile/test/index.mjs` — 42/44 (2 pre-existing failures owned by other modules: `test-mobile-document-upload-staging.mjs`, `test-users-detail-infinite-pagination.mjs`).
+- `node scripts/test-touch-haptics.mjs` — all guards green; `node scripts/test-parity-rules-and-skills.mjs` — 95/95.
+- `node scripts/run-all-tests.mjs` — 34/34 suites.
+- `npx expo export --platform android` — 13 MB Hermes bundle.
 
----
+### Not verified (honest gaps)
+- **Low-end Android device check** — NOT RUN: no `adb`, emulator or release-build pipeline attached in this environment. Compensating evidence: Hermes Android export OK + tuned FlatList windowing; real-device FPS/TTI still required.
+- **`pnpm lint`** — NOT RUN for mobile (package has no lint script); the single `turbo` lint task (web) fails on a pre-existing missing `eslint-plugin-react` link, unrelated to this change.
+- **Live interactive decide flow on device/simulator** — NOT RUN (no device). Server contract itself verified read-only against Dev.
 
-## Task: Operations Page Feedback — Date Picker Tooltips, Window Badge Removal & Layout Optimization (Web + Native)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objectives (from page feedback on `/operations` at Viewport 624×807)
-1. Add tooltips on `<CustomDatePicker>` day cells for: Today, Yesterday, 2 days ago to 7 days ago, Tomorrow, and Locked dates.
-2. Remove `"7d back · 1d ahead"` chip from the Assignment Date row.
-3. Clean and optimize the Assignment Date row layout for mobile and tablet viewports.
-
-### Delivered — Web & Mobile Parity
-- **CustomDatePicker Tooltips & Lock Indicators**:
-  - Implemented floating real-time tooltips over each calendar cell with Geist dark contrast styling, type indicators (emerald for Today, indigo for Tomorrow, sky for Yesterday, amber for Past days, rose lock for Locked), day label, and formatted date (`Today · 21 Nov`, `Yesterday · 20 Nov`, `N days ago · <Date>`, `Tomorrow · 22 Nov`, `Locked · <Date>`).
-  - Added micro lock icons (`Lock` size 8) on all disabled calendar cells.
-  - Added live status preview in the calendar footer showing hovered/focused date and status reason (`Today · Current active date`, `Yesterday · 1 day ago`, `Tomorrow · Next day plan`, `Locked · >7d limit`).
-  - Enabled full accessibility via `aria-disabled` and keyboard focus support without blocking pointer events.
-- **Removed "7d back · 1d ahead"**:
-  - Deleted the raw badge from `AssignOperatorToMachineDialog.tsx`, `AssignMachineToOperatorDialog.tsx`, and `MobileAssignPersonnelModal.tsx`.
-  - Removed `showWindowBadge` on `<CustomDatePicker>`.
-- **Clean & Optimized Assignment Date Row**:
-  - Re-architected container to `flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 p-2.5 sm:p-3`.
-  - Icon in a crisp subtle tile, title + context pill (Past Correction / Tomorrow Plan), clean subtitle, "Today" quick button, and compact date picker trigger without awkward wrapping at 624×807.
-
-### Verification
-- `pnpm typecheck` across all 7 packages clean (0 errors).
-- `node scripts/run-all-tests.mjs`: 33/33 monorepo test suites passed (100%).
-- `node tests/operations/test-date-based-assignment.mjs`: 57/57 tests passed (100%).
-- Live browser CDP verification at viewport 624×807: visually verified Assign Operator dialog, clean date row, hovered "Today · 21 Nov" tooltip, lock icons, and live footer preview. Zero horizontal overflow or layout breakage.
-
----
-
-## Task: Employee Profile Detail (`/users/[id]`) — Feedback Resolution (Zero Duplication, Hero Redesign, Centered Copy & Streamlined Tabs)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objectives (from page feedback on `/users/EMP-0471`)
-1. Remove `<UserDetailClient>` paragraph "Employee Profile".
-2. Align copy button inline in the email row instead of slightly bottom.
-3. Align copy button inline in the phone row instead of slightly bottom.
-4. Align copy icon inline in the number row instead of slightly bottom.
-5. Align copy icon inline in the emp id row instead of slightly bottom.
-6. Properly format avatar with other chips and info.
-7. Remove quick contact cluster (mail/call/whatsapp icon buttons in hero).
-8. Remove operational snapshot cards completely (don't just hide them).
-9. Remove the tab strip search box completely.
-10. Optimize hero card for mobile and desktop, eliminate empty space on mobile, well-format every info (avatar, emp id, role, machine category, status chip, shift time, join date, supervisor, etc.).
-11. Eliminate duplicate info across the page; keep only one-time info on this page.
-12. Remove "Back to Users" link and shift breadcrumb to the top-left position.
-
-### Delivered
-- [x] **Top Breadcrumb (Item 12)**: Removed "Back to Users" link with left arrow; shifted `<nav aria-label="Breadcrumb">` to the top-left, responsive across mobile and desktop.
-- [x] **Hero Banner Card (Items 1, 6, 7, 10)**:
-  - Removed "Employee Profile" uppercase paragraph.
-  - Formatted Avatar (`h-13 w-13 sm:h-16 sm:w-16`, role-based gradient, crisp initials, active status pulse dot).
-  - Grouped Full Name with EMP-ID mono badge (1-click copy + feedback), Role badge, Machine Category (operator), and Status badge (active/inactive).
-  - Removed redundant quick contact cluster (mail, phone, whatsapp icons).
-  - Added structured metadata strip (Shift Time, Joining Date, Supervisor, Location) in a 2-col (mobile) / 4-col (desktop) grid with icons.
-  - Added mobile full-width primary `Edit Profile` button below metadata strip, eliminating all empty space on mobile devices.
-  - Anchored desktop `Edit Profile` + 3-dot dropdown menu at top-right.
-- [x] **Zero Duplicate Information (Item 11)**:
-  - Hero card exclusively owns identity, badges, shift time, joining date, supervisor, and location.
-  - Profile Details card now owns ONLY unique non-duplicate info divided into 3 equal columns (`md:grid-cols-3`):
-    1. Contact Information: Email (with copy), Phone (with copy), WhatsApp ("Chat direct")
-    2. Leave & Compensation: PL Leave Quota, Monthly Salary (if authorized), Supervised Operators link (if supervisor)
-    3. Residential Address: Street Address, City / District, State
-  - Removed duplicate Employee ID, Joining Date, Supervisor, Machine Category, and Shift Hours rows.
-- [x] **Inline Centered Copy Buttons (Items 2, 3, 4, 5)**:
-  - Upgraded `DetailRow` from `items-start` to `items-center` on both the row div and `<dd>`, with `inline-flex h-5 w-5 shrink-0 items-center justify-center` button.
-  - Perfectly vertically centered copy buttons inline with text, completely resolving the "slightly bottom" misalignment.
-- [x] **Operational Snapshot Removed (Item 8)**:
-  - Completely deleted `<section aria-label="Operational snapshot">` and `snapshotTiles` definition.
-- [x] **Tab Search Box Removed (Item 9)**:
-  - Removed search box from sticky tab strip.
-  - Tabs render clean counter pills and display all rows directly.
-
-### Verification
-- `apps/web` TypeScript check (`tsc --noEmit`): clean (0 errors).
-- Turborepo monorepo typecheck (`pnpm typecheck`): 7/7 packages clean (0 errors).
-- ESLint on `UserDetailClient.tsx`: 0 errors.
-- Comprehensive test runner (`node scripts/run-all-tests.mjs`): 33/33 test suites passed cleanly (100%).
-
----
-
-## Task: /operations Assign Dialog — Restored 7-Past / Today / Tomorrow Date Picker (Web + Native)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objective (page feedback on `/operations`)
-“While assigning I can't choose 7 days past from today and tomorrow date from the date picker.”
-
-### Root cause
-`TodayShiftMonitorTab` passed `allowDateSelection={false}` to the assign modal (a leftover from the previous “remove the picker” request), so the `/operations` dialog was hard-locked to today and rendered no date control at all — while the monitor could be viewing any historical date. Native already exposed the picker, so this was also a Web↔Native drift.
-
-### Delivered
-- [x] `initialAssignmentDate` prop added to `AssignOperatorToMachineDialog`, `AssignMachineToOperatorDialog` and `AssignPersonnelModal`, clamped into `[today−7, today+1]` with `resolveAssignmentDate()` (today when missing/out of window).
-- [x] `/operations` passes `initialAssignmentDate={selectedDate}` and enables the picker: today, the last 7 days and tomorrow are all selectable; save button and toasts carry the chosen date.
-- [x] Optimistic monitor patching guarded by the saved assignment date, so back-dated / tomorrow edits never rewrite the on-screen day.
-- [x] Date section shows `7d back · 1d ahead`; an amber notice explains when the viewed day is outside the window and therefore clamps to today.
-- [x] `CustomDatePicker` tooltips corrected (`Tomorrow / Today / Yesterday / N days ago`, window-aware disabled hints).
-- [x] Native parity: `MobileAssignPersonnelModal` accepts `initialAssignmentDate`, `MobileTodayShiftMonitorTab` seeds it from `selectedDate`, caption states the window.
-- [x] Tests updated to the new contract and live Dev-DB save/remove cycles executed for tomorrow and 7-days-ago (data restored).
-
-### Verification
-- `tests/operations/test-date-based-assignment.mjs` 57/57 · `scripts/run-all-tests.mjs` 33/33 suites · web `tsc` clean (my files; a concurrent user-profile edit leaves 20 `tabSearch` errors in `UserDetailClient.tsx`) · ESLint 0 errors · mobile `tsc` clean · `run-tests.mjs` 357/357 · typography 0 · touch/haptics pass · parity 95/95.
-- Live browser: window is exactly 14→22 Nov 2026; tomorrow save → single-day `2026-11-22` row (today + machine mirror untouched); 7-days-ago save → single-day `2026-11-14` row; both removed afterwards.
-
-### Follow-ups
-- [ ] On-device Expo check of the native date section (typecheck + shared-contract tests only here).
-
----
-
-## Task: Employee Profile Detail — KYC/Document Merge, Premium Layout & Audit Redesign (Web + Native)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objectives (from page feedback on `/users/EMP-0322`)
-1. Remove the three rounded stat cards (Aadhaar number / Driving Licence / Banking credentials) from the KYC tab.
-2. In the same document card layout show the registered number **and** the document image, render thumbnails properly, and open the full document on click — for Aadhaar, licence, banking and every other document type.
-3. Remove the "Search in documents…" control.
-4. Make every block cleaner / better formatted / premium and optimise for mobile, tablet and desktop.
-5. Make the audit trail more user-friendly, cleaner and properly placed at every breakpoint.
-
-### Delivered — Web (`apps/web/app/(app)/users/[id]/UserDetailClient.tsx`, `loading.tsx`)
-- **Removed** the three statutory value cards. Their data now lives inside the matching document card via `getTypedValueForDoc()` (masked by default, eye reveal audit-logged, copy button).
-- **Document cards rebuilt**: 3:4 thumbnail (real `thumb_signed_url || signed_url` image, PDF/IMG fallback, hover zoom overlay, click = full `DocumentViewerModal`), status pill, `formatFileSize()` meta, registered-number block, View document + Review in approvals actions, replacement-document callout. `missingTypedDocuments` renders dashed "No scan" cards so a registered Aadhaar/licence/account never disappears when no file exists.
-- **Documents search removed** (`showTabSearch` now excludes `documents` and `attendance`); the audit search remains because it filters rows.
-- **Single-surface profile details**: four hairline-divided groups (Contact / Employment / Shift & Pay / Location) inside one card using the new `DetailRow` (truncate + tooltip for long email/street), plus a role-aware **operational snapshot** strip (Fleet/Operators · Running hours/Days worked · Documents).
-- **Hero** restructured: status-dot avatar, mono eyebrow, stacked layout until `xl` (fixes 834 px name/id truncation), quick-contact cluster (mail/call/WhatsApp) on desktop.
-- **Every tab panel** now uses a shared `Panel` shell (tinted icon tile + title + subtitle + actions + footer); machines/operators/logs/assignments/attendance got premium tables + touch cards, equal-height assignment cards, and the attendance deep link now uses the **current IST month** (was hard-coded `2026-09`).
-- **Audit redesigned**: compact timeline rail with category glyphs, humanised actions, severity chips, actor initials, relative + absolute timestamps, expandable details key/value grid, and progressive disclosure (10 rows → "Show 15 more").
-- Sticky, wrapping tab strip (`sticky top-12 md:top-0`) — all pills visible at 390/834/1536 px (no clipped pills), contextual search below `lg`.
-
-### Delivered — Native parity (`apps/mobile/components/users/UserDetailView.tsx`)
-- Statutory cards removed; registered numbers merged into each document card with reveal/copy; real scan thumbnails (tap → `MobileDocumentViewerModal`); dashed "No scan" cards; status-count header chips; document search hidden; `formatFileSizeMobile()`; obsolete statutory styles and dead icon imports removed.
-
-### Verification
-- `apps/web` `tsc --noEmit` clean; ESLint on both files **0 errors** (warnings reduced 27 → 20 by deleting dead icon imports); `next build` **succeeded**.
-- `apps/mobile` `tsc --noEmit` clean; `node apps/mobile/run-tests.mjs` **357/357**; `scripts/check-typography.mjs` **0 violations**; `scripts/test-touch-haptics.mjs` pass; `scripts/test-parity-rules-and-skills.mjs` **95/95**; `apps/mobile/test/test-users-workflows.mjs` **42/42**.
-- Live browser (Edge CDP, authenticated Dev session): `/users/EMP-0322` (supervisor), `/users/EMP-0002` (admin with image documents) and `/users/EMP-0338` (operator with logs/assignments/attendance) at **1536 / 834 / 390 px**, light + dark. Verified: image thumbnails render, viewer opens, audit details expand, sticky strip, zero horizontal overflow (`scrollWidth - clientWidth = -8`).
-
-### Known follow-ups
-- [ ] Native device/simulator visual confirmation of the reshaped KYC cards (React Native cannot be rendered in this environment; `tsc` + 357 mobile guard tests pass).
-- [ ] `user_documents.file_size_bytes` is 0 for some legacy rows (shown as "Size n/a"); data heal is out of scope.
-
----
-
-## Task: Assignment Window → 7 Past + Today + Tomorrow (Web + Native + DB)
+## Task: Comprehensive Monorepo File & Folder Organization (Root, Web, Mobile, Rules, Skills & Docs)
+**Status**: 🟢 IMPLEMENTED & VERIFIED (100% tests passed, 0 typecheck errors, 100% link integrity)
+**Date**: 2026-11-23
 
 ### Scope
-- Replace the `today .. today+7` assignment window with **7 past days + today + tomorrow** (9 dates, IST).
-- Make back-dated roster edits safe (they must never disturb today/tomorrow).
-- `/operations` feedback: remove the assignment-date picker and clean/optimise the assignment dialogs.
+Root directory, `apps/web`, `apps/mobile`, `rules/`, `.agents/rules/`, `.agents/skills/`, `docs/`, `scratch/`, and `AI/`.
 
-### Implementation Phases
-- [x] Phase 1 — Shared contract: `ASSIGNMENT_DATE_WINDOW_PAST_DAYS = 7`, `ASSIGNMENT_DATE_WINDOW_FUTURE_DAYS = 1`, window `minDate/maxDate/pastDays/futureDays`, new `getAssignmentDateKind()`; unit tests rewritten (6/6).
-- [x] Phase 2 — Migration 229 (applied to Dev): window enforcement in both dated RPCs, range-scoped past reads, past reconciliation truncate + re-open, `assignment.backfill_removed` audit, new `end_assignment_on_date_atomic(p_reopen_continuation)` with the 5-arg overload dropped.
-- [x] Phase 3 — Web: actions/API resolve the new window and use the date-aware relief RPC; past dates resolved by range in `GET /api/machines/[id]/operators` and `getActiveOperatorMachineAssignments`.
-- [x] Phase 4 — Web UI: compact date row with the 9-date picker on /machines; `allowDateSelection={false}` lock for /operations (no picker at all); dialog layout cleanup (equipment row, roster, dashed add row, footer border) and window-aware `CustomDatePicker` badges.
-- [x] Phase 5 — Native: same window constants on both modals, `assignmentDate < today` → “Past Roster Updated” copy, `end_assignment_on_date_atomic` relief.
-- [x] Phase 6 — Tests: `test-date-based-assignment.mjs` 55/55 (static + live Dev-DB back-dating/split/relief checks); cleanup hardened to only delete rows created during the run.
-- [x] Phase 7 — Verification: `pnpm typecheck` 7/7, `run-all-tests.mjs` 33/33, ESLint 0 errors, typography/touch guards, live browser picker + past-save check.
+### Objectives & Results
+1. **Root Directory Optimization**:
+   - Cleaned root folder of scattered QA reports (`SHIFT_ENTRY_QA_REPORT.md` moved to `docs/reports/`).
+   - Standardized core root markdown files: `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, `SECURITY.md`, `NOTIFICATIONS.md`, `prd.md`.
+2. **Centralized Documentation (`docs/`)**:
+   - Restructured `docs/` into domain subdirectories: `architecture/`, `approvals/`, `guides/`, `deployments/`, and `reports/`.
+   - Created comprehensive `docs/README.md` index mapping all technical guides and architecture specifications.
+   - Updated `README.md` deployment link to `docs/deployments/NETLIFY_DEPLOYMENT.md`.
+3. **Engineering Rules & Standards Consolidation**:
+   - Resolved broken external machine file paths in `rules/testing/` (00, 08, 09, 10, README) and `.agents/rules/testing_standards_and_enforcement.md`.
+   - Removed redundant duplicate directory `.agents/rules/testing/`, establishing `rules/testing/` as the single authoritative source for testing standards.
+   - Added `rules/README.md` and `.agents/rules/README.md` indexing the 8 agent behavioral rules and 15 testing standards.
+4. **Agent Skills Catalog**:
+   - Added `.agents/skills/README.md` categorizing all 44 agent skills into Mobile, Web, Parity, Database, UI/UX, and Automation.
+5. **Mobile Application Organization (`apps/mobile`)**:
+   - Moved scattered release notes from root of `apps/mobile` to `apps/mobile/docs/release-notes/` (`v1.3.0`, `v1.4.0`, `v1.5.0`).
+   - Organized `apps/mobile/docs/` into `release-notes/`, `store/`, and `audits/`.
+   - Removed empty `apps/mobile/scripts` directory.
+   - Added `apps/mobile/docs/README.md` documenting mobile architecture and native primitives.
+6. **Web Application Organization (`apps/web`)**:
+   - Created `apps/web/docs/` and moved benchmark JSON reports from `apps/web/scripts/` to `apps/web/docs/reports/`.
+   - Updated `apps/web/scripts/run-lighthouse.mjs` to target `apps/web/docs/reports/`.
+   - Moved ad-hoc script `tmp-repro.mjs` from `apps/web/scripts/` to `scratch/scripts/`.
+   - Added `apps/web/docs/README.md` documenting Next.js 16.2 App Router architecture, RSC, DAL, Server Actions, and test map.
+7. **Scratchpad Workspace (`scratch/`)**:
+   - Cleaned 34 loose scratch files into structured directories: `scratch/sql/`, `scratch/metrics/`, `scratch/scripts/`.
+   - Added `scratch/README.md`.
+8. **AI Persistent Memory (`AI/`)**:
+   - Added top-level `AI/README.md` documenting the persistent memory system, system rules (`AI/RULES/`), and domain specs (`AI/FEATURES/`).
 
-### Follow-ups (require user decision)
-- [ ] Apply migrations **228 + 229** to Production (`dhbbgfzbyatzvqafnsqp`) — blocked by policy until explicitly instructed.
-- [ ] On-device Expo run of the native date section (typecheck + shared-contract tests only so far).
-# Current Task
+### Verification Evidence
+- `pnpm typecheck` — 7/7 packages clean (0 errors).
+- `node scripts/run-all-tests.mjs` — 34/34 test suites passed cleanly (100%).
+- `node scripts/verify-security-links.mjs` — 117/117 relative links verified valid across 26 files (0 broken links).
+- `node scripts/test-parity-rules-and-skills.mjs` — 95/95 checks passed (100%).
 
-## Task: Past-Date Operator Shift Assignment Visibility & Persistence in Operations Monitor (Web + Native + DB)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
+## Task: Native Machines Module — RBAC Hardening, Bug Fixes, Interaction & Performance Pass
+**Status**: 🟢 IMPLEMENTED & VERIFIED (implementation) / ⚠️ device FPS & TTI NOT MEASURED
+**Date**: 2026-11-23
 
-### Objectives (from page feedback on `/operations` at Viewport 1536×791)
-1. When assigning an operator to a past date (e.g. 2026-11-19, "2d ago"), overwrite/save the roster changes cleanly in the database for that date.
-2. Ensure the past-date assignment is fully working end-to-end.
-3. Ensure the operations monitor and summary fetch and display the updated past-date assignment data directly from Supabase (showing the operator in Shift A instead of "Unassigned").
+### Scope
+`apps/mobile/app/(app)/machines.tsx`, `apps/mobile/components/machines/*`, `apps/mobile/lib/hooks/useMachinesData.ts`,
+native nav entry points, `supabase/migrations/232_native_machines_operator_view_and_scope.sql` (+ rollback), native test suites.
+`apps/web` and all other mobile modules untouched (web Machines prompt is owned by a parallel agent in the same working tree).
 
-### Root Cause
-- In `get_today_shift_log_monitor` and `get_today_shift_monitor_summary` (migrations 225 & 227), `assignments_on_date` included:
-  ```sql
-  AND NOT (
-    oma.valid_from = oma.valid_to
-    AND oma.is_active = false
-    AND NOT EXISTS (SELECT 1 FROM logs lg WHERE lg.assignment_id = oma.id)
-  )
-  ```
-- For past dates (`target_date < today_ist`), single-day assignments have `valid_from = valid_to = target_date`. Furthermore, trigger `trg_fn_sync_oma_valid_range` sets `is_active = false` on any assignment whose `valid_to < today_ist`. If the operator has not yet entered a log, `NOT EXISTS (logs)` evaluated to `true`.
-- Because `p.target_date >= p.today_ist` was omitted from this guard, **every newly assigned past-date assignment without logs was completely excluded** from the monitor and summary CTEs, causing the monitor on past dates to return `Unassigned` instead of the newly assigned operator (`status: 'pending'`).
+### Objectives & Result
+1. **Confirm native rendering** — `/machines` is a native Expo Router screen (WebView shell only wraps `app/index.tsx`). ✅
+2. **Single RBAC source of truth** — module consumes `@reachinternational/permissions` machine capabilities; all local role-string logic removed. ✅
+3. **Five enforcement layers** — DB (RLS/triggers/SECURITY DEFINER 42501), data layer (role projection + gated queries), server contract (RPC), route redirect, UI (unmounted controls). ✅
+4. **Operator assigned-only view** — new `get_operator_assigned_machines()` RPC, no fleet list/KPI/filter/audit fetch, worksite + site supervisor + Log Entry/History CTAs. ✅
+5. **Interaction** — shared Reanimated press preset (0.97 scale, 90/110 ms), 44 px targets, overlay presets/reduce-motion reused, haptics unchanged (Settings toggle + throttle). ✅
+6. **Bugs** — hydration-gated first query, single cache source (no mirrored state), optimistic delete + authoritative rollback, Android back yields to overlays, duplicate-tap guard, 360 dp badge wrap. ✅
+7. **Performance** — 10-row chunks, FlatList tuning, `gcTime`/`staleTime`/`refreshOnFocus`, lazy modal mounting, export libs on demand. ✅
+8. **Database** — migration 232 applied to Dev `vlmxciuogczumumrwyot`; profiling with `EXPLAIN (ANALYZE, BUFFERS)` recorded; no new index (existing assignment indexes suffice). ✅
 
-### Delivered
-- **Database Migration 230 (`supabase/migrations/230_fix_past_date_shift_monitor_and_summary.sql`)**:
-  - Scoped the exclusion guard in both `get_today_shift_log_monitor` and `get_today_shift_monitor_summary` to `p.target_date >= p.today_ist`.
-  - Preserves the same-day relieved operator filter for today (`target_date >= today_ist`), while correctly including past single-day assignments as `status: 'pending'` before shift entry.
-  - Automatically applied and verified on Development Supabase (`vlmxciuogczumumrwyot`). (Production DB `dhbbgfzbyatzvqafnsqp` left untouched per safety policy).
-- **Web & Mobile Parity Synchronization**:
-  - `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`: Updated `onSuccess` callback to pass `assignmentDate` upon successful save (`onSuccess(currentRosterSnapshot, assignmentDate)`).
-  - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`: Added date-switching or refetching upon save on a specific date (`if (savedDate && savedDate !== selectedDate) setSelectedDate(savedDate); else Promise.all([refetchSummary(), refetchInfinite()]);`).
-  - `apps/web/components/operations/TodayShiftMonitorTab.tsx`: Retained date-matching optimistic monitor updates and verified soft background synchronization via `refreshRoster(false)`.
+### Verification Evidence
+- `pnpm typecheck` — 7/7 packages, 0 errors.
+- `npx expo export --platform android` — bundle 13 MB Hermes (Metro build succeeds with on-demand requires).
+- `node apps/mobile/test/test-machines-rbac.mjs` — 33/33 (live Dev RLS/RPC negative tests per role: operator RPC 42501 for hr/supervisor/manager/admin, operator row-scope, HR INSERT denial, supervisor spec/delete denial, audit 0 rows for operators).
+- `node apps/mobile/test/index.mjs machines` — 2/2 suites green.
+- `node apps/mobile/test/test-machine-detail-mobile-opt.mjs` — 14/14.
+- `node apps/mobile/test/index.mjs` — 42/44 suites; the 2 failures are pre-existing/other-module (`test-mobile-document-upload-staging.mjs` staging token, `test-users-detail-infinite-pagination.mjs` after the UserDetailView hero redesign).
+- `scripts/test-touch-haptics.mjs` green; `scripts/check-typography.mjs` clean for machines (2 pre-existing hits in `UserDetailView.tsx`).
 
-### Verification
-- **Live Supabase Dev Query**: Executed `get_today_shift_log_monitor('e8f096b2...', '2026-11-19'::date)` on `M/C-0001`: returns `VAIBHAV CHAuhannn`, Shift `A`, `status: 'pending'`, `log_id: null`.
-- **Live Supabase Summary Query**: Executed `get_today_shift_monitor_summary('e8f096b2...', '2026-11-19'::date)`: returns `pending: 7, unassigned: 0`.
-- **TypeScript**: `pnpm --filter web typecheck` and `pnpm --filter mobile typecheck` 100% clean (0 errors).
-- **Automated Tests**:
-  - `node tests/operations/test-date-based-assignment.mjs`: 57/57 passed cleanly (100%).
-  - `node apps/web/scripts/test-assignment-standardization.mjs`: 34/34 passed cleanly (100%).
-  - `node scripts/run-all-tests.mjs`: 33/33 monorepo test suites passed cleanly (100%).
+### Not Verified
+- Release-build FPS (frame-rate) and TTI on a real mid-range Android device — no device/build pipeline attached in this environment.
+- Post-231 supervisor RLS scale behaviour — flagged to the shared-migration owner (per-row `check_user_can_access_machine()` in the SELECT policy).
 
----
-
-## Task: Operations Page Feedback — Date Picker Tooltips, Window Badge Removal & Layout Optimization (Web + Native)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objectives (from page feedback on `/operations` at Viewport 624×807)
-1. Add tooltips on `<CustomDatePicker>` day cells for: Today, Yesterday, 2 days ago to 7 days ago, Tomorrow, and Locked dates.
-2. Remove `"7d back · 1d ahead"` chip from the Assignment Date row.
-3. Clean and optimize the Assignment Date row layout for mobile and tablet viewports.
-
-### Delivered — Web & Mobile Parity
-- **CustomDatePicker Tooltips & Lock Indicators**:
-  - Implemented floating real-time tooltips over each calendar cell with Geist dark contrast styling, type indicators (emerald for Today, indigo for Tomorrow, sky for Yesterday, amber for Past days, rose lock for Locked), day label, and formatted date (`Today · 21 Nov`, `Yesterday · 20 Nov`, `N days ago · <Date>`, `Tomorrow · 22 Nov`, `Locked · <Date>`).
-  - Added micro lock icons (`Lock` size 8) on all disabled calendar cells.
-  - Added live status preview in the calendar footer showing hovered/focused date and status reason (`Today · Current active date`, `Yesterday · 1 day ago`, `Tomorrow · Next day plan`, `Locked · >7d limit`).
-  - Enabled full accessibility via `aria-disabled` and keyboard focus support without blocking pointer events.
-- **Removed "7d back · 1d ahead"**:
-  - Deleted the raw badge from `AssignOperatorToMachineDialog.tsx`, `AssignMachineToOperatorDialog.tsx`, and `MobileAssignPersonnelModal.tsx`.
-  - Removed `showWindowBadge` on `<CustomDatePicker>`.
-- **Clean & Optimized Assignment Date Row**:
-  - Re-architected container to `flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 p-2.5 sm:p-3`.
-  - Icon in a crisp subtle tile, title + context pill (Past Correction / Tomorrow Plan), clean subtitle, "Today" quick button, and compact date picker trigger without awkward wrapping at 624×807.
-
-### Verification
-- `pnpm typecheck` across all 7 packages clean (0 errors).
-- `node scripts/run-all-tests.mjs`: 33/33 monorepo test suites passed (100%).
-- `node tests/operations/test-date-based-assignment.mjs`: 57/57 tests passed (100%).
-- Live browser CDP verification at viewport 624×807: visually verified Assign Operator dialog, clean date row, hovered "Today · 21 Nov" tooltip, lock icons, and live footer preview. Zero horizontal overflow or layout breakage.
-
----
-
-## Task: Employee Profile Detail (`/users/[id]`) — Feedback Resolution (Zero Duplication, Hero Redesign, Centered Copy & Streamlined Tabs)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objectives (from page feedback on `/users/EMP-0471`)
-1. Remove `<UserDetailClient>` paragraph "Employee Profile".
-2. Align copy button inline in the email row instead of slightly bottom.
-3. Align copy button inline in the phone row instead of slightly bottom.
-4. Align copy icon inline in the number row instead of slightly bottom.
-5. Align copy icon inline in the emp id row instead of slightly bottom.
-6. Properly format avatar with other chips and info.
-7. Remove quick contact cluster (mail/call/whatsapp icon buttons in hero).
-8. Remove operational snapshot cards completely (don't just hide them).
-9. Remove the tab strip search box completely.
-10. Optimize hero card for mobile and desktop, eliminate empty space on mobile, well-format every info (avatar, emp id, role, machine category, status chip, shift time, join date, supervisor, etc.).
-11. Eliminate duplicate info across the page; keep only one-time info on this page.
-12. Remove "Back to Users" link and shift breadcrumb to the top-left position.
-
-### Delivered
-- [x] **Top Breadcrumb (Item 12)**: Removed "Back to Users" link with left arrow; shifted `<nav aria-label="Breadcrumb">` to the top-left, responsive across mobile and desktop.
-- [x] **Hero Banner Card (Items 1, 6, 7, 10)**:
-  - Removed "Employee Profile" uppercase paragraph.
-  - Formatted Avatar (`h-13 w-13 sm:h-16 sm:w-16`, role-based gradient, crisp initials, active status pulse dot).
-  - Grouped Full Name with EMP-ID mono badge (1-click copy + feedback), Role badge, Machine Category (operator), and Status badge (active/inactive).
-  - Removed redundant quick contact cluster (mail, phone, whatsapp icons).
-  - Added structured metadata strip (Shift Time, Joining Date, Supervisor, Location) in a 2-col (mobile) / 4-col (desktop) grid with icons.
-  - Added mobile full-width primary `Edit Profile` button below metadata strip, eliminating all empty space on mobile devices.
-  - Anchored desktop `Edit Profile` + 3-dot dropdown menu at top-right.
-- [x] **Zero Duplicate Information (Item 11)**:
-  - Hero card exclusively owns identity, badges, shift time, joining date, supervisor, and location.
-  - Profile Details card now owns ONLY unique non-duplicate info divided into 3 equal columns (`md:grid-cols-3`):
-    1. Contact Information: Email (with copy), Phone (with copy), WhatsApp ("Chat direct")
-    2. Leave & Compensation: PL Leave Quota, Monthly Salary (if authorized), Supervised Operators link (if supervisor)
-    3. Residential Address: Street Address, City / District, State
-  - Removed duplicate Employee ID, Joining Date, Supervisor, Machine Category, and Shift Hours rows.
-- [x] **Inline Centered Copy Buttons (Items 2, 3, 4, 5)**:
-  - Upgraded `DetailRow` from `items-start` to `items-center` on both the row div and `<dd>`, with `inline-flex h-5 w-5 shrink-0 items-center justify-center` button.
-  - Perfectly vertically centered copy buttons inline with text, completely resolving the "slightly bottom" misalignment.
-- [x] **Operational Snapshot Removed (Item 8)**:
-  - Completely deleted `<section aria-label="Operational snapshot">` and `snapshotTiles` definition.
-- [x] **Tab Search Box Removed (Item 9)**:
-  - Removed search box from sticky tab strip.
-  - Tabs render clean counter pills and display all rows directly.
-
-### Verification
-- `apps/web` TypeScript check (`tsc --noEmit`): clean (0 errors).
-- Turborepo monorepo typecheck (`pnpm typecheck`): 7/7 packages clean (0 errors).
-- ESLint on `UserDetailClient.tsx`: 0 errors.
-- Comprehensive test runner (`node scripts/run-all-tests.mjs`): 33/33 test suites passed cleanly (100%).
-
----
-
-## Task: Users Directory Card & Responsive Layout Refinement (Web + Native)
-**Status**: 🟢 COMPLETED & VERIFIED
-**Date**: 2026-11-21
-
-### Objectives
-Make `/users` clean, well-formatted and fully responsive on mobile, tablet and desktop, keeping every status/role chip visible while removing card clutter.
-
-### Delivered
-- [x] Web `MobileUserCard`: checkbox removed from the default card; **long press (450 ms)** enters multi-select (context menu suppressed, 12 ms haptic, click-after-long-press guarded, guard reset on pointerdown).
-- [x] Identity chips on one row: employee ID (mono 10.5 px) · status pill · role pill.
-- [x] City + state on one row; duplicate-city bug fixed (`locationSuffix` wrongly fell back to `locationLabel`).
-- [x] Aadhaar + DL compliance footer pinned with `mt-auto` so equal-height grid cards align.
-- [x] Cards below `lg` (1 → 2 cols at `sm`); table only `lg+` with progressive columns (core 6 → `xl +Supervisor` → `2xl +Machine/Location` → `min-[1900px] +KYC/Joined`) and capped name/email/supervisor widths (no horizontal scroll at 1024–1600 px).
-- [x] KPI tiles responsive (2 cols until `lg`, `p-3 sm:p-3.5`, single-line labels, aligned values).
-- [x] Shared `PageHeader` stacks actions below `lg` → no truncated page titles on tablets (verified on `/machines`).
-- [x] Bulk bar compacted to one row above the mobile bottom nav with `Select All`/`Deselect`, icon-only exports on mobile.
-- [x] Native parity: `UserTouchCard` identity chips row (EMP micro + status + role), city/state inline in one line, dead styles removed.
-
-### Verification
-- `apps/web` `tsc --noEmit` clean; ESLint on touched files: 0 errors; `apps/mobile` `tsc --noEmit` clean.
-- `node test/test-users-workflows.mjs`: 42/42 · `scripts/check-typography.mjs`: 0 violations · `scripts/test-touch-haptics.mjs`: pass · `scripts/test-parity-rules-and-skills.mjs`: 95/95.
-- Live browser: 390 / 820 / 1024 / 1280 / 1440 / 1600 px, light + dark, plus long-press selection, bulk bar, empty state and card→detail navigation.
-
-### Known follow-ups
-- [ ] Native device/simulator visual confirmation of the reshaped `UserTouchCard` (RN layout cannot be rendered in this environment).
-
----
-
-## Task: Date-Based Operator-to-Machine Assignment (Today .. Today+7, IST)
-**Status**: 🟢 COMPLETED & VERIFIED (Dev DB migrated; Production pending explicit user instruction)
-**Date**: 2026-11-21
-
-### Objectives
-Make operator-to-machine assignment date-aware end-to-end (Web + Native + DB): a supervisor/admin must pick an assignment date (today .. today+7, IST), assigning on one date must never disturb today's roster or any other date, and duplicate/overlapping assignments must stay blocked.
-
-### Root causes found during the audit
-- `save_machine_roster_atomic` / `assign_operator_machine_atomic` hard-coded `valid_from = today_ist, valid_to = NULL`.
-- Date-less partial unique index `idx_oma_machine_active_shift_code` on `(machine_id, lower(trim(shift_code))) WHERE is_active` made future single-day plans collide with today's carry-forward rows.
-- Integrity triggers (`enforce_max_operators_per_machine`, `enforce_max_shifts_per_operator`, `sync_machine_assigned_operators`, `sync_operator_shift_ranges`) counted rows across all dates.
-- No date input in either assignment dialog; all roster reads were date-less.
-- Latent: `getActiveOperatorMachineAssignments` used an ambiguous `users!inner` embed (PGRST201) and always returned `[]`, disabling fleet-wide availability/overlap badges.
-
-### Implementation Phases
-- [x] Phase 1 — Migration `228_date_based_operator_assignment.sql`: date-aware RPCs (`p_assignment_date`), window enforcement (`DATE_OUT_OF_WINDOW`), single-day ranges for future dates, GiST machine+shift range exclusion, date-scoped triggers, `trg_cap_open_assignment_range`, date-scoped reconciliation + audit; legacy RPC wrappers kept for backward compatibility. Applied to Dev.
-- [x] Phase 2 — Shared IST window helpers in `packages/utils/src/date.ts` (+ unit tests).
-- [x] Phase 3 — Web: action/API/DAL date plumbing + required Assignment Date picker and future-plan UX in `AssignOperatorToMachineDialog`.
-- [x] Phase 4 — Native parity: date-keyed modal data hook + `MobileAssignPersonnelModal` date section and save path.
-- [x] Phase 5 — Fix `getActiveOperatorMachineAssignments` FK ambiguity (availability/conflict badges now real) and return 401 instead of 500 for unauthenticated API calls.
-- [x] Phase 6 — Tests/verification: `test-date-based-assignment.mjs` 42/42 (11 live DB checks), assignment standardization 34/34, utils 55/55, `pnpm typecheck` 7/7, `run-all-tests.mjs` 33/33, live browser E2E on the Dev app.
-- [x] Phase 7 — Dated-everywhere sweep: removed every date-less assignment write path (web resilient fallback + legacy roster branch, updateMachineOperatorsAction, assignments actions, native legacy fallback/raw inserts, native machine-modal deactivation), deleted the unused date-less mobile modal, added the Assignment Date section to the operator-fixed dialogs, and defaulted every entry point to today.
-- [x] Phase 8 — Re-verification: 52/52 date-based checks (incl. valid today, rejected past/invalid dates, zero date-less RPC references), live API 200/400 matrix, live browser today assign+remove cycle with mirror verification, pnpm typecheck 7/7.
-
-### Follow-ups (require user decision)
-- [ ] Apply migration 228 to **Production** (`dhbbgfzbyatzvqafnsqp`) — blocked by policy until explicitly instructed.
-- [ ] `operator_shift_ranges` remains intentionally date-less (materialises today-effective rows only); cross-date overlap for future plans is enforced by `oma_no_active_operator_shift_overlap` and the RPC `SHIFT_OVERLAP_CONFLICT` check.
-
----
-
-## Task: Operations Module End-to-End Audit, Performance Optimization & Architecture Refactoring
-**Status**: 🟢 COMPLETED & VERIFIED (Dev DB migrated; Production pending explicit user instruction)
-**Date**: 2026-11-21
-
-### Objectives
-Audit and optimize the entire Web Operations module (Shift Management, Shift Entry & History, Daily Operations) for speed, scalability, reduced server/DB load and instant-feeling interactions — without changing established workflows or UI.
-
-### Implementation Phases
-- [x] Phase 0: Map the Operations module (page, monitor tab, entry client, history tab, DAL, actions, DB RPCs, indexes) and measure baselines with `EXPLAIN (ANALYZE, BUFFERS)` on the Development database.
-- [x] Phase 1: Migration `227_optimize_operations_shift_monitor_queries.sql`
-  - [x] Drop the stale pre-225 `get_today_shift_log_monitor(uuid,date,text,uuid)` overload that caused PostgREST 42725 "function is not unique" for any call omitting `p_shift_code`/`p_sort` (broke native `useTodayShiftMonitor`).
-  - [x] Rewrite `get_today_shift_log_monitor`, `get_today_shift_monitor_summary`, `get_today_shift_log_monitor_paginated` (single planned statement each, RBAC scope resolved once, one log scan, equality joins, paginated delegates to canonical monitor).
-  - [x] Add index `idx_mhl_logdate_machine_shift`.
-- [x] Phase 2: Behavioural equivalence proof (48 monitor cases + 8 paginated/summary cases, 0 differences).
-- [x] Phase 3: DAL `lib/data/operations/today-shift-monitor.ts` — removed the duplicate active-roster query + JS reconciliation, added tagged 10 s `unstable_cache` tier and `bypassCache` fast path.
-- [x] Phase 4: `TodayShiftMonitorTab` — single fetch per date, request coalescing, in-memory search/filter/sort, visibility-gated polling, dead refs removed.
-- [x] Phase 5: `OperatorEntryClient` — removed duplicate context fetch, single-run notification sync, session-scoped broadcast channel (leak fixed).
-- [x] Phase 6: `OperatorHistoryTab` — 60 s per-operator session cache.
-- [x] Phase 7: Backend cleanups — O(n) assignment stats, parallel assisted-entry authorization, dead code removal (`OperationsClient` dead dynamic import, `getClients()` payload on `/operations`, `getShiftTasks`).
-- [x] Phase 8: Verify — `pnpm typecheck` 7/7 clean, ESLint 0 errors, `next build` passed (isolated dist dir), `node scripts/run-all-tests.mjs` 32/32 suites passed.
-
-### Follow-ups (require user decision)
-- [ ] Apply migration 227 to **Production** (`dhbbgfzbyatzvqafnsqp`) — blocked by policy until the user explicitly instructs.
-- [ ] Optional: reduce the `running-logs` default page size (currently 500 rows per page) to a smaller server-side page.
+### Prior Task (superseded)
+Fix Machine Details 404 & enable `/machines/M/C-0001` — completed 2026-11-23 (see `AI/CHANGELOG_AI.md`).

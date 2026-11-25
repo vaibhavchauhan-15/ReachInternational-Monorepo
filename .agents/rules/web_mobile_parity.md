@@ -1,30 +1,260 @@
-# Authoritative Rule: Web & Mobile 100% Parity Across UI/UX, Behavior, Responsiveness, Design, Layout, Color, Theme & Typography
+# STRICT MONOREPO RULE: WEB & NATIVE APP PARITY — `.agents/rules/web_mobile_parity.md`
 
-> **MANDATORY ENFORCEMENT POLICY FOR ALL AI CODING AGENTS**:
-> 
-> 1. **100% VISUAL & BEHAVIORAL PARITY**: The Web App (`apps/web`) and Native App (`apps/mobile`) MUST follow the **100% EXACT SAME color tokens, theme adaptations, typography hierarchy, font families, visual layout, UI/UX components, interaction behaviors, and operational terminology**.
-> 2. **NATIVE-APPROPRIATE BACKEND & ARCHITECTURE**: The Native App architecture MUST be implemented using native-appropriate patterns (Expo SDK 57, React Native, Expo Router, TanStack Query, SecureStore hardware keystore, offline queue, touch cards, bottom sheets, haptics, and min 44px touch targets) while Web uses Next.js 16.2 App Router, RSC, DAL, Server Actions, and SSR Auth.
-> 3. **ZERO-DRIFT CHANGE SYNCHRONIZATION**: Whenever ANY change, feature, style, theme, color, modal, form field, status badge, or workflow is added or modified on Web, the AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Native App in the same session**.
-> 4. **STRICT ENFORCEMENT**: No code change is complete until both Web and Mobile have been synchronized and verified.
-
----
-
-## 1. Single Source of Truth for Visual Design
-
-Every AI agent must strictly follow:
-1. `DESIGN.md` in workspace root (Primary single source of truth for visual design).
-2. `ARCHITECTURE.md` in workspace root (Primary single source of truth for monorepo DAG & technical architecture).
-3. `AI/RULES/DESIGN-SYSTEM.md` (Design system policy).
-4. `AI/RULES/UI-UX.md` (User interaction & component layout policy).
-5. `AI/RULES/GLOBAL-RESPONSIVE-DESIGN.md` (3-tier viewport responsiveness).
-6. Shared design tokens in `@reachinternational/design-tokens`.
-7. The `web-mobile-parity` skill (`.agents/skills/web-mobile-parity/SKILL.md`).
-
-**NEVER independently invent colors, font sizes, margins, paddings, or icons for Web or Mobile.**
+> **ONE MONOREPO = ONE PRODUCT = ONE SOURCE OF TRUTH = CONSISTENT WEB & NATIVE EXPERIENCE.**
+>
+> **ABSOLUTE RULE**: Any change that affects shared product functionality, business logic, UI/UX, user workflows, API integration, data handling, validation, permissions, or application behavior in one platform MUST be evaluated and implemented consistently in the other platform.
+>
+> The web and native applications must remain functionally equivalent, visually consistent, and behaviorally aligned. No AI agent is exempt from this rule.
 
 ---
 
-## 2. The 8 Dimensions of 100% Parity
+## 1. CORE RULE — MANDATORY CROSS-PLATFORM CONSISTENCY
+
+This monorepo contains two client applications:
+- **Web Application** (`apps/web`)
+- **Native Mobile Application** (`apps/mobile`)
+
+**ABSOLUTE RULE: Any change that affects shared product functionality, business logic, UI/UX, user workflows, API integration, data handling, validation, permissions, or application behavior in one platform MUST be evaluated and implemented consistently in the other platform.**
+
+The web and native applications must remain functionally equivalent, visually consistent, and behaviorally aligned.
+
+No AI agent is exempt from this rule.
+
+This is a mandatory project-wide engineering policy, not a suggestion.
+
+---
+
+## 2. BEFORE MAKING ANY CHANGES — MANDATORY CODEBASE AUDIT
+
+Before modifying ANY code, every AI agent MUST:
+
+1. Read and understand the relevant project structure.
+2. Identify the existing implementation in the web application (`apps/web`).
+3. Identify the corresponding implementation in the native application (`apps/mobile`).
+4. Read the relevant frontend components, hooks, services, API integrations, backend routes, database schemas, migrations, types, validation logic, and related dependencies.
+5. Examine existing application behavior and relevant logs where available.
+6. Determine whether the requested change is actually necessary.
+7. Check whether the requested change already exists in either application.
+8. Identify potential regressions, dependencies, and side effects.
+
+**Never modify code based on assumptions. Never implement a change before understanding the existing implementation.**
+
+---
+
+## 3. CROSS-PLATFORM CHANGE REQUIREMENT
+
+Whenever a change is requested, classify its impact:
+
+### A. UI/UX Changes
+Examples:
+- New screens or pages
+- Buttons, forms, dialogs, modals, and dropdowns
+- Tables, cards, lists, and dashboards
+- Filters, search, sorting, and pagination
+- Loading, empty, success, and error states
+- Typography, spacing, colors, icons, and layouts
+- Responsive behavior and navigation
+
+Requirement:
+Implement equivalent functionality and consistent design behavior in both web and native applications.
+Use platform-appropriate components and interaction patterns while preserving the same design language and user experience.
+
+### B. Backend / Business Logic Changes
+Examples:
+- API endpoints and integrations
+- Authentication and authorization
+- Role-based permissions
+- Database schema and migrations
+- CRUD operations
+- Validation and business rules
+- Data models and relationships
+- Error handling and response structures
+- Notifications and background operations
+
+Requirement:
+Ensure both applications consume and support the updated backend behavior.
+If backend changes affect existing web or native workflows, update both clients accordingly.
+Do not leave one platform using outdated API contracts, validation rules, or business logic.
+
+### C. Data and State Changes
+Examples:
+- New fields
+- Updated database relationships
+- Changed status values
+- Updated filters
+- Modified calculations
+- Pagination changes
+- Local storage or caching changes
+
+Requirement:
+Ensure both platforms correctly read, write, validate, display, and synchronize the updated data.
+
+---
+
+## 4. NO PLATFORM SHOULD BE LEFT BEHIND
+
+The following situations are **STRICTLY PROHIBITED**:
+
+- Implementing a feature in web but ignoring native.
+- Implementing a feature in native but ignoring web.
+- Updating backend functionality without checking both clients.
+- Updating a database schema without checking both clients.
+- Fixing a bug in one platform while leaving the same bug in the other.
+- Using different business rules for the same feature.
+- Introducing inconsistent validation or permissions.
+- Removing functionality from one platform without evaluating its counterpart.
+- Marking a task complete when the other platform has not been checked.
+
+If a change is relevant to both platforms, both must be updated within the same task whenever technically feasible.
+
+---
+
+## 5. EXCEPTIONS — ONLY WHEN JUSTIFIED
+
+Not every implementation must use identical code.
+
+Platform-specific implementations are allowed when technically necessary.
+
+Examples:
+- Web-specific browser APIs.
+- Native device permissions.
+- Camera, GPS, Bluetooth, and biometric integrations.
+- Platform-specific navigation (e.g. Next.js App Router vs Expo Router file stacks).
+- Responsive web layouts versus mobile layouts (e.g. Desktop 1024px+ tables vs Mobile ≤640px touch cards).
+
+However:
+
+**Platform-specific implementation does NOT justify platform-specific business behavior.**
+
+The underlying functionality, business rules, permissions, validation, data integrity, and expected outcomes must remain consistent.
+
+If a feature genuinely applies to only one platform:
+1. Explain why the other platform does not require it.
+2. Document the reason.
+3. Do not introduce unnecessary changes to the other platform.
+
+Never silently skip cross-platform implementation.
+
+---
+
+## 6. IMPLEMENTATION WORKFLOW — STRICT ORDER
+
+Every AI agent MUST follow this workflow:
+
+```text
+STEP 1: UNDERSTAND   → Read relevant codebase, architecture, components, backend, & existing implementation.
+                             ↓
+STEP 2: AUDIT        → Inspect BOTH web and native implementations.
+                             ↓
+STEP 3: EVALUATE     → Determine whether change is necessary, already implemented, or requires modification.
+                             ↓
+STEP 4: IMPACT       → Identify affected platforms, APIs, database models, shared packages, & workflows.
+                             ↓
+STEP 5: PLAN         → Prepare a cross-platform implementation plan before editing.
+                             ↓
+STEP 6: IMPLEMENT    → Implement required changes in all affected layers and platforms.
+                             ↓
+STEP 7: VERIFY       → Check both applications for correctness, parity, business logic, APIs, & regressions.
+                             ↓
+STEP 8: REPORT       → Provide a clear summary of what changed in web, native, backend, and database.
+```
+
+- **STEP 1 — UNDERSTAND**: Read the relevant codebase, architecture, components, backend, and existing implementation.
+- **STEP 2 — AUDIT**: Inspect both web and native implementations.
+- **STEP 3 — EVALUATE**: Determine whether the requested change is necessary, already implemented, or requires modification.
+- **STEP 4 — IMPACT ANALYSIS**: Identify all affected platforms, APIs, database models, shared packages, and dependent workflows.
+- **STEP 5 — PLAN**: Prepare a cross-platform implementation plan before editing.
+- **STEP 6 — IMPLEMENT**: Implement the required changes in all affected layers and platforms.
+- **STEP 7 — VERIFY**: Check both applications for:
+  - Functional correctness.
+  - UI/UX consistency.
+  - Business logic consistency.
+  - API compatibility.
+  - Validation consistency.
+  - Permission consistency.
+  - Data integrity.
+  - Error and loading states.
+  - Regression issues.
+- **STEP 8 — REPORT**: Provide a clear summary of what changed in web, native, backend, and database.
+
+---
+
+## 7. SHARED CODE AND ARCHITECTURE
+
+Before creating duplicate implementations, inspect whether reusable logic already exists.
+
+Prefer shared packages for:
+- TypeScript types and interfaces (`@reachinternational/types`)
+- API contracts & permissions (`@reachinternational/permissions`)
+- Validation schemas (`@reachinternational/validation`)
+- Constants and enums
+- Business rules & utilities (`@reachinternational/utils`)
+- Shared design tokens (`@reachinternational/design-tokens`)
+- Shared configuration
+
+Keep platform-specific rendering and interactions in their respective applications.
+Do not introduce unnecessary abstractions or refactor unrelated code.
+Always reuse existing project components, conventions, utilities, and architecture wherever possible.
+
+---
+
+## 8. TESTING REQUIREMENTS
+
+Before declaring a task complete:
+
+- Run relevant web application checks (`pnpm --filter web typecheck`, build, Playwright/Node test scripts).
+- Run relevant native application checks (`pnpm --filter mobile typecheck`, `node apps/mobile/test/run-tests.mjs`).
+- Run backend tests where applicable (Supabase integration scripts, RLS checks).
+- Run type checking and linting where configured (`pnpm typecheck`).
+- Verify API compatibility across both applications.
+- Verify database migrations and data compatibility where applicable.
+- Test the affected workflows on both platforms.
+- Check that existing unrelated functionality has not regressed.
+
+If a test cannot be executed, explicitly disclose it. Never claim an unexecuted test passed.
+
+---
+
+## 9. COMPLETION GATE — NON-NEGOTIABLE
+
+A cross-platform task MUST NOT be marked COMPLETE until:
+
+- [ ] Existing codebase was audited.
+- [ ] Necessity of the requested change was evaluated.
+- [ ] Web implementation was inspected and updated if necessary.
+- [ ] Native implementation was inspected and updated if necessary.
+- [ ] Backend and database impacts were addressed.
+- [ ] Both platforms follow the same business rules.
+- [ ] Both platforms support the updated API contracts.
+- [ ] Relevant checks and tests were performed.
+- [ ] Platform-specific exceptions were justified and documented.
+
+If only one platform was modified, the agent MUST explicitly state:
+1. Which platform was modified.
+2. Why the other platform did not require modification.
+3. What evidence supports that decision.
+
+Do not claim cross-platform completion without verifying both applications.
+
+---
+
+## 10. FINAL DIRECTIVE TO ALL AI AGENTS
+
+These rules apply to every AI agent, every developer workflow, every feature, every bug fix, every refactor, and every future modification in this monorepo.
+
+Before changing anything, understand the existing implementation.
+Before implementing anything, inspect both platforms.
+Before completing anything, verify cross-platform consistency.
+
+**ONE MONOREPO = ONE PRODUCT = ONE SOURCE OF TRUTH = CONSISTENT WEB & NATIVE EXPERIENCE.**
+
+Treat cross-platform parity as a mandatory engineering requirement, not optional follow-up work.
+
+If the requested implementation conflicts with these rules, stop and explain the conflict before proceeding.
+
+---
+
+## 11. TECHNICAL PARITY SPECIFICATIONS — THE 8 DIMENSIONS
 
 Every screen, component, and user workflow must achieve 100% parity across all 8 dimensions:
 
@@ -41,11 +271,11 @@ Every screen, component, and user workflow must achieve 100% parity across all 8
 
 ---
 
-## 3. 100% Color & Theme Parity Invariants
+## 12. 100% COLOR & THEME PARITY INVARIANTS
 
 Web and Native Mobile must use the **exact same color tokens** across both Light and Dark themes:
 
-### 3.1 Foundation Colors
+### 12.1 Foundation Colors
 - **Ink Tone (Headings & Primary Text)**:
   - Light: `#171717` (`var(--color-ink)`, `theme.colors.ink`)
   - Dark: `#fafafa` (`var(--color-ink)`, `theme.colors.ink`)
@@ -62,18 +292,7 @@ Web and Native Mobile must use the **exact same color tokens** across both Light
   - Light: `#f2f2f2` (`var(--color-hairline-soft)`, `theme.colors.hairlineSoft`)
   - Dark: `#1a1a1a` (`var(--color-hairline-soft)`, `theme.colors.hairlineSoft`)
 
-### 3.2 Text Ladder
-- **Body**: `#4d4d4d` (light) / `#a3a3a3` (dark)
-- **Mute**: `#8f8f8f` (light) / `#737373` (dark)
-- **Faint**: `#a1a1a1` (light) / `#525252` (dark)
-
-### 3.3 Brand & Interactive Accents
-- **Primary / Reach Sky Blue**: `#0284c7` (light) / `#0ea5e9` (dark) — primary CTA buttons, active state highlights.
-- **Link / Vercel Blue**: `#0070f3` (light) / `#3b82f6` (dark) — inline links, focus rings, active indicator pills.
-- **Link Deep**: `#0761d1` (light) / `#2563eb` (dark) — pressed / active link states.
-- **Link Soft**: `#d3e5ff` (light) / `#1e3a8a` (dark) — active category pill background wash.
-
-### 3.4 Semantic Operational Status Colors
+### 12.2 Semantic Operational Status Colors
 - **Success / Operational**: `#10b981` (soft `#ecfdf5`, deep `#059669`) / Dark `#34d399` (soft `#064e3b`).
 - **Warning / Caution**: `#f5a623` (soft `#ffefcf`, deep `#ab570a`) / Dark `#fbbf24` (soft `#78350f`).
 - **Error / Breakdown**: `#ee0000` (soft `#fef2f2`, deep `#c50000`) / Dark `#f87171` (soft `#450a0a`).
@@ -83,109 +302,19 @@ Web and Native Mobile must use the **exact same color tokens** across both Light
 
 ---
 
-## 4. 100% Typography & Font Parity
+## 13. NATIVE & WEB ARCHITECTURE SPECIALIZATION
 
-Both Web and Native Mobile run on **Geist Sans** and **Geist Mono**:
+While visual design and behavior are 100% identical, backend data access and runtime architecture leverage platform-native strengths:
 
-- **Web**: Implemented via `@font-face` / next/font, Geist Sans & Geist Mono font variables.
-- **Native**: Bundled static `.ttf` font files in `apps/mobile/assets/fonts/`:
-  - `Geist-Regular.ttf`
-  - `Geist-Medium.ttf`
-  - `Geist-SemiBold.ttf`
-  - `Geist-Bold.ttf`
-  - `GeistMono-Medium.ttf`
-- **Mobile Typography Invariant**: Native code MUST use `<Text variant="...">` from `components/ui/Text.tsx` or `useTypeStyle(variant)`. Setting raw typography properties (`fontSize`, `fontWeight`, `lineHeight`, etc.) in `StyleSheet.create` is strictly forbidden (enforced via `scripts/check-typography.mjs`).
+### 13.1 Native Mobile Platform (`apps/mobile`)
+- **Data Layer**: **TanStack Query (`@tanstack/react-query`)** for server state with 30s default stale time, reactive cache invalidation, and pull-to-refresh (`RefreshControl`).
+- **Hardware-Backed Auth**: **`expo-secure-store`** backed by Android KeyStore and iOS Keychain. Raw tokens are never stored in unencrypted AsyncStorage.
+- **Offline Resilience**: Offline mutations save into persistent local queue in `AsyncStorage` with `@react-native-community/netinfo` connectivity monitoring and ambient status banner (`OfflineBanner.tsx`).
+- **Ergonomics**: Minimum 44px touch targets (`minHeight: 44`), bottom sheets instead of desktop popovers, scrollable horizontal filter strips, and tactile haptic feedback (`Haptics.selectionAsync()`).
+- **Type Safety**: Strictly use `<Text variant="...">` with zero raw typography properties in `StyleSheet.create`.
 
----
-
-## 5. 100% UI/UX & Behavior Parity
-
-Every component and user workflow must maintain identical interaction behaviors and visual aesthetics:
-
-1. **Loading Skeletons**: Both platforms MUST display matching pulse skeleton loaders (`DashboardSkeleton`, `MetricCardSkeleton`) during data loading, preventing layout shift.
-2. **Empty States**: If a table or list is empty, both platforms MUST render the canonical `EmptyState` component with identical icon, title, and descriptive subtitle.
-3. **Error Handling**: Network and API errors MUST be presented consistently using the same error message wording and retry CTA.
-4. **Toast Feedback**: Successful mutations, log submissions, and profile updates MUST show identical toast notifications (e.g. "Shift log submitted successfully").
-5. **Confirmation Dialogs**: Destructive actions (sign out, delete machine, cancel shift) MUST use the canonical `ConfirmationDialog` (Web) / `ConfirmDialog` (Mobile) with identical red orb warning icon, title, and cancel/confirm buttons.
-6. **SegmentedToggle**: Same sliding pill design, same Geist typography, same active blue highlight, same container background (`#f4f4f5` light / `rgba(255,255,255,0.06)` dark), and count badges.
-7. **Form Validation Feedback**: Real-time validation errors MUST highlight the invalid input border in red (`#ee0000`) and display identical error text below the field.
-8. **Icons**: Exact same Lucide icon glyphs (`lucide-react` on Web, `lucide-react-native` on Mobile).
-9. **Bottom Navigation**: Same 5-slot manifest-driven navigation (`getNavForRole()` from `@reachinternational/permissions`), same icons, and same "Menu" drawer trigger.
-
----
-
-## 6. 100% Responsiveness & 3-Tier Viewport Parity
-
-Both Web and Native Mobile MUST support the 3-tier viewport protocol:
-
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        VIEWPORT RESPONSIVENESS                          │
-├────────────────────────┬────────────────────────┬───────────────────────┤
-│    MOBILE (≤ 640px)    │   TABLET (641-1023px)   │   DESKTOP (≥ 1024px)  │
-├────────────────────────┼────────────────────────┼───────────────────────┤
-│ • Touch Card View      │ • 2-Column Grid Reflow │ • High-Density Table  │
-│ • Scroll Filter Bar    │ • Adaptive Modals      │ • Fixed Sidebar Nav   │
-│ • Bottom Sheet Dialogs │ • Condensed Toolbars   │ • Hover Tooltips      │
-│ • Min 44px Touch Target│ • Collapsible Drawers  │ • Multi-Col Dashboards│
-└────────────────────────┴────────────────────────┴───────────────────────┘
-```
-
-1. **High-Density Table Reflow**: On mobile screens (≤640px), data tables MUST reflow into stacked touch cards with min 44px tap targets.
-2. **Horizontal Filter Strips**: Status filters, date pickers, and tab bars MUST support smooth horizontal touch scrolling without text wrapping or layout clipping.
-3. **Modal Height Clamping**: Dialogs and sheets MUST clamp to viewport height (`max-h-[calc(100vh-2rem)]` / bottom sheet) with internal scrolling.
-
----
-
-## 7. Native Backend & Architecture Specifications
-
-While the visual design and behavior are 100% identical, the backend data layer and runtime architecture MUST follow native-platform best practices:
-
-### 7.1 Native Data Layer (TanStack Query)
-- Native Mobile MUST use **TanStack Query (`@tanstack/react-query`)** for server state.
-- Custom query hooks (e.g. `useOperatorHistoryLogs`, `useMachineData`) must be centralized in `lib/hooks/` and `lib/queries/`.
-- Default stale time of 30 seconds to prevent unnecessary network polling.
-- Reactive cache invalidation on mutations (e.g. `queryClient.invalidateQueries({ queryKey: [...] })`).
-- Pull-to-refresh (`RefreshControl`) implemented on all scrollable list screens.
-
-### 7.2 Native Hardware-Backed Auth Storage
-- Native Mobile MUST use **`expo-secure-store`** backed by Android KeyStore and iOS Keychain for storing auth tokens and refresh tokens.
-- Never store raw access tokens in unencrypted AsyncStorage.
-
-### 7.3 Offline-First Queue & Syncing
-- Native Mobile MUST monitor network connectivity via `@react-native-community/netinfo`.
-- Offline mutations (daily HMR logs, shift entries) must save into persistent local queue in `AsyncStorage`.
-- Ambient top banner (`OfflineBanner.tsx`) displays when offline, informing the user that changes save locally.
-- Automatic queue synchronization and cache invalidation when network connectivity resumes.
-
-### 7.4 Native Touch & Mobile UX Optimization
-- **Minimum 44px Touch Targets**: Enforced on all buttons, touchable cards, and menu triggers (`minHeight: 44` / `hitSlop`).
-- **Tactile Haptic Feedback**: Critical actions (tab switches, log submissions, deletions) MUST trigger `Haptics.selectionAsync()` or `Haptics.notificationAsync()`.
-- **Bottom Sheets & Modals**: Use smooth bottom sheets on mobile viewports rather than desktop centered popovers.
-- **Scrollable Horizontal Filter Strips**: Use `ScrollView horizontal showsHorizontalScrollIndicator={false}` for category pills.
-- **Safe Area Insets**: Always incorporate `useSafeAreaInsets()` to prevent UI overlap with device notches and home indicator bars.
-
----
-
-## 8. Web Backend & Architecture Specifications
-
-Web Application architecture leverages Next.js 16.2 App Router capabilities:
-1. **React Server Components (RSC)**: Fetch data server-side by default, eliminating client-side loading waterfalls.
-2. **Data Access Layer (DAL)**: All reads go through `lib/dal.ts` and `lib/queries/*` using per-request Supabase SSR clients.
-3. **Server Actions (`app/actions/*`)**: All mutations go through Server Actions with Zod validation, role authorization, audit logging, and cache revalidation (`revalidateTag`).
-4. **SSR Auth**: Supabase Auth managed securely via HTTP-only cookies (`@supabase/ssr`).
-
----
-
-## 9. Mandatory Pre-Completion Verification Checklist
-
-Before completing any task, every AI agent MUST verify:
-
-- [ ] Does the visual design, color tokens, and font hierarchy match `DESIGN.md` 100%?
-- [ ] Were any changes in `apps/web` mirrored and synchronized into `apps/mobile`?
-- [ ] Are all touch targets in `apps/mobile` ≥ 44px?
-- [ ] Does Native Mobile use TanStack Query for data fetching and SecureStore for auth?
-- [ ] Does Native Mobile use `<Text variant="...">` with zero raw typography properties?
-- [ ] Do both platforms enforce the canonical 6 roles from `@reachinternational/permissions`?
-- [ ] Does `pnpm typecheck` pass with 0 errors monorepo-wide?
-- [ ] If an agent places Web and Mobile screens side-by-side, do they look like ONE unified product?
+### 13.2 Web Platform (`apps/web`)
+- **React Server Components (RSC)**: Fetch data server-side by default, eliminating client waterfalls. Leaf-node `'use client'` components only.
+- **Data Access Layer (DAL)**: All reads go through `lib/dal.ts` and `lib/queries/*` using per-request Supabase SSR clients. No `SELECT *`.
+- **Server Actions (`app/actions/*`)**: All mutations go through Server Actions with canonical Zod validation, role authorization, audit logging, and tag cache revalidation (`revalidateTag`).
+- **SSR Auth**: Supabase Auth managed securely via HTTP-only cookies (`@supabase/ssr`).

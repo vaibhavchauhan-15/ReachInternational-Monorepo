@@ -265,7 +265,7 @@ check('server action calls the date-aware RPC with the legacy fallback guard', (
 const machineFilters = read('apps/web/lib/data/machines/machine-filters.ts');
 
 check('fleet assignment lookups are date-scoped (no stale/future bleed)', () => {
-  assert.match(machineFilters, /async \(targetDate\?: string \| null\)/);
+  assert.match(machineFilters, /async \(targetDate\?: string \| null/);
   assert.match(machineFilters, /\.lte\("valid_from", dateFilter\)/);
   assert.match(machineFilters, /valid_to\.is\.null,valid_to\.gte\.\$\{dateFilter\}/);
 });

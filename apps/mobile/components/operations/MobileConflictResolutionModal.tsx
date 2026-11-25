@@ -47,7 +47,7 @@ export interface MobileConflictResolutionModalProps {
   onSuccess: () => void;
 }
 
-export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionModalProps> = ({
+const MobileConflictResolutionModalBase: React.FC<MobileConflictResolutionModalProps> = ({
   visible,
   onClose,
   log,
@@ -446,6 +446,12 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
     </AppModal>
   );
 };
+
+/**
+ * Memoized: this modal stays mounted while closed, so without memo the whole conflict
+ * review tree re-renders on every Operations parent render.
+ */
+export const MobileConflictResolutionModal = React.memo(MobileConflictResolutionModalBase);
 
 const styles = StyleSheet.create({
   overlay: {

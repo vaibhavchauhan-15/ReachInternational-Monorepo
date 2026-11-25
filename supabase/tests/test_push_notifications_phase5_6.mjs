@@ -86,12 +86,12 @@ async function run() {
     assert.ifError(mErr);
     testMachine = mData;
 
-    // Pick existing supervisor and operator
+    // Pick existing supervisor and operator (Deepak Patel - no conflicting logs in 7-day window)
     const supervisorId = '13841eaa-c894-448f-b60f-093b341605e7'; // supervisor@reachinternational.co.in
-    const operatorId = 'b3400740-3e79-44c7-9aec-a0ec3ccd22ce';
+    const operatorId = '09e5a215-d147-48a0-95ab-76437dc83a43';
 
-    // Insert a breakdown hour log 4 days ago (non-overlapping within 7-day window and older than 24h)
-    const testDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Insert a breakdown hour log 6 days ago (non-overlapping within 7-day window and older than 24h)
+    const testDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const { data: lData, error: logErr } = await admin
       .from('machine_hour_logs')
@@ -102,8 +102,8 @@ async function run() {
         log_date: testDate,
         start_meter: 100,
         end_meter: 108,
-        start_datetime: `${testDate}T08:00:00Z`,
-        end_datetime: `${testDate}T16:00:00Z`,
+        start_datetime: `${testDate}T06:00:00Z`,
+        end_datetime: `${testDate}T12:00:00Z`,
         shift_code: 'S1',
         is_breakdown: true,
         remarks: 'Hydraulic failure test',
@@ -127,7 +127,7 @@ async function run() {
 
     // 3. Test AS1 Assisted Log Trigger
     console.log('3. Testing AS1 Assisted Log Event Trigger...');
-    const asTestDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const asTestDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const { data: asData, error: asErr } = await admin
       .from('machine_hour_logs')
       .insert({
@@ -137,8 +137,8 @@ async function run() {
         log_date: asTestDate,
         start_meter: 110,
         end_meter: 118,
-        start_datetime: `${asTestDate}T08:00:00Z`,
-        end_datetime: `${asTestDate}T16:00:00Z`,
+        start_datetime: `${asTestDate}T14:00:00Z`,
+        end_datetime: `${asTestDate}T22:00:00Z`,
         shift_code: 'S1',
         is_breakdown: false,
         entry_source: 'supervisor',

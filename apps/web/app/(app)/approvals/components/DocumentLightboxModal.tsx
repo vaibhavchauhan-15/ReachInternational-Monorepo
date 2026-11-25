@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   ZoomIn,
@@ -13,7 +13,6 @@ import {
   Loader2,
   ShieldCheck,
   AlertTriangle,
-  Image as ImageIcon,
 } from "lucide-react";
 import type { AttachedDocumentSummary } from "@reachinternational/types";
 import { Button } from "@/components/ui/Button";
@@ -30,7 +29,12 @@ export interface DocumentLightboxModalProps {
   isActionLoading?: boolean;
 }
 
-export function DocumentLightboxModal({
+export function DocumentLightboxModal(props: DocumentLightboxModalProps) {
+  if (!props.isOpen || !props.document) return null;
+  return <DocumentLightboxModalInner key={props.document.id} {...props} />;
+}
+
+function DocumentLightboxModalInner({
   isOpen,
   onClose,
   document: doc,
@@ -45,36 +49,27 @@ export function DocumentLightboxModal({
   const [rotation, setRotation] = useState(0);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
-  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(
+    doc?.signed_url || doc?.thumb_signed_url || null
+  );
+  const [viewMode, setViewMode] = useState<"original" | "thumbnail">(
+    doc?.file_size_bytes && doc.file_size_bytes <= 9000 && doc.thumb_signed_url
+      ? "thumbnail"
+      : "original"
+  );
 
   // Auto-detect black or corrupted original document (e.g. 7,508 bytes Android Chrome canvas drop)
   const isCorruptedOriginal = Boolean(
     doc?.file_size_bytes && doc.file_size_bytes <= 9000 && doc.thumb_signed_url
   );
 
-  const [viewMode, setViewMode] = useState<"original" | "thumbnail">("original");
-
   useEffect(() => {
-    setImageLoading(true);
-    setImageError(false);
-    setZoom(1);
-    setRotation(0);
-
     if (!doc) {
-      setResolvedUrl(null);
       return;
-    }
-
-    // Auto-switch to thumbnail if the original is detected as a corrupted black file
-    if (doc.file_size_bytes && doc.file_size_bytes <= 9000 && doc.thumb_signed_url) {
-      setViewMode("thumbnail");
-    } else {
-      setViewMode("original");
     }
 
     // Always prioritize the full original document (signed_url)
     if (doc.signed_url) {
-      setResolvedUrl(doc.signed_url);
       return;
     }
 
@@ -96,8 +91,6 @@ export function DocumentLightboxModal({
       return () => {
         active = false;
       };
-    } else {
-      setResolvedUrl(doc.signed_url || doc.thumb_signed_url || null);
     }
   }, [doc, userId]);
 
