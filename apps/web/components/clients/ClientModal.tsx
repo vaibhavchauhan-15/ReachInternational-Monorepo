@@ -256,7 +256,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
         <form
           ref={formContainerRef}
           onSubmit={handleSubmit}
-          className="mt-4 space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar"
+          className="mt-4 space-y-4 overflow-y-auto overscroll-contain pr-1 flex-1"
         >
           {/* Section 1: Company & Tax Details */}
           <div

@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { assertBearer } from '@/lib/notifications/auth';
 import { sendAll } from '@/lib/notifications/send-all';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { ClaimedPushRow } from '@/lib/notifications/types';
+
+const dispatchBodySchema = z.object({
+  ids: z.array(z.string().uuid()).max(500).optional(),
+});
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -32,8 +37,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ disabled: true, reason: 'PUSH_ENABLED is not true' });
   }
 
-  const bodyJson = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const ids: string[] | undefined = Array.isArray(bodyJson?.ids) ? bodyJson.ids : undefined;
+  const parsedBody = dispatchBodySchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+  const ids: string[] | undefined = parsedBody.data.ids;
 
   const admin = createSupabaseAdminClient();
   const started = Date.now();
@@ -57,6 +65,13 @@ export async function POST(req: Request) {
     const claimedRows = (rows as ClaimedPushRow[]) || [];
     if (claimedRows.length === 0) {
       break;
+    }
+
+    // Latency instrumentation: provider request window starts here.
+    const uniqueIds = [...new Set(claimedRows.map((r) => r.notification_id))];
+    const { error: beginErr } = await admin.rpc('begin_push_send', { p_ids: uniqueIds });
+    if (beginErr) {
+      console.warn('[NotifyDispatch] Failed to record send_started_at:', beginErr.message);
     }
 
     const results = await sendAll(claimedRows);

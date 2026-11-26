@@ -117,6 +117,11 @@ export const TAGS = {
   approvalsList: "approvals:list",
   approvalsCounts: "approvals:counts",
   approvalDetail: (id: string) => `approvals:${id}`,
+
+  // In-App Notifications Domain (Canonical)
+  notifications: "notifications",
+  notificationList: (userId: string) => `notifications:list:${userId}`,
+  notificationUnreadCount: (userId: string) => `notifications:unread-count:${userId}`,
 } as const;
 
 export type TagName = string;

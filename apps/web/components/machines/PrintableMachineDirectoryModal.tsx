@@ -432,7 +432,7 @@ export function PrintableMachineDirectoryModal({
               )}
             </div>
 
-            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
+            <div className="flex items-center gap-1 overflow-x-auto flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
               {FILTER_TABS.map((tab) => (
                 <button
                   key={tab.value}
@@ -450,7 +450,7 @@ export function PrintableMachineDirectoryModal({
             </div>
           </div>
 
-          <div id="printable-machines-document-preview" className="max-w-full overflow-x-auto custom-scrollbar">
+          <div id="printable-machines-document-preview" className="max-w-full overflow-x-auto">
             <MachineDirectoryReportContent {...reportProps} />
           </div>
         </div>

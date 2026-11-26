@@ -33,6 +33,7 @@ import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MobileCommandPalette } from '../navigation/MobileCommandPalette';
+import { MobileNotificationBell } from '../notifications/MobileNotificationBell';
 
 export interface HeaderActionItem {
   id: string;
@@ -611,6 +612,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 </Pressable>
               )
             ) : null}
+
+            {/* IN-APP NOTIFICATIONS BELL */}
+            {title !== 'Notifications' && (
+              <MobileNotificationBell />
+            )}
 
             {/* 3-DOT MENU BUTTON FOR OTHER ACTIONS */}
             {showMoreMenu !== false && (

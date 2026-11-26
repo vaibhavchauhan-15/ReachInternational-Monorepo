@@ -125,7 +125,7 @@ export function Drawer({
             </div>
 
             {/* Scrollable Body */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
               {children}
             </div>
 

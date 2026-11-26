@@ -599,14 +599,8 @@ export async function submitOperatorHourLogAction(payload: {
     }
   }
 
-  // Ensure remarks includes formatted breakdown string for reports and exports backward compatibility
+  // Single source of truth: User remarks remain clean. Breakdown timestamps and durations are stored exclusively in dedicated columns.
   let finalRemarks = payload.remarks?.trim() || "";
-  if (payload.isBreakdown && effectiveBreakdownDuration) {
-    const bkdPrefix = `[Breakdown Duration: ${effectiveBreakdownDuration}]`;
-    if (!finalRemarks.includes("[Breakdown Duration:")) {
-      finalRemarks = finalRemarks ? `${bkdPrefix} ${finalRemarks}` : bkdPrefix;
-    }
-  }
 
   // Machine, Site, and Client Linking resolution:
   let targetClientId = payload.clientId || null;
@@ -1284,6 +1278,12 @@ const EXPORT_LOG_FULL_PROJECTION = `
   overtime_hours,
   normal_working_hours,
   is_breakdown,
+  breakdown_start_time,
+  breakdown_end_time,
+  breakdown_duration,
+  breakdown_hours,
+  breakdown_minutes,
+  maintenance_minutes,
   shift,
   machine_condition,
   location,
@@ -1313,6 +1313,12 @@ const EXPORT_LOG_BASE_PROJECTION = `
   overtime_hours,
   normal_working_hours,
   is_breakdown,
+  breakdown_start_time,
+  breakdown_end_time,
+  breakdown_duration,
+  breakdown_hours,
+  breakdown_minutes,
+  maintenance_minutes,
   shift,
   machine_condition,
   location,

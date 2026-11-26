@@ -1281,7 +1281,7 @@ export function ApprovalsClientShell({
                       animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
                       exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
                       transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                      className="absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl p-1 max-h-64 overflow-y-auto custom-scrollbar backdrop-blur-md"
+                      className="absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl p-1 max-h-64 overflow-y-auto overscroll-contain backdrop-blur-md"
                       role="listbox"
                     >
                       {STATUS_FILTER_OPTIONS.map((opt) => {
@@ -1385,7 +1385,7 @@ export function ApprovalsClientShell({
                             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
                             exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
                             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl p-1 max-h-64 overflow-y-auto custom-scrollbar backdrop-blur-md"
+                            className="absolute top-full left-0 right-0 mt-1.5 z-50 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl p-1 max-h-64 overflow-y-auto overscroll-contain backdrop-blur-md"
                             role="listbox"
                           >
                             {TYPE_FILTER_OPTIONS.map((opt) => {

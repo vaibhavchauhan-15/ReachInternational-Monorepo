@@ -519,7 +519,7 @@ export function DateRangePicker({
               </div>
 
               <div
-                className="overflow-y-auto flex-1 min-h-0 custom-scrollbar"
+                className="overflow-y-auto overscroll-contain flex-1 min-h-0"
                 onMouseLeave={() => setHoverDate("")}
               >
                 {/* Weekday Column Headers */}

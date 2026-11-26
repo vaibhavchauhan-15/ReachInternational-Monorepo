@@ -733,10 +733,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         bkdDecimalHours = breakdownStats.durationDecimalHours;
       }
 
-      let remarksPayload = isBreakdown ? remarks.trim() : '';
-      if (isBreakdown && bkdDurationFormatted) {
-        remarksPayload = `[Breakdown Duration: ${bkdDurationFormatted}] ${remarksPayload}`.trim();
-      }
+      // User remarks remain clean; breakdown timestamps and duration are stored in dedicated columns
+      let remarksPayload = remarks.trim();
       if (isUnassigned && isAssisted) {
         remarksPayload = `[Assisted Override: Shift ${selectedShiftCode}] ${remarksPayload}`.trim();
       }

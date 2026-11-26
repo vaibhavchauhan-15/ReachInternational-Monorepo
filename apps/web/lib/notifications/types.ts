@@ -21,7 +21,7 @@ export interface ClaimedPushRow {
   } | null;
 }
 
-export type PushOutcome = 'ok' | 'retry' | 'dead';
+export type PushOutcome = 'ok' | 'retry' | 'dead' | 'skip';
 
 export interface PushBatchResult {
   notification_id: string;
@@ -30,3 +30,9 @@ export interface PushBatchResult {
   ticket_id?: string;
   error?: string;
 }
+
+/** Categories whose repeated reminders should collapse (replace) rather than stack. */
+export const COLLAPSIBLE_CATEGORIES = new Set([
+  'shift_reminder',
+  'shift_reminders',
+]);

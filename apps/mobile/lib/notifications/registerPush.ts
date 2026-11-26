@@ -11,9 +11,32 @@ import Constants from 'expo-constants';
 import { isRunningInExpoGo } from 'expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { isAllowedPushDeepLink } from '@reachinternational/types';
 import { supabase } from '../supabase';
+import { generateUUID } from '../optimistic/tempId';
+import { syncAppBadge } from './badge';
+
+export { syncAppBadge };
 
 const STORAGE_KEY_TOKEN = '@reach:registered_push_token';
+const STORAGE_KEY_INSTALLATION = '@reach:installation_id';
+
+/**
+ * Stable opaque identifier for this physical app installation. Keying device
+ * registrations by installation id guarantees one live push token per install
+ * (token refresh / re-registration deactivates the stale token server-side).
+ */
+export async function getInstallationId(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem(STORAGE_KEY_INSTALLATION);
+    if (existing) return existing;
+    const fresh = generateUUID();
+    await AsyncStorage.setItem(STORAGE_KEY_INSTALLATION, fresh);
+    return fresh;
+  } catch {
+    return generateUUID();
+  }
+}
 
 /**
  * Evaluates whether the app is running in the Expo Go client app.
@@ -31,25 +54,10 @@ export function isExpoGo(): boolean {
   return Constants.appOwnership === 'expo';
 }
 
-// Safe route prefixes for push deep-links
-const ROUTE_ALLOWLIST: readonly string[] = [
-  '/dashboard',
-  '/operations',
-  '/fleet',
-  '/users',
-  '/settings',
-  '/reports',
-];
-
-/**
- * Validates a deep-link path against the strict relative-path pattern and route allowlist
- */
+// Safe route prefixes for push deep-links are owned by the shared notification
+// registry (@reachinternational/types). This wrapper keeps the historical API.
 export function isValidDeepLink(link?: string | null): boolean {
-  if (!link || typeof link !== 'string') return false;
-  const trimmed = link.trim();
-  // Must be a relative path without protocol or dangerous schemes
-  if (!/^\/[A-Za-z0-9/_\-?=&%.]*$/.test(trimmed)) return false;
-  return ROUTE_ALLOWLIST.some((prefix) => trimmed === prefix || trimmed.startsWith(`${prefix}?`) || trimmed.startsWith(`${prefix}/`));
+  return isAllowedPushDeepLink(link ?? undefined);
 }
 
 /**
@@ -109,8 +117,10 @@ export async function setupNotificationChannels(): Promise<void> {
 
 /**
  * Configures the foreground notification display handler.
- * Forces the device OS to display all push notifications strictly outside the app
- * via system heads-up banners, notification shade, sound, and badge.
+ * Critical/high priority events keep the native heads-up banner (they must
+ * interrupt). Normal/low events shown while the app is foregrounded drop the
+ * duplicate system banner and surface instead as an in-app indicator (badge +
+ * in-app inbox) — the OS shade entry is still recorded (shouldShowList).
  */
 export function setupForegroundNotificationHandler(): void {
   Notifications.setNotificationHandler({
@@ -118,11 +128,14 @@ export function setupForegroundNotificationHandler(): void {
       const priority = notification.request.content.data?.priority;
       const isHighPriority = priority === 'critical' || priority === 'high';
 
+      // Keep the icon badge in step with the authoritative unread count.
+      void syncAppBadge();
+
       return {
         shouldShowAlert: true,
-        shouldPlaySound: true,
+        shouldPlaySound: isHighPriority,
         shouldSetBadge: true,
-        shouldShowBanner: true,
+        shouldShowBanner: isHighPriority,
         shouldShowList: true,
       };
     },
@@ -185,12 +198,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
       return null;
     }
 
-    // 4. Register token with backend RPC
+    // 4. Register token with backend RPC (provider + installation identity)
     const appVersion = Constants.expoConfig?.version || '1.4.0';
+    const installationId = await getInstallationId();
     const { error: rpcError } = await supabase.rpc('register_push_device', {
       p_token: token,
       p_platform: Platform.OS,
+      p_provider: 'expo',
       p_app_version: appVersion,
+      p_installation_id: installationId,
     });
 
     if (rpcError) {
@@ -235,6 +251,7 @@ export function setupNotificationResponseListener(): () => void {
   try {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       try {
+        void syncAppBadge();
         const data = response.notification.request.content.data;
         const rawLink = data?.link;
         const link = typeof rawLink === 'string' ? rawLink : null;

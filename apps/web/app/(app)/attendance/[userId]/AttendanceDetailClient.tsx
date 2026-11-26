@@ -1449,7 +1449,7 @@ export function AttendanceDetailClient({
                 <h4 className="text-xs font-semibold text-[var(--color-ink)] uppercase tracking-wider">
                   Machine Operation Entries ({selectedDay.entries.length})
                 </h4>
-                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1 custom-scrollbar">
+                <div className="space-y-2.5 max-h-[360px] overflow-y-auto overscroll-contain pr-1">
                   {selectedDay.entries.map((entry: AttendanceDayEntry, idx: number) => (
                     <div
                       key={entry.id || idx}

@@ -89,6 +89,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { WebOfflineBanner } from "@/components/ui/WebOfflineBanner";
 import { QueryClientProvider } from "@/components/providers/QueryClientProvider";
+import { ScrollActivity } from "@/components/scroll/ScrollActivity";
 
 const AgentationWrapper = dynamic(
   () => import("@/components/AgentationWrapper").then((m) => m.AgentationWrapper)
@@ -133,6 +134,7 @@ export default function RootLayout({
           <QueryClientProvider>
             <ToastProvider>
               <TooltipProvider delayDuration={200}>
+                <ScrollActivity />
                 <WebOfflineBanner />
                 {children}
                 <AgentationWrapper />

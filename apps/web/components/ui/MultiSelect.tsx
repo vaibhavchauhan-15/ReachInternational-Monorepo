@@ -256,7 +256,7 @@ export function MultiSelect({
             </div>
 
             {/* Options List */}
-            <div className="overflow-y-auto p-1.5 max-h-48 space-y-0.5 custom-scrollbar">
+            <div className="overflow-y-auto overscroll-contain p-1.5 max-h-48 space-y-0.5">
               {filteredOptions.length === 0 ? (
                 <div className="py-4 text-center text-xs text-[var(--color-mute)]">
                   No matching options found

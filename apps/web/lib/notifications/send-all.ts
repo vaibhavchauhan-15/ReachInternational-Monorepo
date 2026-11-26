@@ -22,10 +22,11 @@ export async function sendAll(rows: ClaimedPushRow[]): Promise<PushBatchResult[]
 
   for (const row of rows) {
     if (disabledCategories.has(row.category.toLowerCase())) {
+      // Sender-side condition: never touches the device registration (G-C4).
       skippedResults.push({
         notification_id: row.notification_id,
         device_id: row.device_id,
-        outcome: 'dead',
+        outcome: 'skip',
         error: 'CategoryDisabledByKillSwitch',
       });
     } else {
@@ -52,10 +53,25 @@ export async function sendAll(rows: ClaimedPushRow[]): Promise<PushBatchResult[]
     }
   }
 
-  // 3. Dispatch concurrently
+  // 3. Dispatch concurrently, isolated per provider: one provider throwing must
+  //    never lose or block the other provider's results (failure-domain isolation).
   const [expoResults, webPushResults] = await Promise.all([
-    sendExpoBatch(expoRows),
-    sendWebPushBatch(webPushRows),
+    sendExpoBatch(expoRows).catch((err: unknown) =>
+      expoRows.map((row) => ({
+        notification_id: row.notification_id,
+        device_id: row.device_id,
+        outcome: 'retry' as const,
+        error: `ExpoProviderCrash:${err instanceof Error ? err.message : 'unknown'}`,
+      }))
+    ),
+    sendWebPushBatch(webPushRows).catch((err: unknown) =>
+      webPushRows.map((row) => ({
+        notification_id: row.notification_id,
+        device_id: row.device_id,
+        outcome: 'retry' as const,
+        error: `WebPushProviderCrash:${err instanceof Error ? err.message : 'unknown'}`,
+      }))
+    ),
   ]);
 
   return [...skippedResults, ...expoResults, ...webPushResults];

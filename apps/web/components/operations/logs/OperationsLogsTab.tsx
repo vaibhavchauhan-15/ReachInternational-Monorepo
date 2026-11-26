@@ -1802,7 +1802,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 shadow-sm transition-all duration-200">
         <div className="flex items-center justify-between gap-2.5">
           {/* View Mode Switcher */}
-          <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
+          <div className="flex items-center gap-1 overflow-x-auto p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
             <button
               type="button"
               onClick={() => handleSubTabClick("machine")}

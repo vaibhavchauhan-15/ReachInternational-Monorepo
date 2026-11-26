@@ -88,23 +88,50 @@ export function mapApprovalDecisionError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? "");
   const message = raw.trim();
 
-  if (status === 401) {
-    return "Your session expired. Sign in again to record a decision.";
+  if (status === 401 || /jwt expired|invalid token|session expired|auth session missing/i.test(message)) {
+    return "Your session expired. Please sign in again to record a decision.";
   }
   if (status === 403 || code === "42501" || PERMISSION_PATTERN.test(message)) {
-    return "You are not authorized to review this request. The server rejected the decision.";
+    return "You are not authorized to review this request. Administrator privileges are required.";
   }
   if (status === 409 || code === "P0004" || CONFLICT_PATTERN.test(message)) {
     return "This request was already decided or changed on the server. Refresh the queue to continue.";
   }
-    if (status === 404 || code === "P0002" || /user document not found|document not found|no longer exists/i.test(message)) {
-      return "Document record not found or has already been reviewed.";
-    }
-    if (/network|failed to fetch|timeout|timed out|offline/i.test(message)) {
-      return "The server could not be reached. Decisions are never queued offline — try again when you are online.";
-    }
-    return message || "The server could not record this decision. Please try again.";
+  if (status === 404 || code === "P0002" || /user document not found|document not found|no longer exists/i.test(message)) {
+    return "Document record not found or has already been reviewed.";
   }
+  if (/network|failed to fetch|timeout|timed out|offline/i.test(message)) {
+    return "The server could not be reached. Decisions are never queued offline — try again when you are online.";
+  }
+  return message || "The server could not record this decision. Please try again.";
+}
+
+/**
+ * Ensures an active, valid Supabase session before executing approval decisions.
+ * Proactively refreshes the token if close to expiry.
+ */
+async function ensureActiveSession(): Promise<{ actorId: string | null; token: string | null }> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    let session = sessionData?.session;
+
+    // If session is expired or within 60s of expiring, proactively refresh
+    if (!session || (session.expires_at && session.expires_at * 1000 - Date.now() < 60_000)) {
+      const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+      if (!refreshErr && refreshData?.session) {
+        session = refreshData.session;
+      }
+    }
+
+    return {
+      actorId: session?.user?.id || null,
+      token: session?.access_token || null,
+    };
+  } catch (err) {
+    console.warn("[useApprovalsData] ensureActiveSession fallback:", err);
+    return { actorId: null, token: null };
+  }
+}
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Queue helpers
@@ -570,15 +597,13 @@ export interface UseApprovalsListOptions {
           expectedVersion?: number;
           boundRequestIds?: string[];
         }) => {
-          // ⚡ Hoist getSession() — single call, reused for both transports
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-          const actorId = sessionData?.session?.user?.id || null;
+          // ⚡ Verify and ensure fresh session token
+          const { actorId, token } = await ensureActiveSession();
 
-          // 1. Dual-Transport: Try Next.js API route with Bearer auth (propagates HTTP status)
-          if (token) {
+          // 1. Dual-Transport: Try Next.js API route with Bearer auth if available
+          const appUrl = getAppUrl();
+          if (token && appUrl) {
             try {
-              const appUrl = getAppUrl();
               const res = await fetch(`${appUrl}/api/approvals/${requestId}/decide`, {
                 method: "POST",
                 headers: {
@@ -598,20 +623,27 @@ export interface UseApprovalsListOptions {
                 return await res.json();
               }
 
-              const json = await res.json().catch(() => ({}));
-              const serverError = new Error(
-                json.error || `Decision rejected by the server (${res.status}).`
-              ) as Error & { status?: number };
-              serverError.status = res.status;
-              throw serverError;
+              // Concurrency or already-decided conflicts (409) are authoritative domain state
+              if (res.status === 409) {
+                const json = await res.json().catch(() => ({}));
+                const conflictError = new Error(
+                  json.error || "This request was already decided or modified by another reviewer."
+                ) as Error & { status?: number };
+                conflictError.status = 409;
+                throw conflictError;
+              }
+
+              // Non-409 errors (401 from Web/Dev host mismatch, 404, 500) fall through cleanly to direct Supabase RPC
+              console.warn(
+                `[useDecideApprovalMutation] Web API returned ${res.status}, falling back to direct Supabase RPC`
+              );
             } catch (err: any) {
-              // Authoritative 4xx rejection → surface it; 5xx/transport failures fall through to the RPC.
-              if (err?.status && err.status < 500) throw err;
+              if (err?.status === 409) throw err;
               console.warn("[useDecideApprovalMutation] Web API call fallback to direct RPC:", err);
             }
           }
 
-          // 2. Direct RPC fallback — the shared approval_decide contract
+          // 2. Direct RPC fallback — the authoritative Supabase approval_decide contract
           const res = await decideApproval(supabase, {
             request_id: requestId,
             decision,
@@ -685,15 +717,12 @@ export interface UseApprovalsListOptions {
           requestIds?: string[];
           note?: string;
         } = {}) => {
-          // ⚡ Hoist getSession() — single call, reuse for both transports
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-          const actorId = sessionData?.session?.user?.id || null;
+          const { actorId, token } = await ensureActiveSession();
 
           // 1. Dual-transport: Attempt rich Next.js API route with Bearer auth
-          if (token) {
+          const appUrl = getAppUrl();
+          if (token && appUrl) {
             try {
-              const appUrl = getAppUrl();
               const res = await fetch(`${appUrl}/api/approvals/approve-all`, {
                 method: "POST",
                 headers: {
@@ -710,12 +739,15 @@ export interface UseApprovalsListOptions {
               if (res.ok) {
                 return (await res.json()) as ApprovalApproveAllResult;
               }
+              console.warn(
+                `[useApproveAllMutation] Web API returned ${res.status}, falling back to direct Supabase RPC`
+              );
             } catch (err) {
               console.warn("[useApproveAllMutation] Web API call fallback to direct RPC:", err);
             }
           }
 
-          // 2. Direct RPC fallback — reuse already-fetched actorId
+          // 2. Direct RPC fallback — reuse verified actorId
           const res = await approveAll(supabase, {
             type_key: typeKey,
             request_ids: requestIds,
@@ -797,14 +829,12 @@ export interface UseApprovalsListOptions {
           documentId: string;
           userId?: string;
         }) => {
-          const { data: sessionResult } = await supabase.auth.getSession();
-          const token = sessionResult?.session?.access_token;
-          const actorId = sessionResult?.session?.user?.id || null;
+          const { actorId, token } = await ensureActiveSession();
 
           // 1. Dual-transport: Try fast dedicated Next.js API route with Bearer auth
-          if (token) {
+          const appUrl = getAppUrl();
+          if (token && appUrl) {
             try {
-              const appUrl = getAppUrl();
               const res = await fetch(`${appUrl}/api/approvals/documents/verify`, {
                 method: "POST",
                 headers: {
@@ -817,14 +847,17 @@ export interface UseApprovalsListOptions {
               if (res.ok) {
                 return await res.json();
               }
-              const json = await res.json().catch(() => ({}));
-              const serverError = new Error(
-                json.error || `Verification rejected by the server (${res.status}).`
-              ) as Error & { status?: number };
-              serverError.status = res.status;
-              throw serverError;
+              if (res.status === 409) {
+                const json = await res.json().catch(() => ({}));
+                const err = new Error(json.error || "Document is already verified or modified.") as Error & { status?: number };
+                err.status = 409;
+                throw err;
+              }
+              console.warn(
+                `[useVerifyDocumentMutation] Web API returned ${res.status}, falling back to direct RPC`
+              );
             } catch (err: any) {
-              if (err?.status && err.status < 500) throw err;
+              if (err?.status === 409) throw err;
               console.warn("[useVerifyDocumentMutation] API fallback to RPC:", err);
             }
           }
@@ -904,54 +937,55 @@ export interface UseApprovalsListOptions {
         }: {
           documentId: string;
           rejectionReason: string;
-          userId?: string;
-        }) => {
-          if (!rejectionReason.trim()) {
-            throw new Error("A rejection reason is required.");
-          }
+        userId?: string;
+      }) => {
+        if (!rejectionReason.trim()) {
+          throw new Error("A rejection reason is required.");
+        }
 
-          const { data: sessionResult } = await supabase.auth.getSession();
-          const token = sessionResult?.session?.access_token;
-          const actorId = sessionResult?.session?.user?.id || null;
+        const { actorId, token } = await ensureActiveSession();
 
-          // 1. Dual-transport: Try fast dedicated Next.js API route with Bearer auth
-          if (token) {
-            try {
-              const appUrl = getAppUrl();
-              const res = await fetch(`${appUrl}/api/approvals/documents/reject`, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                  Accept: "application/json",
-                },
-                body: JSON.stringify({
-                  documentId,
-                  rejectionReason: rejectionReason.trim(),
-                  userId,
-                }),
-              });
-              if (res.ok) {
-                return await res.json();
-              }
-              const json = await res.json().catch(() => ({}));
-              const serverError = new Error(
-                json.error || `Rejection rejected by the server (${res.status}).`
-              ) as Error & { status?: number };
-              serverError.status = res.status;
-              throw serverError;
-            } catch (err: any) {
-              if (err?.status && err.status < 500) throw err;
-              console.warn("[useRejectDocumentMutation] API fallback to RPC:", err);
+        // 1. Dual-transport: Try fast dedicated Next.js API route with Bearer auth
+        const appUrl = getAppUrl();
+        if (token && appUrl) {
+          try {
+            const res = await fetch(`${appUrl}/api/approvals/documents/reject`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({
+                documentId,
+                rejectionReason: rejectionReason.trim(),
+                userId,
+              }),
+            });
+            if (res.ok) {
+              return await res.json();
             }
+            if (res.status === 409) {
+              const json = await res.json().catch(() => ({}));
+              const err = new Error(json.error || "Document is already decided or modified.") as Error & { status?: number };
+              err.status = 409;
+              throw err;
+            }
+            console.warn(
+              `[useRejectDocumentMutation] Web API returned ${res.status}, falling back to direct RPC`
+            );
+          } catch (err: any) {
+            if (err?.status === 409) throw err;
+            console.warn("[useRejectDocumentMutation] API fallback to RPC:", err);
           }
+        }
 
-          // 2. Direct atomic RPC fallback — atomic database rejection
-          const { data, error } = await supabase.rpc("reject_user_document_atomic", {
-            p_document_id: documentId,
-            p_reviewer_id: actorId,
-            p_rejection_reason: rejectionReason.trim(),
-          });
+        // 2. Direct atomic RPC fallback — atomic database rejection
+        const { data, error } = await supabase.rpc("reject_user_document_atomic", {
+          p_document_id: documentId,
+          p_reviewer_id: actorId,
+          p_rejection_reason: rejectionReason.trim(),
+        });
 
           if (error) {
             // Table update fallback

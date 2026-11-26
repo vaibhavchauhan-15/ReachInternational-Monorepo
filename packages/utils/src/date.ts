@@ -1091,6 +1091,19 @@ export interface FormattedBreakdownDetails {
 }
 
 /**
+ * Formats duration in minutes into a human-readable string:
+ * e.g. 36 -> "36m", 60 -> "1h", 90 -> "1h 30m", 0 -> "0h"
+ */
+export function formatBreakdownMinutes(m: number): string {
+  if (!m || isNaN(m) || m <= 0) return "0h";
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h === 0) return `${rem}m`;
+  if (rem === 0) return `${h}h`;
+  return `${h}h ${rem}m`;
+}
+
+/**
  * Parses and formats breakdown timing and duration into structured, display-ready parts.
  * Formats:
  * - Start/End range: compact zero-space timing range e.g. "12:30PM-03:00PM"
@@ -1105,6 +1118,7 @@ export function parseBreakdownDetails(
     breakdown_end_time?: string | null;
     breakdown_duration?: string | null;
     breakdown_hours?: number | null;
+    breakdown_minutes?: number | null;
   } | string | null
 ): FormattedBreakdownDetails {
   if (!logOrRemarks) {
@@ -1122,24 +1136,37 @@ export function parseBreakdownDetails(
   const rawEnd = isObj ? logOrRemarks.breakdown_end_time : null;
   const rawDuration = isObj ? logOrRemarks.breakdown_duration : null;
   const rawHours = isObj ? logOrRemarks.breakdown_hours : null;
+  const rawMinutes = isObj ? logOrRemarks.breakdown_minutes : null;
 
   const parsed =
     parseBreakdownString(remarks) ||
     (rawDuration ? parseBreakdownString(rawDuration) : null);
 
-  const startTime = rawStart || parsed?.startTime;
-  const endTime = rawEnd || parsed?.endTime;
+  const startTime = rawStart ? (formatTo12Hour(rawStart) || rawStart) : parsed?.startTime;
+  const endTime = rawEnd ? (formatTo12Hour(rawEnd) || rawEnd) : parsed?.endTime;
 
   let timingRange: string | null = null;
   if (startTime && endTime) {
     timingRange = formatCompactTiming(startTime, endTime);
   }
 
-  let durationText: string | null =
-    parsed?.durationFormatted ||
-    parsed?.durationText ||
-    rawDuration ||
-    (rawHours ? `${rawHours}h` : null);
+  let durationText: string | null = null;
+  if (rawMinutes != null && Number(rawMinutes) > 0) {
+    durationText = formatBreakdownMinutes(Number(rawMinutes));
+  } else if (rawStart && rawEnd) {
+    const stats = computeBreakdownDuration(rawStart, rawEnd);
+    if (stats.isValid && stats.totalMinutes > 0) {
+      durationText = formatBreakdownMinutes(stats.totalMinutes);
+    }
+  }
+
+  if (!durationText) {
+    durationText =
+      parsed?.durationFormatted ||
+      parsed?.durationText ||
+      rawDuration ||
+      (rawHours ? formatBreakdownMinutes(Math.round(Number(rawHours) * 60)) : null);
+  }
 
   // If no range found yet, check remarks regex match
   if (!timingRange && remarks) {

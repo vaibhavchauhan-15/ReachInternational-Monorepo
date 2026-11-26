@@ -18,6 +18,12 @@ export const MACHINE_CAPABILITIES = {
   EDIT_SPECS: "machine.edit_specs",
   /** Bulk import. */
   IMPORT: "machine.import",
+  /**
+   * Admin-only bulk machine logsheet (operation log) Excel import.
+   * Deliberately NOT part of the fleet matrix: only super_admin and admin may
+   * bulk-insert historical machine_hour_logs records.
+   */
+  LOGS_IMPORT: "machine.logs_import",
   /** Delete machine. */
   DELETE: "machine.delete",
   /** Assign/change supervisors. */
@@ -48,11 +54,28 @@ export type MachineScope = "all" | "supervised" | "assigned" | "none";
 // assigned-machine-only screen. It must never be granted to the manager tier,
 // otherwise /machines renders the operator view (and its 0-or-1 row scope) for
 // admins. Operator view is determined by role/scope, not by this capability.
+// `machine.logs_import` is an admin-only capability (bulk logsheet Excel import)
+// and is likewise excluded from the fleet matrix.
+const NON_FLEET_CAPABILITIES: readonly MachineCapability[] = [
+  MACHINE_CAPABILITIES.OPERATOR_VIEW,
+  MACHINE_CAPABILITIES.LOGS_IMPORT,
+];
+
 const FLEET_CAPABILITIES: readonly MachineCapability[] = Object.values(
   MACHINE_CAPABILITIES
-).filter((capability) => capability !== MACHINE_CAPABILITIES.OPERATOR_VIEW);
+).filter((capability) => !NON_FLEET_CAPABILITIES.includes(capability));
+
+/** Admin-only capabilities: granted to super_admin and admin, nobody else. */
+const ADMIN_ONLY_CAPABILITIES: readonly MachineCapability[] = [
+  MACHINE_CAPABILITIES.LOGS_IMPORT,
+];
 
 const MANAGER_TIER: readonly MachineCapability[] = FLEET_CAPABILITIES;
+
+const ADMIN_TIER: readonly MachineCapability[] = [
+  ...FLEET_CAPABILITIES,
+  ...ADMIN_ONLY_CAPABILITIES,
+];
 
 const SUPERVISOR_CAPABILITIES: readonly MachineCapability[] = [
   MACHINE_CAPABILITIES.VIEW,
@@ -81,8 +104,8 @@ const OPERATOR_CAPABILITIES: readonly MachineCapability[] = [
  *   HR                           = no machine access at all
  */
 export const MACHINE_ROLE_CAPABILITIES: Record<UserRole, readonly MachineCapability[]> = {
-  super_admin: FLEET_CAPABILITIES,
-  admin: MANAGER_TIER,
+  super_admin: ADMIN_TIER,
+  admin: ADMIN_TIER,
   manager: MANAGER_TIER,
   supervisor: SUPERVISOR_CAPABILITIES,
   hr: [],
@@ -114,7 +137,7 @@ export function getMachineCapabilities(
 ): MachineCapability[] {
   const normalized = normalizeMachineRole(role);
   if (!normalized) return [];
-  if (normalized === "super_admin") return [...FLEET_CAPABILITIES];
+  if (normalized === "super_admin") return [...ADMIN_TIER];
   return [...MACHINE_ROLE_CAPABILITIES[normalized]];
 }
 
@@ -126,7 +149,10 @@ export function hasMachineCapability(
   const normalized = normalizeMachineRole(role);
   if (!normalized) return false;
   if (normalized === "super_admin") {
-    return FLEET_CAPABILITIES.includes(capability as MachineCapability);
+    return (
+      FLEET_CAPABILITIES.includes(capability as MachineCapability) ||
+      ADMIN_ONLY_CAPABILITIES.includes(capability as MachineCapability)
+    );
   }
   const granted = MACHINE_ROLE_CAPABILITIES[normalized];
   return granted.includes(capability as MachineCapability);

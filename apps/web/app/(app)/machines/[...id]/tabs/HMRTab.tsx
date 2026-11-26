@@ -146,7 +146,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
             transition={{ duration: 0.15, ease: "easeOut" }}
             role="listbox"
             aria-label={ariaLabel}
-            className={`absolute top-full mt-1.5 z-50 min-w-full max-h-60 overflow-y-auto rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl pointer-events-auto ${
+            className={`absolute top-full mt-1.5 z-50 min-w-full max-h-60 overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl pointer-events-auto ${
               align === "right"
                 ? "right-0 left-auto sm:left-0 sm:right-auto sm:min-w-[200px]"
                 : "left-0 right-auto sm:left-0 sm:min-w-[220px]"

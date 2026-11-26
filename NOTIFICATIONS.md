@@ -1,272 +1,132 @@
-# Notification System Setup Guide
+# Notification System — Architecture & Operations
 
-## Overview
-ReachInternational uses a multi-channel notification system:
-- **Email**: SendGrid (consolidated daily summaries, auth emails)
-- **WhatsApp**: Twilio (immediate action alerts for engineers and admins)
-- **In-App**: Dashboard notifications
+> **Scope:** in-app notifications (`public.notifications` + inbox RPCs) and **push notifications** (Web Push + Expo) delivered when the browser tab or app is closed.
+> **Audit + hardening record:** [`AI/FEATURES/push-notifications.md`](AI/FEATURES/push-notifications.md).
+> **Incident runbook:** [`runbooks/PUSH_NOTIFICATION_DELIVERY_FAILURE.md`](runbooks/PUSH_NOTIFICATION_DELIVERY_FAILURE.md).
+> The historical email (SendGrid) / WhatsApp (Twilio) / QStash design described in older revisions of this file is **retired** — none of those integrations exist in the codebase.
 
-## Prerequisites
-- Twilio account with WhatsApp and SMS capabilities
-- SendGrid account for email delivery
-- Upstash QStash account for scheduled cron jobs
+---
 
-## Environment Variables
+## 1. Channels
 
-### Twilio (WhatsApp & SMS)
-```env
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+91xxxxxxxxxx
-TWILIO_SMS_NUMBER=+91xxxxxxxxxx
+| Channel | Mechanism | Delivery when app/tab closed |
+| --- | --- | --- |
+| In-app inbox | `public.notifications` + `notification_list` / `notification_unread_count` / `notification_mark_read` RPCs | No (in-app only) |
+| Native push (Android/iOS) | Expo Push Service (`expo-server-sdk`) → FCM/APNs | **Yes** |
+| Web Push (browser/PWA) | `web-push` + VAPID + `public/sw.js` | **Yes** |
+
+`public.notifications` is the **canonical notification source and transactional outbox**. There is no second queue.
+
+## 2. Delivery pipeline (one notification → devices)
+
+```
+producer trigger / server action / scanner (pg_cron)
+  └─ enqueue_notification()            → INSERT notifications (push_status='pending', dedupe_key)
+       └─ trg_notifications_fastpath   → pg_net HTTP POST {ids:[id]}  (critical/high/normal)
+       └─ pg_cron sweeper (1 min)      → pg_net HTTP POST {}          (drains everything due)
+            └─ POST /api/notify/dispatch  (Bearer NOTIFY_SECRET, constant-time compare)
+                 ├─ claim_push_batch()   atomic claim (SKIP LOCKED, 2-min lease, ≤5 attempts)
+                 │    expiry → relevance → preferences → quiet hours (IST) → daily cap
+                 │    → fan-out to every active device not yet delivered to
+                 ├─ sendAll(): Expo (chunks ≤100) + Web Push (20-wide), failure domains isolated
+                 └─ finish_push_batch()  per-device outcomes + per-notification state + jittered backoff
+       └─ pg_cron receipts poller (15 min) → POST /api/notify/receipts (Expo ticket → receipt)
 ```
 
-### SendGrid (Email)
-```env
-SENDGRID_API_KEY=your_sendgrid_api_key
-SENDGRID_FROM_EMAIL=your_from_email@example.com
-SENDGRID_FROM_NAME=ReachInternational
-```
+**Semantics (documented, not exactly-once):** one notification row per business event and
+recipient; at most one active claim per delivery target; at-least-once provider delivery when a
+network outcome is ambiguous (timeout after possible acceptance); best-effort duplicate
+suppression via Expo `collapseId` (reminders), Web Push `Topic`/`tag`, and client-side `nid`
+dedupe. Provider acceptance ≠ device delivery.
 
-## Database Migration
+## 3. Schema map
 
-Run the migration to update the notifications table:
+| Object | Role |
+| --- | --- |
+| `public.notifications` | Inbox row + outbox state: `push_status (none→pending→sending→sent/skipped/failed)`, `claimed_at`, `push_attempts`, `send_after`, `ttl_seconds`, `dedupe_key`, `recheck`, `send_started_at`, `provider_accepted_at` |
+| `public.push_devices` | One row per live push endpoint, globally unique `token`, `installation_id`, `provider (expo/webpush)`, `is_active`, `fail_count`, `disabled_reason`, `last_seen_at`, `vapid_version`. Per-user/per-platform cap (default 10, `app.push_device_cap`), LRU eviction with redacted audit event |
+| `public.push_tickets` | Per-(notification × device) delivery record for **all** providers: `provider`, `status (ticketed/ok/error)`, `outcome (accepted/retry/dead/skipped)`, `ticket_id` (Expo receipts) |
+| `public.user_notification_preferences` | Per-user toggles + quiet hours (IST). Enforced **server-side** in `claim_push_batch`; client toggles are UI only |
+| `public.push_delivery_health` | Aggregate health view (queue depth, oldest pending, failure/invalid-token rates) — service_role only |
+
+## 4. Producers (registry categories)
+
+| Source | Category | Priority | Notes |
+| --- | --- | --- | --- |
+| BD1 breakdown log trigger | `breakdown` | critical (low if >24 h old) | supervisors + managers/admins |
+| EM1 machine halted | `breakdown` | high | assigned operators + supervisors |
+| AS1 assisted log | `assignment` | normal | operator |
+| SA1 assignment change | `assignment` | normal | `app.skip_notify` suppressible |
+| REG1 registration pending | `admin` | normal | 15-min digest bucket, **zero-PII body** |
+| ENQ1 RFQ inquiry | `admin` | normal | **zero-PII body** |
+| SP1-s1/s2 shift-end reminders | `shift_reminder` | high | window `[today−6, today]` IST |
+| SP2 morning digest | `shift_reminder` | high | 09:00 IST |
+| SL1 final lock warning | `shift_reminder` | critical | 18:00 IST, bypasses quiet hours |
+| SUP1 supervisor digest | `shift_reminder` | normal | 09:30 IST |
+| SEC1 password change/reset | `security` | critical | bypasses preferences + quiet hours + cap |
+| PAY1 payroll statement | `payroll` | normal | generic body (month only) |
+| approvals / log_entry (inbox task) | `approvals`, `log_entry`, … | varies | shared registry in `@reachinternational/types` |
+
+**Reminder date authority:** operator logging window is exactly `[today_IST − 6, today_IST]`
+(`public.get_pending_shift_slots` — the single implementation; no client-side duplicate exists).
+Deadlines: `shift_entry_deadline(work_date) = (work_date + 7) 00:00 IST`. Expired reminders are
+never dispatched (TTL + deadline enforced at claim).
+
+## 5. Preferences & quiet hours
+
+- Quiet hours (default 22:00–06:00 IST) **defer** non-critical pushes to the window end (never drop).
+- Daily cap: max 5 non-critical pushes per user per 24 h (`daily_cap_exceeded`).
+- `priority='critical'` and category `security` bypass application-level suppression.
+- Nothing here overrides browser permission, OS settings, connectivity or provider availability.
+
+## 6. Environment & secrets
+
+| Name | Where | Purpose |
+| --- | --- | --- |
+| `NOTIFY_SECRET` | Server env only | Bearer auth for `/api/notify/*` (constant-time compare) |
+| `VAPID_PRIVATE_KEY` / `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Server env / public env | Web Push VAPID pair (public key is safe to expose) |
+| `VAPID_SUBJECT` | Server env | `mailto:` subject |
+| `EXPO_ACCESS_TOKEN` | Server env (optional) | Expo Push API access token |
+| `PUSH_ENABLED` | Server env | Master kill switch (`'true'` required) |
+| `PUSH_DISABLED_CATEGORIES` | Server env | Comma-separated category kill switch (skips, never deactivates devices) |
+| Vault `notify_url` / `notify_secret` | Supabase Vault (per database) | How pg_net/pg_cron reach the dispatcher |
+
+**The database's `notify_url` must point at the dispatcher deployment wired to that same
+database.** A wrong URL fails silently (pg_net records 404s; the trigger swallows errors) —
+monitor `net._http_response` and `push_delivery_health`. VAPID rotation: rotate the pair, deploy,
+then re-subscribe clients (see the runbook); `push_devices.vapid_version` tracks the key version.
+
+## 7. Web behavior
+
+- Permission is requested only from a user action behind an in-app primer (Settings) — never on page load.
+- iOS/iPadOS: Web Push only works for an installed Home Screen web app (16.4+); the UI detects and explains.
+- `sw.js`: allowlist-validated `notificationclick` (same-origin routes only), `tag`+`renotify` grouping, `pushsubscriptionchange` re-subscribes with `applicationServerKey` and re-registers via `POST /api/push/resubscribe`.
+- Logout deactivates the user's push devices server-side.
+
+## 8. Native behavior
+
+- Android channels (fixed IDs, do not recreate): `breakdown_alerts` (HIGH), `shift_reminders` (HIGH), `assignment_updates` (DEFAULT), `general_updates` (DEFAULT).
+- Registration keyed by `installation_id`; token re-registration reassigns ownership (shared phones).
+- Foreground: critical/high show the system heads-up banner; normal/low surface via the in-app badge/inbox instead of a duplicate banner.
+- Badge is synced from `notification_unread_count`. Logout/account-switch deactivates devices; user deactivation deactivates via DB trigger.
+
+## 9. Testing
+
 ```bash
-# Apply migration via Supabase CLI
-supabase migration up
-
-# Or run SQL directly in Supabase SQL Editor
-supabase/migrations/002_update_notifications_channel.sql
+pnpm test                 # full battery (includes push suites + live Dev DB negatives)
+node tests/push/test-push-hardening.mjs   # push hardening & negative security suite
+node scripts/test-push-end-to-end.mjs     # live pipeline round-trip (Dev)
+node apps/web/test/test-web-push-notifications.mjs
+node apps/mobile/test/test-mobile-push-notifications.mjs
 ```
 
-## Notification Matrix
+Push suites cover: SSRF/token validation, claim concurrency, lease reclaim, multi-device
+independence, TTL expiry, quiet hours + critical bypass, category toggles, dedupe, IST deadline
+boundaries, zero-PII templates, service-only RPCs, RLS isolation, route allowlist parity.
 
-| Event                  | In-App | Email | WhatsApp |
-| ---------------------- | :----: | :---: | :------: |
-| Login OTP              |    ❌   |   ✅   |     ❌    |
-| Email Verification     |    ❌   |   ✅   |     ❌    |
-| Forgot Password        |    ❌   |   ✅   |     ❌    |
-| New Machine Added      |    ✅   |   ❌   |     ❌    |
-| Machine Updated        |    ✅   |   ❌   |     ❌    |
-| Machine Deleted        |    ✅   |   ❌   |     ❌    |
-| Excel Import Completed |    ✅   |   ✅   |     ❌    |
-| Daily Summary          |    ✅   |   ✅   |     ✅    |
-| Today's Due Service    |    ✅   |   ❌   |     ✅    |
-| Tomorrow Due Service   |    ✅   |   ❌   |     ✅    |
-| Overdue Machines       |    ✅   |   ❌   |     ✅    |
-| Manual Reminder        |    ❌   |   ❌   |     ✅    |
-| Reminder Failed        |    ✅   |   ✅   |     ❌    |
-| Weekly Report          |    ✅   |   ✅   |     ❌    |
-| Monthly Report         |    ✅   |   ✅   |     ❌    |
-| System Error           |    ✅   |   ✅   |     ❌    |
+## 10. Monitoring
 
-## Set Up QStash Cron Job
-
-### 1. Install Upstash QStash CLI
-```bash
-pnpm add -g @upstash/qstash-cli
-```
-
-### 2. Configure QStash
-```bash
-# Login to QStash
-qstash login
-
-# Set your QStash token
-export QSTASH_TOKEN=your_qstash_token_here
-```
-
-### 3. Schedule Daily Reminders
-Schedule the cron job to run daily at 8:00 AM:
-```bash
-qstash schedule \
-  --url "https://your-domain.com/api/cron/send-reminders" \
-  --cron "0 8 * * *" \
-  --method POST
-```
-
-### Alternative: Using Upstash Console
-1. Go to [Upstash Console](https://console.upstash.com/qstash)
-2. Navigate to **Schedules**
-3. Create new schedule:
-   - **URL**: `https://your-domain.com/api/cron/send-reminders`
-   - **Cron**: `0 8 * * *` (daily at 8:00 AM)
-   - **Method**: POST
-
-## Email Templates
-
-### Daily Summary Email
-**Subject**: ReachInternational - Daily Service Summary (03 Aug 2026)
-
-**Content**:
-- Today's due count
-- Tomorrow's due count
-- Overdue count
-- Breakdown by engineer
-- Machine details table
-- Link to dashboard
-
-### WhatsApp Messages
-
-#### Service Due Today
-```
-🔔 *Service Due Today*
-
-Machine *ABC123* (Machine Name) is scheduled for service today.
-
-Customer: John Doe
-Mobile: +919876543210
-Due Date: 2026-03-04
-Assigned Engineer: Jane Smith
-
-Please ensure timely service completion.
-```
-
-#### Service Due Tomorrow
-```
-📅 *Service Due Tomorrow*
-
-Machine *ABC123* (Machine Name) is scheduled for service tomorrow.
-
-Customer: John Doe
-Mobile: +919876543210
-Due Date: 2026-03-05
-Assigned Engineer: Jane Smith
-
-Please ensure timely service completion.
-```
-
-#### Service Overdue
-```
-⚠️ *Service Overdue (3 days)*
-
-Machine *ABC123* (Machine Name) service is overdue. Please attend immediately.
-
-Customer: John Doe
-Mobile: +919876543210
-Due Date: 2026-03-01
-Assigned Engineer: Jane Smith
-
-Please ensure timely service completion.
-```
-
-#### Daily Summary (WhatsApp)
-```
-📊 *Daily Service Summary* - 2026-03-04
-
-Today: 5 services
-Tomorrow: 3 services
-Overdue: 2 machines
-
-Details:
-• ABC123 - Today
-• XYZ789 - Tomorrow
-• DEF456 - Overdue (3d)
-
-Please check the dashboard for more details.
-```
-
-## Testing
-
-### 1. Test Locally
-Start your development server:
-```bash
-pnpm dev
-```
-
-Trigger the cron endpoint manually:
-```bash
-curl -X POST http://localhost:3000/api/cron/send-reminders
-```
-
-### 2. Test in Production
-```bash
-curl -X POST https://your-domain.com/api/cron/send-reminders
-```
-
-## Manual Reminder
-Admins can send reminders manually via the admin dashboard:
-1. Go to **Notifications** page
-2. Find the notification you want to resend
-3. Click **Resend** button
-
-## Monitoring
-
-### Check Notification Logs
 ```sql
--- View recent notifications
-SELECT 
-  n.id,
-  n.alert_type,
-  n.status,
-  n.channel,
-  n.sent_at,
-  m.machine_code,
-  u.full_name as recipient
-FROM notifications n
-JOIN machines m ON n.machine_id = m.id
-LEFT JOIN users u ON n.recipient_id = u.id
-ORDER BY n.created_at DESC
-LIMIT 50;
+SELECT * FROM public.push_delivery_health;   -- queue depth, oldest pending, failures
+SELECT status_code, count(*) FROM net._http_response GROUP BY 1;  -- pg_net dispatch health
 ```
-
-### Check Failed Notifications
-```sql
-SELECT 
-  n.id,
-  n.error_message,
-  n.retry_count,
-  m.machine_code,
-  m.customer_mobile
-FROM notifications n
-JOIN machines m ON n.machine_id = m.id
-WHERE n.status = 'failed'
-ORDER BY n.created_at DESC;
-```
-
-### Check Email Delivery (SendGrid)
-- Log in to [SendGrid Dashboard](https://app.sendgrid.com/)
-- Navigate to **Email Activity** to see sent emails
-- Check **Stats** for delivery rates
-
-### Check WhatsApp Delivery (Twilio)
-- Log in to [Twilio Console](https://console.twilio.com/)
-- Navigate to **Messaging** > **Try it Out** > **Send a WhatsApp message**
-- Check **Monitor** > **Logs** for delivery status
-
-## Troubleshooting
-
-### Common Issues
-
-1. **WhatsApp messages not sending**
-   - Ensure your Twilio WhatsApp number is properly configured
-   - Check that you've joined the Twilio WhatsApp sandbox (for testing)
-   - Verify the recipient's WhatsApp number is valid
-
-2. **Email not sending**
-   - Verify SENDGRID_API_KEY is correct
-   - Check that sender email is verified in SendGrid
-   - Review SendGrid suppression lists
-
-3. **Authentication errors**
-   - Verify all credentials are set correctly
-   - Check that credentials are set in production environment
-
-4. **Cron not triggering**
-   - Verify QStash is properly configured
-   - Check that your endpoint is publicly accessible
-   - Review QStash logs in the console
-
-## Security Notes
-- Never commit `.env` file to version control
-- Rotate Twilio and SendGrid credentials regularly
-- Use QStash signature verification in production
-- Monitor notification logs for suspicious activity
-
-## Cost Considerations
-- **WhatsApp**: ~$0.005-0.07 per message (varies by country)
-- **SMS**: ~$0.0079-0.50 per message (varies by country)
-- **SendGrid**: Free tier (100 emails/day), then ~$0.10 per 1,000 emails
-- **QStash**: Free tier available, then ~$0.20 per million requests
-
-Monitor your usage in the Twilio, SendGrid, and QStash dashboards.

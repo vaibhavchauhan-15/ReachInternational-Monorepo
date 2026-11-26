@@ -29,6 +29,39 @@ function arrayBufferToBase64(buffer: ArrayBuffer | null): string {
   return window.btoa(binary);
 }
 
+const INSTALLATION_ID_KEY = 'reach_installation_id';
+const VAPID_VERSION_KEY = 'reach_vapid_version';
+
+/**
+ * Stable opaque identifier for this browser profile/installation so the server
+ * keeps exactly one live push endpoint per install (no stale duplicate tokens).
+ */
+export function getWebInstallationId(): string {
+  try {
+    const existing = window.localStorage.getItem(INSTALLATION_ID_KEY);
+    if (existing) return existing;
+    const fresh = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(INSTALLATION_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+/** Key-rotation marker: identifies which VAPID key pair the subscription uses. */
+export function getVapidVersion(publicKey: string): string {
+  try {
+    const stored = window.localStorage.getItem(VAPID_VERSION_KEY);
+    const current = publicKey.slice(0, 12);
+    if (stored !== current) {
+      window.localStorage.setItem(VAPID_VERSION_KEY, current);
+    }
+    return current;
+  } catch {
+    return publicKey.slice(0, 12);
+  }
+}
+
 /**
  * Ensures the service worker is registered
  */
@@ -124,12 +157,15 @@ export async function subscribeToWebPush(): Promise<boolean> {
       return false;
     }
 
-    // 4. Register with Supabase RPC
+    // 4. Register with Supabase RPC (provider + installation identity)
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.rpc('register_push_device', {
       p_token: subscription.endpoint,
       p_platform: 'web',
+      p_provider: 'webpush',
       p_app_version: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+      p_installation_id: getWebInstallationId(),
+      p_vapid_version: getVapidVersion(publicKey),
       p_web_keys: {
         p256dh,
         auth,

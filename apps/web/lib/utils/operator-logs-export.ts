@@ -122,10 +122,13 @@ export function exportOperatorLogsToExcel(
     const mModel = log.machine?.model || assignedMachine?.model || "Standard";
 
     const bkdParsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
-    const bkdStartTime = (log as any).breakdown_start_time || bkdParsed?.startTime || null;
-    const bkdEndTime = (log as any).breakdown_end_time || bkdParsed?.endTime || null;
+    const rawBkdStart = (log as any).breakdown_start_time;
+    const rawBkdEnd = (log as any).breakdown_end_time;
+    const bkdStartTime = rawBkdStart ? (formatTo12Hour(rawBkdStart) || rawBkdStart) : (bkdParsed?.startTime || null);
+    const bkdEndTime = rawBkdEnd ? (formatTo12Hour(rawBkdEnd) || rawBkdEnd) : (bkdParsed?.endTime || null);
     const bkdTimingStr = isBkd && bkdStartTime && bkdEndTime ? `${bkdStartTime} - ${bkdEndTime}` : isBkd ? "Breakdown" : "—";
-    const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || (log as any).breakdown_duration || "Breakdown";
+    const bkdMins = Number((log as any).breakdown_minutes || 0);
+    const bkdDurationOnly = bkdMins > 0 ? (bkdMins < 60 ? `${bkdMins}m` : (bkdMins % 60 === 0 ? `${Math.floor(bkdMins / 60)}h` : `${Math.floor(bkdMins / 60)}h ${bkdMins % 60}m`)) : (bkdParsed?.durationFormatted || bkdParsed?.durationText || (log as any).breakdown_duration || "Breakdown");
     const displayBkdText = isBkd ? bkdDurationOnly : "0";
 
     const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";

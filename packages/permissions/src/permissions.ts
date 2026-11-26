@@ -8,6 +8,8 @@ export const PERMISSIONS = {
   MACHINE_EDIT: "machine.edit",
   MACHINE_DELETE: "machine.delete",
   MACHINE_ASSIGN: "machine.assign",
+  /** Admin-only bulk machine logsheet (operation log) Excel import. */
+  MACHINE_LOGS_IMPORT: "machine.logs_import",
 
   // Breakdown Complaints
   COMPLAINT_VIEW: "complaint.view",

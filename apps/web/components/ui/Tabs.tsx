@@ -71,7 +71,7 @@ export function Tabs({
   if (variant === "underline") {
     return (
       <div
-        className={`flex items-center gap-4 sm:gap-6 border-b border-[var(--color-hairline)] overflow-x-auto custom-scrollbar flex-nowrap ${className}`}
+        className={`flex items-center gap-4 sm:gap-6 border-b border-[var(--color-hairline)] overflow-x-auto flex-nowrap ${className}`}
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
@@ -119,7 +119,7 @@ export function Tabs({
   // Pill variant
   return (
     <div
-      className={`inline-flex p-1 rounded-xl bg-[var(--color-hairline-soft-surface)] dark:bg-neutral-900 border border-[var(--color-hairline)] gap-1 overflow-x-auto custom-scrollbar flex-nowrap max-w-full ${className}`}
+      className={`inline-flex p-1 rounded-xl bg-[var(--color-hairline-soft-surface)] dark:bg-neutral-900 border border-[var(--color-hairline)] gap-1 overflow-x-auto flex-nowrap max-w-full ${className}`}
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTab;

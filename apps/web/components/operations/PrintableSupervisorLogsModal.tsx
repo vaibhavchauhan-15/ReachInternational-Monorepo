@@ -1250,7 +1250,7 @@ export function PrintableSupervisorLogsModal({
                 <Calendar className="h-4 w-4 text-sky-500" />
                 <span>Select Export Period:</span>
               </div>
-              <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
+              <div className="flex items-center gap-1 overflow-x-auto flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
                 {MONTH_NAMES.map((m) => (
                   <button
                     key={m.value}
@@ -1288,7 +1288,7 @@ export function PrintableSupervisorLogsModal({
             )}
           </div>
 
-          <div id={PREVIEW_ID} className="max-w-full overflow-x-auto custom-scrollbar flex justify-center py-2">
+          <div id={PREVIEW_ID} className="max-w-full overflow-x-auto flex justify-center py-2">
             {isLoadingLogs ? (
               <SupervisorLogsReportSkeleton />
             ) : (

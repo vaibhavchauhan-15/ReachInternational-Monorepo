@@ -386,7 +386,7 @@ export function MultiUserSelect({
               </div>
 
               {/* Candidate User List */}
-              <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar flex-1 min-h-0">
+              <div className="overflow-y-auto overscroll-contain p-1.5 space-y-1 flex-1 min-h-0">
                 {filteredCandidates.length === 0 ? (
                   <div className="py-6 text-center text-xs text-[var(--color-mute)]">
                     No matching staff found

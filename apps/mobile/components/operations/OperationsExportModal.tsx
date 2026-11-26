@@ -126,6 +126,9 @@ const calculateShiftBreakdownHours = (log: HourLogRecord): number => {
   if ((log as any).breakdown_hours != null && Number((log as any).breakdown_hours) > 0) {
     return Number((log as any).breakdown_hours);
   }
+  if ((log as any).breakdown_minutes != null && Number((log as any).breakdown_minutes) > 0) {
+    return Number((log as any).breakdown_minutes) / 60;
+  }
   const parsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
   if (parsed?.durationFormatted) {
     const matchH = parsed.durationFormatted.match(/(\d+(?:\.\d+)?)\s*h/i);
@@ -621,8 +624,8 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
         `"${formatTo12Hour(log.end_time) || ''}"`,
         log.overtime_hours ? String(log.overtime_hours) : '0',
         log.is_breakdown ? 'YES' : 'NO',
-        `"${(log as any).breakdown_duration || ''}"`,
-        `"${(log.remarks || '').replace(/"/g, '""')}"`,
+        `"${(log as any).breakdown_duration || ((log as any).breakdown_minutes ? `${(log as any).breakdown_minutes}m` : '')}"`,
+        `"${(log.remarks || '').replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, '').replace(/"/g, '""').trim()}"`,
         `"${log.created_at ? formatDate(log.created_at) : ''}"`,
       ].join(','));
 

@@ -41,6 +41,7 @@ import {
   setupForegroundNotificationHandler,
   setupNotificationResponseListener,
   registerForPushNotifications,
+  syncAppBadge,
 } from '../lib/notifications/registerPush';
 import { TypeScaleProvider, useTypeScale } from '../lib/typography/TypeScaleProvider';
 import { offlineQueueManager, syncCoordinator, networkConnectivityManager } from '../lib/offline';
@@ -290,77 +291,66 @@ function MobileOperatorAlertsListener() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Offline resilience: sync any notifications stored while operator was disconnected
-  const syncOfflineNotifications = React.useCallback(async () => {
+  // Freshness resilience: Invalidate operational and notification caches without mutating inbox state
+  const syncOperationalCaches = React.useCallback(() => {
     if (!user?.id) return;
     try {
-      const { data: unreadNotifications, error } = await supabase
-        .from('notifications')
-        .select('id, user_id, title, message, category, severity, metadata, created_at')
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-        .order('created_at', { ascending: true });
-
-      if (error || !unreadNotifications || unreadNotifications.length === 0) return;
-
-      const idsToMarkRead: string[] = unreadNotifications.map((n) => n.id);
-
-      if (idsToMarkRead.length > 0) {
-        await supabase
-          .from('notifications')
-          .update({ is_read: true, read_at: new Date().toISOString() })
-          .in('id', idsToMarkRead);
-
-        queryClient.invalidateQueries({
-          queryKey: ['operator', 'entry-context', user.id],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ['operations', 'logs'],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ['today-shift-monitor'],
-        });
-      }
+      queryClient.invalidateQueries({
+        queryKey: ['operator', 'entry-context', user.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['operations', 'logs'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['today-shift-monitor'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['notifications'],
+      });
     } catch (err) {
-      console.warn('[OfflineNotifications] Sync notice:', err);
+      console.warn('[OperationalCaches] Invalidation notice:', err);
     }
   }, [user?.id, queryClient]);
 
   React.useEffect(() => {
     if (!user?.id) return;
 
-    // 1. Initial offline notifications sync on mount / authentication
-    syncOfflineNotifications();
+    // 1. Initial operational cache invalidation on mount / authentication
+    syncOperationalCaches();
 
-    // 2. Re-sync offline notifications when app transitions back to active foreground
+    // 2. Re-sync operational caches when app transitions back to active foreground
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
-        syncOfflineNotifications();
+        syncOperationalCaches();
       }
     });
 
-    // 3. Realtime WebSocket listener for immediate background data cache invalidation
+    // 3. Realtime WebSocket listener for immediate background data & notification invalidation
     const alertChannel = supabase.channel(`operator-alerts:${user.id}`);
     alertChannel
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: ['notifications'],
+          });
+        }
+      )
       .on('broadcast', { event: 'assisted_shift_logged' }, (eventPayload) => {
         const data = eventPayload?.payload;
         if (data) {
-          // Zero in-app toast popup: push notifications are delivered to device OS tray.
-          // Invalidate React Query cache so data is fresh without user pull-to-refresh.
-          queryClient.invalidateQueries({
-            queryKey: ['operator', 'entry-context', user.id],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ['operations', 'logs'],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ['today-shift-monitor'],
-          });
+          syncOperationalCaches();
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          syncOfflineNotifications();
+          syncOperationalCaches();
         }
       });
 
@@ -368,13 +358,14 @@ function MobileOperatorAlertsListener() {
       subscription.remove();
       supabase.removeChannel(alertChannel);
     };
-  }, [user?.id, queryClient, syncOfflineNotifications]);
+  }, [user?.id, queryClient, syncOperationalCaches]);
 
   // Push Notifications: Register device token and handle incoming notification taps
   React.useEffect(() => {
     if (!user?.id) return;
 
     registerForPushNotifications().catch(() => {});
+    syncAppBadge().catch(() => {});
     const unsubscribeResponse = setupNotificationResponseListener();
 
     return () => {

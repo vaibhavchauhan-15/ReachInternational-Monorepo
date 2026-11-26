@@ -99,6 +99,7 @@ export default function AppLayout() {
         <Tabs.Screen name="settings/about/cookies" options={{ ...motion.tabsShift, title: 'Cookies & Storage Policy' }} />
 
         {/* Operational Modules Accessible via Settings & Command Palette */}
+        <Tabs.Screen name="notifications" options={{ ...motion.tabsShift, title: 'Notifications' }} />
         <Tabs.Screen name="approvals" options={{ ...motion.tabsShift, title: 'Approvals' }} />
         <Tabs.Screen name="running-logs" options={{ ...motion.tabsShift, title: 'Running Logs' }} />
         <Tabs.Screen name="audit" options={{ title: 'Audit' }} />

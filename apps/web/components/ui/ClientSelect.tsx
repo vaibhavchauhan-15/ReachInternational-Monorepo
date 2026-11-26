@@ -342,7 +342,7 @@ export function ClientSelect({
               </div>
 
               {/* Listbox */}
-              <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar flex-1 min-h-0">
+              <div className="overflow-y-auto overscroll-contain p-1.5 space-y-1 flex-1 min-h-0">
                 {allowAll && !searchQuery.trim() && (
                   <button
                     type="button"

@@ -209,11 +209,8 @@ export function OperationsEditLogModal({
             ? breakdownStats.durationDecimalHours
             : 0;
 
-        let finalRemarks = isBreakdown && breakdownReason.trim() ? `[Breakdown: ${breakdownReason.trim()}]` : "";
-        if (isBreakdown && bkdDurationStr) {
-          const durationTag = `[Breakdown Duration: ${bkdDurationStr}]`;
-          finalRemarks = finalRemarks ? `${durationTag} ${finalRemarks}` : durationTag;
-        }
+        // User remarks remain clean; breakdown timestamps and duration are stored in dedicated columns
+        const finalRemarks = breakdownReason.trim();
 
         const res = await updateOperatorHourLogAction({
           logId: log.id,

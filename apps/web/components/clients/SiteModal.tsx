@@ -212,7 +212,7 @@ export function SiteModal({
         <form
           ref={formContainerRef}
           onSubmit={handleSubmit}
-          className="mt-4 space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar"
+          className="mt-4 space-y-4 overflow-y-auto overscroll-contain pr-1 flex-1"
         >
           {/* Target Client Banner (when clientId is fixed from row or detail page) */}
           {isFixedClient && (

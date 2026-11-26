@@ -1,4 +1,188 @@
+## Task: Production Supabase Migrations & Push Notifications Hardening (dhbbgfzbyatzvqafnsqp)
+**Status**: 🟢 RESOLVED, MIGRATED, TESTED & VERIFIED ON PRODUCTION
+**Date**: 2026-11-26
+
+### 1. Production Database Migrations Applied & Recorded
+- **Target Project**: `dhbbgfzbyatzvqafnsqp` (Reach International Production, ap-south-1).
+- **Applied Migrations**:
+  1. `242_in_app_notifications_inbox_and_keyset_rpc.sql` (`20261126120000`): In-app inbox, keyset pagination, sync triggers, and RPCs. Rollback: `242_rollback_in_app_notifications_inbox_and_keyset_rpc.sql`.
+  2. `243_push_notifications_reliability_hardening.sql` (`20261126143000`): Ticket deduplication, `register_push_device` v2 (8-param) + 6-param wrapper, `claim_push_batch` v2, `finish_push_batch` v2, `push_receipts_poller` cron, and `push_delivery_health` view. Rollback: `243_rollback_push_notifications_reliability_hardening.sql`.
+  3. `244_machine_logsheet_bulk_import.sql` (`20261126150000`): Logsheet bulk import tables, indexes, RLS, notification suppression guards, and atomic RPC `import_machine_hour_logs_bulk`. Rollback: `244_rollback_machine_logsheet_bulk_import.sql`.
+  4. `245_push_zero_pii_templates_and_user_deactivation.sql` (`20261126153000`): Zero-PII push templates and user status deactivation trigger `trg_deactivate_push_devices_on_user_status`. Rollback: `245_rollback_push_zero_pii_and_user_deactivation.sql`.
+- **Database Rollback Tracking**: Synchronized `supabase_migrations.schema_migrations` with explicit `rollback` SQL column populated for all applied migrations.
+
+### 2. Vault Secrets & Dispatcher Configuration
+- Configured production `vault.decrypted_secrets`:
+  - `notify_url`: `https://dashboard-reachinternational.vercel.app/api/notify/dispatch`
+  - `notify_secret`: `f2543d5600c980a26506b5adf150eff71ba6090d882682c27941a63b4de8baaf`
+- Verified `push_notifications_sweeper` pg_cron running every minute via `pg_net`: 100% HTTP 200 responses against Vercel.
+
+### 3. Live Smoke Verification
+- Triggered live test-send: `POST https://dashboard-reachinternational.vercel.app/api/notify/test-send`.
+- Returned HTTP 200 (`notificationId: "418a109d-0e09-4616-b9d8-dfceb9774b80"`).
+- `push_delivery_health`: `queue_depth: 0`, `in_flight: 0`, `failed_24h: 0`.
+
+---
+
+## Task: Unified Scroll-Activated Scrollbar System (apps/web)
+**Status**: 🟢 RESOLVED & HARDENED (Root Cause Fixed: Dual Root Scrolling + Hover Reveal)
+**Date**: 2026-11-26
+- Fixed "Scrollbars not visible in any pages and components":
+  1. `body { overflow-x: hidden; }` caused Chromium/WebKit to anchor the viewport scrollbar to `body` rather than `html`. `ScrollActivity.tsx` now marks both `document.documentElement` and `document.body` on root/window scroll events.
+  2. CSS in `apps/web/app/globals.css` updated with explicit targets (`html[data-scrolling]`, `body[data-scrolling]`, `[data-scrolling]`) and hover reveal (`:where(*:hover)::-webkit-scrollbar-thumb` and `:where(*)::-webkit-scrollbar-thumb:hover`) per the spec note so idle elements reveal at 30% on hover and 50% on thumb hover, while staying hidden at idle when unhovered.
+- Verification: live CDP testing in real Chromium headless against `http://localhost:3000/`, zero TS errors (`pnpm --filter web typecheck`), zero typography violations.
+
 # Current Task
+
+## Task: Native Mobile Approvals UI/UX Redesign, Optimistic Feedback & Session Expired Root-Cause Fix
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary: "Your session expired. Sign in again to record a decision."
+- **Root Cause**:
+  1. In `useDecideApprovalMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation` in `apps/mobile/lib/hooks/useApprovalsData.ts`, mutations attempted to call the Web API endpoint `${appUrl}/api/approvals/${requestId}/decide`.
+  2. In `apps/mobile/.env`, `EXPO_PUBLIC_APP_URL` was configured to `https://dashboard-reachinternational.vercel.app` (the production web deployment), while the mobile app was running in development against Dev Supabase (`vlmxciuogczumumrwyot`).
+  3. When mobile sent its Dev Supabase JWT to the production Vercel server, the production server's admin client (`dhbbgfzbyatzvqafnsqp`) rejected the token as invalid with HTTP 401.
+  4. The client's catch block had `if (err?.status && err.status < 500) throw err;`, which re-threw the HTTP 401 error and **blocked the direct Supabase RPC fallback** from ever executing.
+  5. `mapApprovalDecisionError` then formatted HTTP 401 into `"Your session expired. Sign in again to record a decision."`, showing a false session expiry toast even though the mobile user was actively signed in with valid Supabase credentials.
+
+### 2. Solutions Implemented
+1. **Proactive Session Refresh & Direct Supabase RPC Fallback (`useApprovalsData.ts`)**:
+   - Added `ensureActiveSession()`: Checks token expiration with `supabase.auth.getSession()` and proactively calls `supabase.auth.refreshSession()` if the token is close to expiry (<60s) or missing.
+   - Fixed fallback mechanism in `useDecideApprovalMutation`, `useApproveAllMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation`:
+     - If optional Web API returns 409 (domain conflict / already decided), surfaces the conflict error.
+     - For non-409 statuses (401 from cross-environment host mismatch, 404, 500, network error), cleanly and immediately falls back to the authoritative direct Supabase RPC (`approval_decide`, `approval_approve_all`, `verify_user_document_atomic`, `reject_user_document_atomic`) using the mobile client's active authenticated session and `actorId`.
+   - Hardened `mapApprovalDecisionError` to never produce misleading "session expired" errors on non-auth failures.
+2. **Contact Info & Android Zero-Width Layout Bug Fix (`MobileApprovalCard.tsx`)**:
+   - Fixed Android Yoga layout bug where `contactItem: { maxWidth: "48%" }` and `contactText: { flex: 1 }` collapsed text width to 0, hiding email and phone text.
+   - Refactored `Fact` with `factIconWrapper` (16px fixed width) and `flexShrink: 1` text, vertically stacked so long emails and phone numbers render cleanly with 100% legibility.
+   - Empty/whitespace facts return `null` immediately, preventing empty icons from rendering without labels.
+3. **Clean Compact Notice for Zero Documents (`MobileApprovalCard.tsx`)**:
+   - Replaced bloated 100px dashed container (`Attached Documents (0)`) with a subtle, clean 32px notice (`compactEmptyNotice`), saving ~80px of vertical space per card.
+4. **Card Header & Action Buttons Redesign (`MobileApprovalCard.tsx`)**:
+   - Clean top header: Role badge in brand soft blue (`#e0f2fe` / `#0284c7`), type badge in neutral pill, status badge, and `# EMP-xxxx` mono badge aligned on top right.
+   - Action buttons: 44px min-height touch targets with Geist tokens:
+     - `Reject`: Outline style with soft red border and text.
+     - `Approve`: Solid emerald success button (`#10b981`) with white check icon.
+     - Single loading spinner per button when in-flight.
+5. **Segmented Filter Tabs & Type Scroll Strip (`approvals.tsx`)**:
+   - Replaced squashed, broken dropdown filters with a native segmented status tab bar: `Pending (${counts.total})`, `Approved`, `Rejected`, `All`.
+   - Added horizontal scrollable request type pill strip: `All Requests`, `New Registrations`, `Document Verifications`, `Replacements`, `Profile Changes`, `Account Deletions`, `Shift Conflicts`.
+   - Prominent, responsive `SearchInput` with clear button.
+6. **Optimistic UI Animation (`approvals.tsx`)**:
+   - Wrapped FlatList items in `Animated.View` with `entering={FadeIn.duration(200)}`, `exiting={FadeOut.duration(200)}`, and `layout={LinearTransition.springify().damping(18).stiffness(180)}`.
+   - Decisions instantly remove the item from the cache, decrement the counter, and trigger spring physics to slide the remaining cards upward with 0ms lag.
+
+### 3. Verification & Evidence
+- `pnpm --filter mobile typecheck`: 0 errors (clean exit 0).
+- `pnpm --filter web typecheck`: 0 errors (clean exit 0).
+- `node scripts/check-typography.mjs`: 0 violations across monorepo.
+- `pnpm --filter @reachinternational/validation test`: 87/87 passed (100%).
+
+---
+
+
+
+## Task: /running-logs Breakdown Timing Resolution, Single Source of Truth, and Animated Accordion UI
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Web and Mobile
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary
+- **Why breakdown start and end time was unrecorded on bulk-imported logs**:
+  The Next.js operational data queries (`MACHINE_LOG_EXACT_PROJECTION` in `operations-machine-logs.ts`, `CLIENT_LOG_EXACT_PROJECTION` in `operations-client-logs.ts`, `OPERATOR_LOG_EXACT_PROJECTION` in `operations-operator-logs.ts`, and `HOUR_LOG_FULL_PROJECTION` in `operators.ts`) omitted `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, and `breakdown_minutes` from their `select(...)` clauses.
+  Although PostgreSQL already stored `breakdown_start_time: '18:48:00'`, `breakdown_end_time: '19:24:00'`, `breakdown_minutes: 36` on the imported record for `M/C-0001` on `2026-11-24`, the frontend query received `undefined`.
+- **Why manual entry showed the times**:
+  Manual shift entry had an older workaround that prepended `[Breakdown Duration: 11:00 AM - 12:00 PM (60min)]` into the `remarks` column. `parseBreakdownString(log.remarks)` was able to parse that string from `remarks`. In bulk import, remarks were clean (e.g. `"Electrical fault caused downtime; checked and restarted."`), so no bracketed tag existed to fall back on.
+- **Why duration showed `0h`**:
+  `fmtMin(m)` calculated `Math.floor(m / 60) + 'h'`, rendering `0h` for sub-hour durations (like 36 min).
+
+### 2. Solutions Implemented
+1. **Added Projections for All Breakdown Columns**:
+   - `apps/web/lib/data/operations/operations-machine-logs.ts`
+   - `apps/web/lib/data/operations/operations-client-logs.ts`
+   - `apps/web/lib/data/operations/operations-operator-logs.ts`
+   - `apps/web/lib/queries/operators.ts`
+   - `apps/web/app/actions/operators.ts`
+   - `apps/mobile/lib/queries/operationsExport.ts`
+2. **Removed Duplicate Breakdown Storage in Remarks (Single Source of Truth)**:
+   - Cleaned up `submitOperatorHourLogAction` (`app/actions/operators.ts`), `OperatorDashboard.tsx`, `MeterLogModal.tsx`, and `OperationsEditLogModal.tsx` so they never prepend `[Breakdown Duration: ...]` to `remarks`.
+   - Dedicated database columns (`breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, `breakdown_minutes`) are now the sole authoritative source of truth.
+3. **Resilient Dual Reading**:
+   - `extractBreakdownTiming` reads dedicated columns first, calculates duration accurately from timestamps if minutes are missing, and falls back to legacy remarks tags if dedicated columns are null.
+4. **Duration Formatting in Minutes & Hours**:
+   - Created canonical `formatBreakdownMinutes(m)` in `@reachinternational/utils` (`packages/utils/src/date.ts`):
+     - `36m` for 36 min (instead of `0h` or `0h 36m`).
+     - `1h` for 60 min.
+     - `1h 30m` for 90 min.
+5. **Streamlined UI & Smooth Accordion Animation**:
+   - Removed the top summary row (`Total stoppage: ... Net Breakdown...`).
+   - Removed the text header `"Stoppage Timestamps & Classification:"`.
+   - Added Framer Motion `<AnimatePresence>` and `<motion.div>` accordion animation (`duration: 0.25`, `ease: [0.16, 1, 0.3, 1]`) to both desktop table (`OperationsLogsTable.tsx`) and mobile card list (`OperationsLogsMobileList.tsx`).
+
+### 3. Verification & Evidence
+- `pnpm --filter web typecheck`: 0 errors.
+- `pnpm --filter mobile typecheck`: 0 errors.
+- `packages/validation` test suite: 87/87 passed.
+- `tests/logsheet-import` test suite: 17/17 passed.
+- `tests/breakdown` test suite: 4/4 passed.
+
+## Task: Bulk Historical Logsheet Analysis & Pipeline Ingestion for M/C-0001 (JCB 3DX Super #1 / Afcons Infrastructure)
+**Status**: 🟢 IMPORTED, COMMITTED & FULLY VERIFIED (Dev DB `vlmxciuogczumumrwyot`)
+**Date**: 2026-11-26
+
+### Overview & Request Fulfillment
+- **Machine**: M/C-0001 (`8d0011dd-150e-4f71-b166-a8eb9e460480`), Model: 3DX Super, Serial: JCB3DX-2024-001.
+- **Client & Rental Alignment**: Machine `client_id` is Afcons Infrastructure (`1114121d-71ae-4b51-a2b0-1a1553e2ce9d`, `CLI-0050`, Site: Pune Main Site `CLI-0050-S01`). Corrected machine `customer_name` from `'Larsen & Toubro ECC'` to `'Afcons Infrastructure'`.
+- **Logsheet Period**: 2026-10-26 to 2026-11-25 (31 days × 2 shifts/day = 62 shifts).
+- **Operators**: Shift A (06:00-14:00) Amit Verma (`EMP-0334`, `bd307a42-be98-41b3-a47f-372e79fb2f8e`); Shift B (14:00-22:00) Ramesh Kumar (`EMP-0330`, `4c73b810-a00f-40d2-beaa-5bc4fec2d767`).
+- **Meters & Physical Continuity**:
+  - Start HMR: 2480.00 (2026-10-26 Shift A)
+  - End HMR: 2903.22 (2026-11-25 Shift B)
+  - Continuity: 100% contiguous (0 meter gaps or regressions across all 62 shifts).
+  - Total Running Hours: 423.22 hrs.
+- **Breakdowns**: 5 verified incidents (2026-10-30 Shift A, 2026-11-01 Shift A, 2026-11-07 Shift A, 2026-11-19 Shift A, 2026-11-24 Shift B) with containment inside shift duration and descriptive remarks.
+- **Pipeline Artifacts Created**:
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.csv`: Canonical source CSV data.
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.xlsx`: Standardized 3-sheet Excel workbook.
+  - `scripts/pipeline-logsheet-import.mjs`: Fast, reusable multi-format (.csv/.xlsx) CLI & programmatic pipeline with machine resolution, operator resolution, duplicate prevention, and atomic RPC execution.
+- **Database Import Execution**:
+  - Executed atomic `import_machine_hour_logs_bulk(jsonb)` RPC under admin authorization (`Admin User Dev`, `cc2b0d0c-e06d-4500-98fe-69354b2bdc16`).
+  - Import Record ID: `a6958417-687c-4cac-b55f-a434c414a925` (status: `completed`).
+  - Verified 62/62 rows committed to `public.machine_hour_logs`.
+  - Advanced `machines.hour_meter` from 534 to `2903.22` hrs.
+
+---
+
+
+## Task: Fix Supabase Realtime `cannot add postgres_changes callbacks after subscribe()` Error
+**Status**: 🟢 RESOLVED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### Root Cause Diagnosed
+In `apps/web/components/notifications/NotificationBell.tsx`, each instance independently created and subscribed to a Supabase Realtime channel named `notifications:inbox:${user.id}`.
+Because `NotificationBell` is mounted concurrently in two places in `AppShellClient` (`MobilePageHeader.tsx` for mobile and `QuickAccessTrigger.tsx` in `AppSidebar.tsx` for desktop), both instances ran `useEffect` at the same time. The Supabase browser client returned the existing singleton channel instance to the second component while it was already in `'subscribing'`/`'subscribed'` state, throwing the runtime error:
+`cannot add postgres_changes callbacks for realtime:notifications:inbox:<id> after subscribe().`
+
+### Solution Applied
+1. **Centralized Provider (`NotificationContext.tsx`)**:
+   - Created `NotificationProvider` and `useNotification` in `apps/web/components/notifications/NotificationContext.tsx`.
+   - Single point of truth for unread count, realtime items buffer, and background re-sync on tab focus and `visibilitychange`.
+   - Strictly 1 Supabase Realtime channel per authenticated user session.
+   - Guaranteed cleanup of lingering or stale channels prior to subscription.
+2. **Refactored `NotificationBell.tsx`**:
+   - Removed duplicated local `useState` and `useEffect` realtime subscriptions.
+   - Bell now consumes `useNotification()`, maintaining only local popover/drawer presentation state.
+3. **Mounted Provider in `AppShellClient.tsx`**:
+   - Placed `<NotificationProvider>` inside `<CurrentUserProvider>` in `apps/web/components/layout/AppShellClient.tsx`.
+   - Ensures both mobile header bell and desktop sidebar bell share the exact same realtime state with zero drift.
+
+### Verification
+- `pnpm typecheck`: 7/7 packages clean (0 errors).
+- `node scripts/run-all-tests.mjs`: 35/35 test suites passed (100%).
+- `node scripts/check-typography.mjs`: 0 violations.
+- ESLint: 0 errors, 0 warnings on modified web components.
+
+---
 
 ## Task: Supabase Migrations & Rollbacks Push and Synchronization
 **Status**: 🟢 COMPLETED & VERIFIED across Production (`dhbbgfzbyatzvqafnsqp`) and Development (`vlmxciuogczumumrwyot`)
@@ -227,6 +411,156 @@ When an administrator approved a document replacement request:
 
 # Current Task
 
+## Task: Native Mobile Approvals UI/UX Redesign, Optimistic Feedback & Session Expired Root-Cause Fix
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary: "Your session expired. Sign in again to record a decision."
+- **Root Cause**:
+  1. In `useDecideApprovalMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation` in `apps/mobile/lib/hooks/useApprovalsData.ts`, mutations attempted to call the Web API endpoint `${appUrl}/api/approvals/${requestId}/decide`.
+  2. In `apps/mobile/.env`, `EXPO_PUBLIC_APP_URL` was configured to `https://dashboard-reachinternational.vercel.app` (the production web deployment), while the mobile app was running in development against Dev Supabase (`vlmxciuogczumumrwyot`).
+  3. When mobile sent its Dev Supabase JWT to the production Vercel server, the production server's admin client (`dhbbgfzbyatzvqafnsqp`) rejected the token as invalid with HTTP 401.
+  4. The client's catch block had `if (err?.status && err.status < 500) throw err;`, which re-threw the HTTP 401 error and **blocked the direct Supabase RPC fallback** from ever executing.
+  5. `mapApprovalDecisionError` then formatted HTTP 401 into `"Your session expired. Sign in again to record a decision."`, showing a false session expiry toast even though the mobile user was actively signed in with valid Supabase credentials.
+
+### 2. Solutions Implemented
+1. **Proactive Session Refresh & Direct Supabase RPC Fallback (`useApprovalsData.ts`)**:
+   - Added `ensureActiveSession()`: Checks token expiration with `supabase.auth.getSession()` and proactively calls `supabase.auth.refreshSession()` if the token is close to expiry (<60s) or missing.
+   - Fixed fallback mechanism in `useDecideApprovalMutation`, `useApproveAllMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation`:
+     - If optional Web API returns 409 (domain conflict / already decided), surfaces the conflict error.
+     - For non-409 statuses (401 from cross-environment host mismatch, 404, 500, network error), cleanly and immediately falls back to the authoritative direct Supabase RPC (`approval_decide`, `approval_approve_all`, `verify_user_document_atomic`, `reject_user_document_atomic`) using the mobile client's active authenticated session and `actorId`.
+   - Hardened `mapApprovalDecisionError` to never produce misleading "session expired" errors on non-auth failures.
+2. **Contact Info & Android Zero-Width Layout Bug Fix (`MobileApprovalCard.tsx`)**:
+   - Fixed Android Yoga layout bug where `contactItem: { maxWidth: "48%" }` and `contactText: { flex: 1 }` collapsed text width to 0, hiding email and phone text.
+   - Refactored `Fact` with `factIconWrapper` (16px fixed width) and `flexShrink: 1` text, vertically stacked so long emails and phone numbers render cleanly with 100% legibility.
+   - Empty/whitespace facts return `null` immediately, preventing empty icons from rendering without labels.
+3. **Clean Compact Notice for Zero Documents (`MobileApprovalCard.tsx`)**:
+   - Replaced bloated 100px dashed container (`Attached Documents (0)`) with a subtle, clean 32px notice (`compactEmptyNotice`), saving ~80px of vertical space per card.
+4. **Card Header & Action Buttons Redesign (`MobileApprovalCard.tsx`)**:
+   - Clean top header: Role badge in brand soft blue (`#e0f2fe` / `#0284c7`), type badge in neutral pill, status badge, and `# EMP-xxxx` mono badge aligned on top right.
+   - Action buttons: 44px min-height touch targets with Geist tokens:
+     - `Reject`: Outline style with soft red border and text.
+     - `Approve`: Solid emerald success button (`#10b981`) with white check icon.
+     - Single loading spinner per button when in-flight.
+5. **Segmented Filter Tabs & Type Scroll Strip (`approvals.tsx`)**:
+   - Replaced squashed, broken dropdown filters with a native segmented status tab bar: `Pending (${counts.total})`, `Approved`, `Rejected`, `All`.
+   - Added horizontal scrollable request type pill strip: `All Requests`, `New Registrations`, `Document Verifications`, `Replacements`, `Profile Changes`, `Account Deletions`, `Shift Conflicts`.
+   - Prominent, responsive `SearchInput` with clear button.
+6. **Optimistic UI Animation (`approvals.tsx`)**:
+   - Wrapped FlatList items in `Animated.View` with `entering={FadeIn.duration(200)}`, `exiting={FadeOut.duration(200)}`, and `layout={LinearTransition.springify().damping(18).stiffness(180)}`.
+   - Decisions instantly remove the item from the cache, decrement the counter, and trigger spring physics to slide the remaining cards upward with 0ms lag.
+
+### 3. Verification & Evidence
+- `pnpm --filter mobile typecheck`: 0 errors (clean exit 0).
+- `pnpm --filter web typecheck`: 0 errors (clean exit 0).
+- `node scripts/check-typography.mjs`: 0 violations across monorepo.
+- `pnpm --filter @reachinternational/validation test`: 87/87 passed (100%).
+
+---
+
+
+
+## Task: /running-logs Breakdown Timing Resolution, Single Source of Truth, and Animated Accordion UI
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Web and Mobile
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary
+- **Why breakdown start and end time was unrecorded on bulk-imported logs**:
+  The Next.js operational data queries (`MACHINE_LOG_EXACT_PROJECTION` in `operations-machine-logs.ts`, `CLIENT_LOG_EXACT_PROJECTION` in `operations-client-logs.ts`, `OPERATOR_LOG_EXACT_PROJECTION` in `operations-operator-logs.ts`, and `HOUR_LOG_FULL_PROJECTION` in `operators.ts`) omitted `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, and `breakdown_minutes` from their `select(...)` clauses.
+  Although PostgreSQL already stored `breakdown_start_time: '18:48:00'`, `breakdown_end_time: '19:24:00'`, `breakdown_minutes: 36` on the imported record for `M/C-0001` on `2026-11-24`, the frontend query received `undefined`.
+- **Why manual entry showed the times**:
+  Manual shift entry had an older workaround that prepended `[Breakdown Duration: 11:00 AM - 12:00 PM (60min)]` into the `remarks` column. `parseBreakdownString(log.remarks)` was able to parse that string from `remarks`. In bulk import, remarks were clean (e.g. `"Electrical fault caused downtime; checked and restarted."`), so no bracketed tag existed to fall back on.
+- **Why duration showed `0h`**:
+  `fmtMin(m)` calculated `Math.floor(m / 60) + 'h'`, rendering `0h` for sub-hour durations (like 36 min).
+
+### 2. Solutions Implemented
+1. **Added Projections for All Breakdown Columns**:
+   - `apps/web/lib/data/operations/operations-machine-logs.ts`
+   - `apps/web/lib/data/operations/operations-client-logs.ts`
+   - `apps/web/lib/data/operations/operations-operator-logs.ts`
+   - `apps/web/lib/queries/operators.ts`
+   - `apps/web/app/actions/operators.ts`
+   - `apps/mobile/lib/queries/operationsExport.ts`
+2. **Removed Duplicate Breakdown Storage in Remarks (Single Source of Truth)**:
+   - Cleaned up `submitOperatorHourLogAction` (`app/actions/operators.ts`), `OperatorDashboard.tsx`, `MeterLogModal.tsx`, and `OperationsEditLogModal.tsx` so they never prepend `[Breakdown Duration: ...]` to `remarks`.
+   - Dedicated database columns (`breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, `breakdown_minutes`) are now the sole authoritative source of truth.
+3. **Resilient Dual Reading**:
+   - `extractBreakdownTiming` reads dedicated columns first, calculates duration accurately from timestamps if minutes are missing, and falls back to legacy remarks tags if dedicated columns are null.
+4. **Duration Formatting in Minutes & Hours**:
+   - Created canonical `formatBreakdownMinutes(m)` in `@reachinternational/utils` (`packages/utils/src/date.ts`):
+     - `36m` for 36 min (instead of `0h` or `0h 36m`).
+     - `1h` for 60 min.
+     - `1h 30m` for 90 min.
+5. **Streamlined UI & Smooth Accordion Animation**:
+   - Removed the top summary row (`Total stoppage: ... Net Breakdown...`).
+   - Removed the text header `"Stoppage Timestamps & Classification:"`.
+   - Added Framer Motion `<AnimatePresence>` and `<motion.div>` accordion animation (`duration: 0.25`, `ease: [0.16, 1, 0.3, 1]`) to both desktop table (`OperationsLogsTable.tsx`) and mobile card list (`OperationsLogsMobileList.tsx`).
+
+### 3. Verification & Evidence
+- `pnpm --filter web typecheck`: 0 errors.
+- `pnpm --filter mobile typecheck`: 0 errors.
+- `packages/validation` test suite: 87/87 passed.
+- `tests/logsheet-import` test suite: 17/17 passed.
+- `tests/breakdown` test suite: 4/4 passed.
+
+## Task: Bulk Historical Logsheet Analysis & Pipeline Ingestion for M/C-0001 (JCB 3DX Super #1 / Afcons Infrastructure)
+**Status**: 🟢 IMPORTED, COMMITTED & FULLY VERIFIED (Dev DB `vlmxciuogczumumrwyot`)
+**Date**: 2026-11-26
+
+### Overview & Request Fulfillment
+- **Machine**: M/C-0001 (`8d0011dd-150e-4f71-b166-a8eb9e460480`), Model: 3DX Super, Serial: JCB3DX-2024-001.
+- **Client & Rental Alignment**: Machine `client_id` is Afcons Infrastructure (`1114121d-71ae-4b51-a2b0-1a1553e2ce9d`, `CLI-0050`, Site: Pune Main Site `CLI-0050-S01`). Corrected machine `customer_name` from `'Larsen & Toubro ECC'` to `'Afcons Infrastructure'`.
+- **Logsheet Period**: 2026-10-26 to 2026-11-25 (31 days × 2 shifts/day = 62 shifts).
+- **Operators**: Shift A (06:00-14:00) Amit Verma (`EMP-0334`, `bd307a42-be98-41b3-a47f-372e79fb2f8e`); Shift B (14:00-22:00) Ramesh Kumar (`EMP-0330`, `4c73b810-a00f-40d2-beaa-5bc4fec2d767`).
+- **Meters & Physical Continuity**:
+  - Start HMR: 2480.00 (2026-10-26 Shift A)
+  - End HMR: 2903.22 (2026-11-25 Shift B)
+  - Continuity: 100% contiguous (0 meter gaps or regressions across all 62 shifts).
+  - Total Running Hours: 423.22 hrs.
+- **Breakdowns**: 5 verified incidents (2026-10-30 Shift A, 2026-11-01 Shift A, 2026-11-07 Shift A, 2026-11-19 Shift A, 2026-11-24 Shift B) with containment inside shift duration and descriptive remarks.
+- **Pipeline Artifacts Created**:
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.csv`: Canonical source CSV data.
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.xlsx`: Standardized 3-sheet Excel workbook.
+  - `scripts/pipeline-logsheet-import.mjs`: Fast, reusable multi-format (.csv/.xlsx) CLI & programmatic pipeline with machine resolution, operator resolution, duplicate prevention, and atomic RPC execution.
+- **Database Import Execution**:
+  - Executed atomic `import_machine_hour_logs_bulk(jsonb)` RPC under admin authorization (`Admin User Dev`, `cc2b0d0c-e06d-4500-98fe-69354b2bdc16`).
+  - Import Record ID: `a6958417-687c-4cac-b55f-a434c414a925` (status: `completed`).
+  - Verified 62/62 rows committed to `public.machine_hour_logs`.
+  - Advanced `machines.hour_meter` from 534 to `2903.22` hrs.
+
+---
+
+
+## Task: Fix Supabase Realtime `cannot add postgres_changes callbacks after subscribe()` Error
+**Status**: 🟢 RESOLVED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### Root Cause Diagnosed
+In `apps/web/components/notifications/NotificationBell.tsx`, each instance independently created and subscribed to a Supabase Realtime channel named `notifications:inbox:${user.id}`.
+Because `NotificationBell` is mounted concurrently in two places in `AppShellClient` (`MobilePageHeader.tsx` for mobile and `QuickAccessTrigger.tsx` in `AppSidebar.tsx` for desktop), both instances ran `useEffect` at the same time. The Supabase browser client returned the existing singleton channel instance to the second component while it was already in `'subscribing'`/`'subscribed'` state, throwing the runtime error:
+`cannot add postgres_changes callbacks for realtime:notifications:inbox:<id> after subscribe().`
+
+### Solution Applied
+1. **Centralized Provider (`NotificationContext.tsx`)**:
+   - Created `NotificationProvider` and `useNotification` in `apps/web/components/notifications/NotificationContext.tsx`.
+   - Single point of truth for unread count, realtime items buffer, and background re-sync on tab focus and `visibilitychange`.
+   - Strictly 1 Supabase Realtime channel per authenticated user session.
+   - Guaranteed cleanup of lingering or stale channels prior to subscription.
+2. **Refactored `NotificationBell.tsx`**:
+   - Removed duplicated local `useState` and `useEffect` realtime subscriptions.
+   - Bell now consumes `useNotification()`, maintaining only local popover/drawer presentation state.
+3. **Mounted Provider in `AppShellClient.tsx`**:
+   - Placed `<NotificationProvider>` inside `<CurrentUserProvider>` in `apps/web/components/layout/AppShellClient.tsx`.
+   - Ensures both mobile header bell and desktop sidebar bell share the exact same realtime state with zero drift.
+
+### Verification
+- `pnpm typecheck`: 7/7 packages clean (0 errors).
+- `node scripts/run-all-tests.mjs`: 35/35 test suites passed (100%).
+- `node scripts/check-typography.mjs`: 0 violations.
+- ESLint: 0 errors, 0 warnings on modified web components.
+
+---
+
 ## Task: Single/Multi Document Approvals Deduplication, Request Consolidation & RPC Error Normalization
 **Status**: 🟢 IMPLEMENTED & VERIFIED across Web (`apps/web`), Mobile (`apps/mobile`), and Shared Utils (`packages/utils`)
 **Date**: 2026-11-25
@@ -275,6 +609,156 @@ When an administrator approved a document replacement request:
 ---
 
 # Current Task
+
+## Task: Native Mobile Approvals UI/UX Redesign, Optimistic Feedback & Session Expired Root-Cause Fix
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary: "Your session expired. Sign in again to record a decision."
+- **Root Cause**:
+  1. In `useDecideApprovalMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation` in `apps/mobile/lib/hooks/useApprovalsData.ts`, mutations attempted to call the Web API endpoint `${appUrl}/api/approvals/${requestId}/decide`.
+  2. In `apps/mobile/.env`, `EXPO_PUBLIC_APP_URL` was configured to `https://dashboard-reachinternational.vercel.app` (the production web deployment), while the mobile app was running in development against Dev Supabase (`vlmxciuogczumumrwyot`).
+  3. When mobile sent its Dev Supabase JWT to the production Vercel server, the production server's admin client (`dhbbgfzbyatzvqafnsqp`) rejected the token as invalid with HTTP 401.
+  4. The client's catch block had `if (err?.status && err.status < 500) throw err;`, which re-threw the HTTP 401 error and **blocked the direct Supabase RPC fallback** from ever executing.
+  5. `mapApprovalDecisionError` then formatted HTTP 401 into `"Your session expired. Sign in again to record a decision."`, showing a false session expiry toast even though the mobile user was actively signed in with valid Supabase credentials.
+
+### 2. Solutions Implemented
+1. **Proactive Session Refresh & Direct Supabase RPC Fallback (`useApprovalsData.ts`)**:
+   - Added `ensureActiveSession()`: Checks token expiration with `supabase.auth.getSession()` and proactively calls `supabase.auth.refreshSession()` if the token is close to expiry (<60s) or missing.
+   - Fixed fallback mechanism in `useDecideApprovalMutation`, `useApproveAllMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation`:
+     - If optional Web API returns 409 (domain conflict / already decided), surfaces the conflict error.
+     - For non-409 statuses (401 from cross-environment host mismatch, 404, 500, network error), cleanly and immediately falls back to the authoritative direct Supabase RPC (`approval_decide`, `approval_approve_all`, `verify_user_document_atomic`, `reject_user_document_atomic`) using the mobile client's active authenticated session and `actorId`.
+   - Hardened `mapApprovalDecisionError` to never produce misleading "session expired" errors on non-auth failures.
+2. **Contact Info & Android Zero-Width Layout Bug Fix (`MobileApprovalCard.tsx`)**:
+   - Fixed Android Yoga layout bug where `contactItem: { maxWidth: "48%" }` and `contactText: { flex: 1 }` collapsed text width to 0, hiding email and phone text.
+   - Refactored `Fact` with `factIconWrapper` (16px fixed width) and `flexShrink: 1` text, vertically stacked so long emails and phone numbers render cleanly with 100% legibility.
+   - Empty/whitespace facts return `null` immediately, preventing empty icons from rendering without labels.
+3. **Clean Compact Notice for Zero Documents (`MobileApprovalCard.tsx`)**:
+   - Replaced bloated 100px dashed container (`Attached Documents (0)`) with a subtle, clean 32px notice (`compactEmptyNotice`), saving ~80px of vertical space per card.
+4. **Card Header & Action Buttons Redesign (`MobileApprovalCard.tsx`)**:
+   - Clean top header: Role badge in brand soft blue (`#e0f2fe` / `#0284c7`), type badge in neutral pill, status badge, and `# EMP-xxxx` mono badge aligned on top right.
+   - Action buttons: 44px min-height touch targets with Geist tokens:
+     - `Reject`: Outline style with soft red border and text.
+     - `Approve`: Solid emerald success button (`#10b981`) with white check icon.
+     - Single loading spinner per button when in-flight.
+5. **Segmented Filter Tabs & Type Scroll Strip (`approvals.tsx`)**:
+   - Replaced squashed, broken dropdown filters with a native segmented status tab bar: `Pending (${counts.total})`, `Approved`, `Rejected`, `All`.
+   - Added horizontal scrollable request type pill strip: `All Requests`, `New Registrations`, `Document Verifications`, `Replacements`, `Profile Changes`, `Account Deletions`, `Shift Conflicts`.
+   - Prominent, responsive `SearchInput` with clear button.
+6. **Optimistic UI Animation (`approvals.tsx`)**:
+   - Wrapped FlatList items in `Animated.View` with `entering={FadeIn.duration(200)}`, `exiting={FadeOut.duration(200)}`, and `layout={LinearTransition.springify().damping(18).stiffness(180)}`.
+   - Decisions instantly remove the item from the cache, decrement the counter, and trigger spring physics to slide the remaining cards upward with 0ms lag.
+
+### 3. Verification & Evidence
+- `pnpm --filter mobile typecheck`: 0 errors (clean exit 0).
+- `pnpm --filter web typecheck`: 0 errors (clean exit 0).
+- `node scripts/check-typography.mjs`: 0 violations across monorepo.
+- `pnpm --filter @reachinternational/validation test`: 87/87 passed (100%).
+
+---
+
+
+
+## Task: /running-logs Breakdown Timing Resolution, Single Source of Truth, and Animated Accordion UI
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Web and Mobile
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary
+- **Why breakdown start and end time was unrecorded on bulk-imported logs**:
+  The Next.js operational data queries (`MACHINE_LOG_EXACT_PROJECTION` in `operations-machine-logs.ts`, `CLIENT_LOG_EXACT_PROJECTION` in `operations-client-logs.ts`, `OPERATOR_LOG_EXACT_PROJECTION` in `operations-operator-logs.ts`, and `HOUR_LOG_FULL_PROJECTION` in `operators.ts`) omitted `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, and `breakdown_minutes` from their `select(...)` clauses.
+  Although PostgreSQL already stored `breakdown_start_time: '18:48:00'`, `breakdown_end_time: '19:24:00'`, `breakdown_minutes: 36` on the imported record for `M/C-0001` on `2026-11-24`, the frontend query received `undefined`.
+- **Why manual entry showed the times**:
+  Manual shift entry had an older workaround that prepended `[Breakdown Duration: 11:00 AM - 12:00 PM (60min)]` into the `remarks` column. `parseBreakdownString(log.remarks)` was able to parse that string from `remarks`. In bulk import, remarks were clean (e.g. `"Electrical fault caused downtime; checked and restarted."`), so no bracketed tag existed to fall back on.
+- **Why duration showed `0h`**:
+  `fmtMin(m)` calculated `Math.floor(m / 60) + 'h'`, rendering `0h` for sub-hour durations (like 36 min).
+
+### 2. Solutions Implemented
+1. **Added Projections for All Breakdown Columns**:
+   - `apps/web/lib/data/operations/operations-machine-logs.ts`
+   - `apps/web/lib/data/operations/operations-client-logs.ts`
+   - `apps/web/lib/data/operations/operations-operator-logs.ts`
+   - `apps/web/lib/queries/operators.ts`
+   - `apps/web/app/actions/operators.ts`
+   - `apps/mobile/lib/queries/operationsExport.ts`
+2. **Removed Duplicate Breakdown Storage in Remarks (Single Source of Truth)**:
+   - Cleaned up `submitOperatorHourLogAction` (`app/actions/operators.ts`), `OperatorDashboard.tsx`, `MeterLogModal.tsx`, and `OperationsEditLogModal.tsx` so they never prepend `[Breakdown Duration: ...]` to `remarks`.
+   - Dedicated database columns (`breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, `breakdown_minutes`) are now the sole authoritative source of truth.
+3. **Resilient Dual Reading**:
+   - `extractBreakdownTiming` reads dedicated columns first, calculates duration accurately from timestamps if minutes are missing, and falls back to legacy remarks tags if dedicated columns are null.
+4. **Duration Formatting in Minutes & Hours**:
+   - Created canonical `formatBreakdownMinutes(m)` in `@reachinternational/utils` (`packages/utils/src/date.ts`):
+     - `36m` for 36 min (instead of `0h` or `0h 36m`).
+     - `1h` for 60 min.
+     - `1h 30m` for 90 min.
+5. **Streamlined UI & Smooth Accordion Animation**:
+   - Removed the top summary row (`Total stoppage: ... Net Breakdown...`).
+   - Removed the text header `"Stoppage Timestamps & Classification:"`.
+   - Added Framer Motion `<AnimatePresence>` and `<motion.div>` accordion animation (`duration: 0.25`, `ease: [0.16, 1, 0.3, 1]`) to both desktop table (`OperationsLogsTable.tsx`) and mobile card list (`OperationsLogsMobileList.tsx`).
+
+### 3. Verification & Evidence
+- `pnpm --filter web typecheck`: 0 errors.
+- `pnpm --filter mobile typecheck`: 0 errors.
+- `packages/validation` test suite: 87/87 passed.
+- `tests/logsheet-import` test suite: 17/17 passed.
+- `tests/breakdown` test suite: 4/4 passed.
+
+## Task: Bulk Historical Logsheet Analysis & Pipeline Ingestion for M/C-0001 (JCB 3DX Super #1 / Afcons Infrastructure)
+**Status**: 🟢 IMPORTED, COMMITTED & FULLY VERIFIED (Dev DB `vlmxciuogczumumrwyot`)
+**Date**: 2026-11-26
+
+### Overview & Request Fulfillment
+- **Machine**: M/C-0001 (`8d0011dd-150e-4f71-b166-a8eb9e460480`), Model: 3DX Super, Serial: JCB3DX-2024-001.
+- **Client & Rental Alignment**: Machine `client_id` is Afcons Infrastructure (`1114121d-71ae-4b51-a2b0-1a1553e2ce9d`, `CLI-0050`, Site: Pune Main Site `CLI-0050-S01`). Corrected machine `customer_name` from `'Larsen & Toubro ECC'` to `'Afcons Infrastructure'`.
+- **Logsheet Period**: 2026-10-26 to 2026-11-25 (31 days × 2 shifts/day = 62 shifts).
+- **Operators**: Shift A (06:00-14:00) Amit Verma (`EMP-0334`, `bd307a42-be98-41b3-a47f-372e79fb2f8e`); Shift B (14:00-22:00) Ramesh Kumar (`EMP-0330`, `4c73b810-a00f-40d2-beaa-5bc4fec2d767`).
+- **Meters & Physical Continuity**:
+  - Start HMR: 2480.00 (2026-10-26 Shift A)
+  - End HMR: 2903.22 (2026-11-25 Shift B)
+  - Continuity: 100% contiguous (0 meter gaps or regressions across all 62 shifts).
+  - Total Running Hours: 423.22 hrs.
+- **Breakdowns**: 5 verified incidents (2026-10-30 Shift A, 2026-11-01 Shift A, 2026-11-07 Shift A, 2026-11-19 Shift A, 2026-11-24 Shift B) with containment inside shift duration and descriptive remarks.
+- **Pipeline Artifacts Created**:
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.csv`: Canonical source CSV data.
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.xlsx`: Standardized 3-sheet Excel workbook.
+  - `scripts/pipeline-logsheet-import.mjs`: Fast, reusable multi-format (.csv/.xlsx) CLI & programmatic pipeline with machine resolution, operator resolution, duplicate prevention, and atomic RPC execution.
+- **Database Import Execution**:
+  - Executed atomic `import_machine_hour_logs_bulk(jsonb)` RPC under admin authorization (`Admin User Dev`, `cc2b0d0c-e06d-4500-98fe-69354b2bdc16`).
+  - Import Record ID: `a6958417-687c-4cac-b55f-a434c414a925` (status: `completed`).
+  - Verified 62/62 rows committed to `public.machine_hour_logs`.
+  - Advanced `machines.hour_meter` from 534 to `2903.22` hrs.
+
+---
+
+
+## Task: Fix Supabase Realtime `cannot add postgres_changes callbacks after subscribe()` Error
+**Status**: 🟢 RESOLVED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### Root Cause Diagnosed
+In `apps/web/components/notifications/NotificationBell.tsx`, each instance independently created and subscribed to a Supabase Realtime channel named `notifications:inbox:${user.id}`.
+Because `NotificationBell` is mounted concurrently in two places in `AppShellClient` (`MobilePageHeader.tsx` for mobile and `QuickAccessTrigger.tsx` in `AppSidebar.tsx` for desktop), both instances ran `useEffect` at the same time. The Supabase browser client returned the existing singleton channel instance to the second component while it was already in `'subscribing'`/`'subscribed'` state, throwing the runtime error:
+`cannot add postgres_changes callbacks for realtime:notifications:inbox:<id> after subscribe().`
+
+### Solution Applied
+1. **Centralized Provider (`NotificationContext.tsx`)**:
+   - Created `NotificationProvider` and `useNotification` in `apps/web/components/notifications/NotificationContext.tsx`.
+   - Single point of truth for unread count, realtime items buffer, and background re-sync on tab focus and `visibilitychange`.
+   - Strictly 1 Supabase Realtime channel per authenticated user session.
+   - Guaranteed cleanup of lingering or stale channels prior to subscription.
+2. **Refactored `NotificationBell.tsx`**:
+   - Removed duplicated local `useState` and `useEffect` realtime subscriptions.
+   - Bell now consumes `useNotification()`, maintaining only local popover/drawer presentation state.
+3. **Mounted Provider in `AppShellClient.tsx`**:
+   - Placed `<NotificationProvider>` inside `<CurrentUserProvider>` in `apps/web/components/layout/AppShellClient.tsx`.
+   - Ensures both mobile header bell and desktop sidebar bell share the exact same realtime state with zero drift.
+
+### Verification
+- `pnpm typecheck`: 7/7 packages clean (0 errors).
+- `node scripts/run-all-tests.mjs`: 35/35 test suites passed (100%).
+- `node scripts/check-typography.mjs`: 0 violations.
+- ESLint: 0 errors, 0 warnings on modified web components.
+
+---
 
 ## Task: Document Replacement Approval Lifecycle — Synchronous File Transfer, Pointer Repointing & Old Storage Purging
 **Status**: 🟢 IMPLEMENTED & FULLY VERIFIED across Web (`apps/web`), Mobile (`apps/mobile`), and Shared Utils
@@ -328,6 +812,156 @@ When an administrator approved a document replacement request:
 ---
 
 # Current Task
+
+## Task: Native Mobile Approvals UI/UX Redesign, Optimistic Feedback & Session Expired Root-Cause Fix
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary: "Your session expired. Sign in again to record a decision."
+- **Root Cause**:
+  1. In `useDecideApprovalMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation` in `apps/mobile/lib/hooks/useApprovalsData.ts`, mutations attempted to call the Web API endpoint `${appUrl}/api/approvals/${requestId}/decide`.
+  2. In `apps/mobile/.env`, `EXPO_PUBLIC_APP_URL` was configured to `https://dashboard-reachinternational.vercel.app` (the production web deployment), while the mobile app was running in development against Dev Supabase (`vlmxciuogczumumrwyot`).
+  3. When mobile sent its Dev Supabase JWT to the production Vercel server, the production server's admin client (`dhbbgfzbyatzvqafnsqp`) rejected the token as invalid with HTTP 401.
+  4. The client's catch block had `if (err?.status && err.status < 500) throw err;`, which re-threw the HTTP 401 error and **blocked the direct Supabase RPC fallback** from ever executing.
+  5. `mapApprovalDecisionError` then formatted HTTP 401 into `"Your session expired. Sign in again to record a decision."`, showing a false session expiry toast even though the mobile user was actively signed in with valid Supabase credentials.
+
+### 2. Solutions Implemented
+1. **Proactive Session Refresh & Direct Supabase RPC Fallback (`useApprovalsData.ts`)**:
+   - Added `ensureActiveSession()`: Checks token expiration with `supabase.auth.getSession()` and proactively calls `supabase.auth.refreshSession()` if the token is close to expiry (<60s) or missing.
+   - Fixed fallback mechanism in `useDecideApprovalMutation`, `useApproveAllMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation`:
+     - If optional Web API returns 409 (domain conflict / already decided), surfaces the conflict error.
+     - For non-409 statuses (401 from cross-environment host mismatch, 404, 500, network error), cleanly and immediately falls back to the authoritative direct Supabase RPC (`approval_decide`, `approval_approve_all`, `verify_user_document_atomic`, `reject_user_document_atomic`) using the mobile client's active authenticated session and `actorId`.
+   - Hardened `mapApprovalDecisionError` to never produce misleading "session expired" errors on non-auth failures.
+2. **Contact Info & Android Zero-Width Layout Bug Fix (`MobileApprovalCard.tsx`)**:
+   - Fixed Android Yoga layout bug where `contactItem: { maxWidth: "48%" }` and `contactText: { flex: 1 }` collapsed text width to 0, hiding email and phone text.
+   - Refactored `Fact` with `factIconWrapper` (16px fixed width) and `flexShrink: 1` text, vertically stacked so long emails and phone numbers render cleanly with 100% legibility.
+   - Empty/whitespace facts return `null` immediately, preventing empty icons from rendering without labels.
+3. **Clean Compact Notice for Zero Documents (`MobileApprovalCard.tsx`)**:
+   - Replaced bloated 100px dashed container (`Attached Documents (0)`) with a subtle, clean 32px notice (`compactEmptyNotice`), saving ~80px of vertical space per card.
+4. **Card Header & Action Buttons Redesign (`MobileApprovalCard.tsx`)**:
+   - Clean top header: Role badge in brand soft blue (`#e0f2fe` / `#0284c7`), type badge in neutral pill, status badge, and `# EMP-xxxx` mono badge aligned on top right.
+   - Action buttons: 44px min-height touch targets with Geist tokens:
+     - `Reject`: Outline style with soft red border and text.
+     - `Approve`: Solid emerald success button (`#10b981`) with white check icon.
+     - Single loading spinner per button when in-flight.
+5. **Segmented Filter Tabs & Type Scroll Strip (`approvals.tsx`)**:
+   - Replaced squashed, broken dropdown filters with a native segmented status tab bar: `Pending (${counts.total})`, `Approved`, `Rejected`, `All`.
+   - Added horizontal scrollable request type pill strip: `All Requests`, `New Registrations`, `Document Verifications`, `Replacements`, `Profile Changes`, `Account Deletions`, `Shift Conflicts`.
+   - Prominent, responsive `SearchInput` with clear button.
+6. **Optimistic UI Animation (`approvals.tsx`)**:
+   - Wrapped FlatList items in `Animated.View` with `entering={FadeIn.duration(200)}`, `exiting={FadeOut.duration(200)}`, and `layout={LinearTransition.springify().damping(18).stiffness(180)}`.
+   - Decisions instantly remove the item from the cache, decrement the counter, and trigger spring physics to slide the remaining cards upward with 0ms lag.
+
+### 3. Verification & Evidence
+- `pnpm --filter mobile typecheck`: 0 errors (clean exit 0).
+- `pnpm --filter web typecheck`: 0 errors (clean exit 0).
+- `node scripts/check-typography.mjs`: 0 violations across monorepo.
+- `pnpm --filter @reachinternational/validation test`: 87/87 passed (100%).
+
+---
+
+
+
+## Task: /running-logs Breakdown Timing Resolution, Single Source of Truth, and Animated Accordion UI
+**Status**: 🟢 RESOLVED, IMPLEMENTED & VERIFIED across Web and Mobile
+**Date**: 2026-11-26
+
+### 1. Root Cause Summary
+- **Why breakdown start and end time was unrecorded on bulk-imported logs**:
+  The Next.js operational data queries (`MACHINE_LOG_EXACT_PROJECTION` in `operations-machine-logs.ts`, `CLIENT_LOG_EXACT_PROJECTION` in `operations-client-logs.ts`, `OPERATOR_LOG_EXACT_PROJECTION` in `operations-operator-logs.ts`, and `HOUR_LOG_FULL_PROJECTION` in `operators.ts`) omitted `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, and `breakdown_minutes` from their `select(...)` clauses.
+  Although PostgreSQL already stored `breakdown_start_time: '18:48:00'`, `breakdown_end_time: '19:24:00'`, `breakdown_minutes: 36` on the imported record for `M/C-0001` on `2026-11-24`, the frontend query received `undefined`.
+- **Why manual entry showed the times**:
+  Manual shift entry had an older workaround that prepended `[Breakdown Duration: 11:00 AM - 12:00 PM (60min)]` into the `remarks` column. `parseBreakdownString(log.remarks)` was able to parse that string from `remarks`. In bulk import, remarks were clean (e.g. `"Electrical fault caused downtime; checked and restarted."`), so no bracketed tag existed to fall back on.
+- **Why duration showed `0h`**:
+  `fmtMin(m)` calculated `Math.floor(m / 60) + 'h'`, rendering `0h` for sub-hour durations (like 36 min).
+
+### 2. Solutions Implemented
+1. **Added Projections for All Breakdown Columns**:
+   - `apps/web/lib/data/operations/operations-machine-logs.ts`
+   - `apps/web/lib/data/operations/operations-client-logs.ts`
+   - `apps/web/lib/data/operations/operations-operator-logs.ts`
+   - `apps/web/lib/queries/operators.ts`
+   - `apps/web/app/actions/operators.ts`
+   - `apps/mobile/lib/queries/operationsExport.ts`
+2. **Removed Duplicate Breakdown Storage in Remarks (Single Source of Truth)**:
+   - Cleaned up `submitOperatorHourLogAction` (`app/actions/operators.ts`), `OperatorDashboard.tsx`, `MeterLogModal.tsx`, and `OperationsEditLogModal.tsx` so they never prepend `[Breakdown Duration: ...]` to `remarks`.
+   - Dedicated database columns (`breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, `breakdown_minutes`) are now the sole authoritative source of truth.
+3. **Resilient Dual Reading**:
+   - `extractBreakdownTiming` reads dedicated columns first, calculates duration accurately from timestamps if minutes are missing, and falls back to legacy remarks tags if dedicated columns are null.
+4. **Duration Formatting in Minutes & Hours**:
+   - Created canonical `formatBreakdownMinutes(m)` in `@reachinternational/utils` (`packages/utils/src/date.ts`):
+     - `36m` for 36 min (instead of `0h` or `0h 36m`).
+     - `1h` for 60 min.
+     - `1h 30m` for 90 min.
+5. **Streamlined UI & Smooth Accordion Animation**:
+   - Removed the top summary row (`Total stoppage: ... Net Breakdown...`).
+   - Removed the text header `"Stoppage Timestamps & Classification:"`.
+   - Added Framer Motion `<AnimatePresence>` and `<motion.div>` accordion animation (`duration: 0.25`, `ease: [0.16, 1, 0.3, 1]`) to both desktop table (`OperationsLogsTable.tsx`) and mobile card list (`OperationsLogsMobileList.tsx`).
+
+### 3. Verification & Evidence
+- `pnpm --filter web typecheck`: 0 errors.
+- `pnpm --filter mobile typecheck`: 0 errors.
+- `packages/validation` test suite: 87/87 passed.
+- `tests/logsheet-import` test suite: 17/17 passed.
+- `tests/breakdown` test suite: 4/4 passed.
+
+## Task: Bulk Historical Logsheet Analysis & Pipeline Ingestion for M/C-0001 (JCB 3DX Super #1 / Afcons Infrastructure)
+**Status**: 🟢 IMPORTED, COMMITTED & FULLY VERIFIED (Dev DB `vlmxciuogczumumrwyot`)
+**Date**: 2026-11-26
+
+### Overview & Request Fulfillment
+- **Machine**: M/C-0001 (`8d0011dd-150e-4f71-b166-a8eb9e460480`), Model: 3DX Super, Serial: JCB3DX-2024-001.
+- **Client & Rental Alignment**: Machine `client_id` is Afcons Infrastructure (`1114121d-71ae-4b51-a2b0-1a1553e2ce9d`, `CLI-0050`, Site: Pune Main Site `CLI-0050-S01`). Corrected machine `customer_name` from `'Larsen & Toubro ECC'` to `'Afcons Infrastructure'`.
+- **Logsheet Period**: 2026-10-26 to 2026-11-25 (31 days × 2 shifts/day = 62 shifts).
+- **Operators**: Shift A (06:00-14:00) Amit Verma (`EMP-0334`, `bd307a42-be98-41b3-a47f-372e79fb2f8e`); Shift B (14:00-22:00) Ramesh Kumar (`EMP-0330`, `4c73b810-a00f-40d2-beaa-5bc4fec2d767`).
+- **Meters & Physical Continuity**:
+  - Start HMR: 2480.00 (2026-10-26 Shift A)
+  - End HMR: 2903.22 (2026-11-25 Shift B)
+  - Continuity: 100% contiguous (0 meter gaps or regressions across all 62 shifts).
+  - Total Running Hours: 423.22 hrs.
+- **Breakdowns**: 5 verified incidents (2026-10-30 Shift A, 2026-11-01 Shift A, 2026-11-07 Shift A, 2026-11-19 Shift A, 2026-11-24 Shift B) with containment inside shift duration and descriptive remarks.
+- **Pipeline Artifacts Created**:
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.csv`: Canonical source CSV data.
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.xlsx`: Standardized 3-sheet Excel workbook.
+  - `scripts/pipeline-logsheet-import.mjs`: Fast, reusable multi-format (.csv/.xlsx) CLI & programmatic pipeline with machine resolution, operator resolution, duplicate prevention, and atomic RPC execution.
+- **Database Import Execution**:
+  - Executed atomic `import_machine_hour_logs_bulk(jsonb)` RPC under admin authorization (`Admin User Dev`, `cc2b0d0c-e06d-4500-98fe-69354b2bdc16`).
+  - Import Record ID: `a6958417-687c-4cac-b55f-a434c414a925` (status: `completed`).
+  - Verified 62/62 rows committed to `public.machine_hour_logs`.
+  - Advanced `machines.hour_meter` from 534 to `2903.22` hrs.
+
+---
+
+
+## Task: Fix Supabase Realtime `cannot add postgres_changes callbacks after subscribe()` Error
+**Status**: 🟢 RESOLVED & VERIFIED across Monorepo
+**Date**: 2026-11-26
+
+### Root Cause Diagnosed
+In `apps/web/components/notifications/NotificationBell.tsx`, each instance independently created and subscribed to a Supabase Realtime channel named `notifications:inbox:${user.id}`.
+Because `NotificationBell` is mounted concurrently in two places in `AppShellClient` (`MobilePageHeader.tsx` for mobile and `QuickAccessTrigger.tsx` in `AppSidebar.tsx` for desktop), both instances ran `useEffect` at the same time. The Supabase browser client returned the existing singleton channel instance to the second component while it was already in `'subscribing'`/`'subscribed'` state, throwing the runtime error:
+`cannot add postgres_changes callbacks for realtime:notifications:inbox:<id> after subscribe().`
+
+### Solution Applied
+1. **Centralized Provider (`NotificationContext.tsx`)**:
+   - Created `NotificationProvider` and `useNotification` in `apps/web/components/notifications/NotificationContext.tsx`.
+   - Single point of truth for unread count, realtime items buffer, and background re-sync on tab focus and `visibilitychange`.
+   - Strictly 1 Supabase Realtime channel per authenticated user session.
+   - Guaranteed cleanup of lingering or stale channels prior to subscription.
+2. **Refactored `NotificationBell.tsx`**:
+   - Removed duplicated local `useState` and `useEffect` realtime subscriptions.
+   - Bell now consumes `useNotification()`, maintaining only local popover/drawer presentation state.
+3. **Mounted Provider in `AppShellClient.tsx`**:
+   - Placed `<NotificationProvider>` inside `<CurrentUserProvider>` in `apps/web/components/layout/AppShellClient.tsx`.
+   - Ensures both mobile header bell and desktop sidebar bell share the exact same realtime state with zero drift.
+
+### Verification
+- `pnpm typecheck`: 7/7 packages clean (0 errors).
+- `node scripts/run-all-tests.mjs`: 35/35 test suites passed (100%).
+- `node scripts/check-typography.mjs`: 0 violations.
+- ESLint: 0 errors, 0 warnings on modified web components.
+
+---
 
 ## Task: Approvals Engine — Normalization of "Already Decided by Another Administrator" & Child Document Independence
 **Status**: 🟢 IMPLEMENTED & VERIFIED on Dev (`vlmxciuogczumumrwyot`) & Production (`dhbbgfzbyatzvqafnsqp`)

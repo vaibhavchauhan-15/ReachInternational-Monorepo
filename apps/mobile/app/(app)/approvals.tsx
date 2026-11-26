@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   FlatList,
+  ScrollView,
   Platform,
   ActivityIndicator,
 } from "react-native";
@@ -28,7 +29,6 @@ import { Skeleton } from "../../components/ui/Skeleton";
 import { MobileHeader } from "../../components/ui/MobileHeader";
 import { PermissionDeniedView } from "../../components/ui/PermissionDeniedView";
 import {
-  DropdownFilterSelector,
   AppRefreshControl,
   showToast,
   type FilterOption,
@@ -593,8 +593,9 @@ export default function ApprovalsScreen() {
   const renderApprovalItem = useCallback(
     ({ item }: { item: ApprovalRequestListItem }) => (
       <Animated.View
-        entering={FadeIn.duration(DUR.md).reduceMotion(ReduceMotion.System)}
-        exiting={FadeOut.duration(DUR.sm).reduceMotion(ReduceMotion.System)}
+        entering={FadeIn.duration(200).reduceMotion(ReduceMotion.System)}
+        exiting={FadeOut.duration(200).reduceMotion(ReduceMotion.System)}
+        layout={LinearTransition.springify().damping(18).stiffness(180).reduceMotion(ReduceMotion.System)}
         style={styles.rowWrapper}
       >
         <MobileApprovalCard
@@ -744,44 +745,112 @@ export default function ApprovalsScreen() {
             ) : (
               <CheckCheck size={16} color={colors.onPrimary} />
             )}
-            <Text variant="caption" style={{ color: colors.onPrimary }}>
+            <Text variant="caption" weight="medium" style={{ color: colors.onPrimary }}>
               Approve All {pendingApprovalsCount > 0 ? `(${pendingApprovalsCount})` : ""}
             </Text>
           </Pressable>
         ) : null}
       </View>
 
-      {/* ── Filter Toolbar with Custom Dropdowns (Matching Web Feedback 4 & 5) ── */}
+      {/* ── Filter Toolbar with Segmented Status Tabs & Horizontal Type Filter ── */}
       <View
         style={[
           styles.filterSection,
           { backgroundColor: colors.canvasElevated, borderColor: colors.hairline },
         ]}
       >
-        {/* Dual Custom Dropdowns Row */}
-        <View style={styles.dropdownsRow}>
-          <View style={styles.dropdownCol}>
-            <DropdownFilterSelector
-              label="Status"
-              value={status}
-              options={statusOptions}
-              onChange={(val) => {
-                setStatus(val as ApprovalStatus | "all");
-              }}
-              minMenuWidth={180}
-            />
-          </View>
-          <View style={styles.dropdownCol}>
-            <DropdownFilterSelector
-              label="Request Type"
-              value={typeKey || "all"}
-              options={typeOptions}
-              onChange={(val) => {
-                setTypeKey(val === "all" ? undefined : val);
-              }}
-              minMenuWidth={220}
-            />
-          </View>
+        {/* Status Segmented Tabs */}
+        <View style={styles.segmentedContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.segmentedScroll}
+          >
+            {statusOptions.map((opt) => {
+              const isSelected = status === opt.id;
+              return (
+                <Pressable
+                  key={opt.id}
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => {
+                    setStatus(opt.id as ApprovalStatus | "all");
+                  }}
+                  style={[
+                    styles.segmentedTab,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.ink
+                        : colors.canvas,
+                      borderColor: isSelected
+                        ? colors.ink
+                        : colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isSelected }}
+                >
+                  {opt.dotColor && !isSelected ? (
+                    <View style={[styles.statusDot, { backgroundColor: opt.dotColor }]} />
+                  ) : null}
+                  <Text
+                    variant="caption"
+                    weight={isSelected ? "semibold" : "medium"}
+                    style={{
+                      color: isSelected ? colors.canvasElevated : colors.ink,
+                    }}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Type Filter Pill Strip */}
+        <View style={styles.typeFilterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.typeFilterScroll}
+          >
+            {typeOptions.map((opt) => {
+              const isSelected = (typeKey || "all") === opt.id;
+              return (
+                <Pressable
+                  key={opt.id}
+                  haptic="select"
+                  hitSlopToMin48
+                  onPress={() => {
+                    setTypeKey(opt.id === "all" ? undefined : opt.id);
+                  }}
+                  style={[
+                    styles.typeChip,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.linkSoft
+                        : colors.canvas,
+                      borderColor: isSelected
+                        ? colors.primary
+                        : colors.hairline,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Text
+                    variant="micro"
+                    weight={isSelected ? "semibold" : "medium"}
+                    style={{
+                      color: isSelected ? colors.primary : colors.mute,
+                    }}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Search Input (Matching Web Search Across All Fields) */}
@@ -1047,21 +1116,54 @@ const styles = StyleSheet.create({
   },
   filterSection: {
     borderBottomWidth: 1,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 10,
   },
-  dropdownsRow: {
-    flexDirection: "row",
+  segmentedContainer: {
     paddingHorizontal: 16,
-    gap: 10,
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  dropdownCol: {
-    flex: 1,
+  segmentedScroll: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  segmentedTab: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    minHeight: 36,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  typeFilterContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  typeFilterScroll: {
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+  },
+  typeChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchContainer: {
     paddingHorizontal: 16,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   offlineNote: {
     flexDirection: "row",

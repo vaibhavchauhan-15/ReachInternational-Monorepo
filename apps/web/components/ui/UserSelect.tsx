@@ -351,7 +351,7 @@ export function UserSelect({
 
               {/* Listbox — Touch-optimized scrolling with hardware acceleration & zero dialog scroll chaining */}
               <div
-                className="overflow-y-auto overscroll-contain p-1.5 space-y-1.5 custom-scrollbar flex-1 min-h-0 touch-pan-y"
+                className="overflow-y-auto overscroll-contain p-1.5 space-y-1.5 flex-1 min-h-0 touch-pan-y"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {allowAll && !searchQuery.trim() && (

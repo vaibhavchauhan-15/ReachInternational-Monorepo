@@ -1,4 +1,5 @@
 import * as webpush from 'web-push';
+import { isAllowedPushDeepLink } from '@reachinternational/types';
 import type { ClaimedPushRow, PushBatchResult } from './types';
 
 let vapidConfigured = false;
@@ -69,18 +70,22 @@ export async function sendWebPushBatch(rows: ClaimedPushRow[]): Promise<PushBatc
       const payloadObj = {
         title: row.title,
         body: row.body,
-        link: row.deep_link || '/dashboard',
+        // Secure routing: only allowlisted same-origin routes reach the client.
+        link: isAllowedPushDeepLink(row.deep_link) ? row.deep_link! : '/dashboard',
         nid: row.notification_id,
         tag: `reach-${row.category}`,
+        priority: row.priority,
+        category: row.category,
       };
 
       const payloadStr = JSON.stringify(payloadObj);
       if (Buffer.byteLength(payloadStr, 'utf-8') > 2048) {
-        // Enforce 2 KB payload limit
+        // Sender-side condition: reject the message without touching the device
+        // registration (G-C4). Never retry a permanently oversized payload.
         return {
           notification_id: row.notification_id,
           device_id: row.device_id,
-          outcome: 'dead',
+          outcome: 'skip',
           error: 'PayloadExceeds2KB',
         };
       }
@@ -123,6 +128,15 @@ export async function sendWebPushBatch(rows: ClaimedPushRow[]): Promise<PushBatc
             device_id: row.device_id,
             outcome: 'retry',
             error: `WebPushTransient${statusCode}`,
+          };
+        } else if (statusCode === 400 || statusCode === 401 || statusCode === 403 || statusCode === 413) {
+          // Permanently invalid payload or credentials — never retry as transient
+          // (G-C6), never mutate the device (G-C4).
+          return {
+            notification_id: row.notification_id,
+            device_id: row.device_id,
+            outcome: 'skip',
+            error: `WebPushPermanent${statusCode}`,
           };
         } else {
           return {

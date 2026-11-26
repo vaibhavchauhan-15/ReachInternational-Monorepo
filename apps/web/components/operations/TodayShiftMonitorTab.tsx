@@ -7,6 +7,7 @@ import { Highlight } from "@/components/ui/Highlight";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
 import { useActiveViewMode } from "@/lib/hooks/useMediaQuery";
 import { getISTDateString, formatDate, classifyError, parseTimeToMinutes } from "@reachinternational/utils";
+import { MACHINE_CAPABILITIES, hasMachineCapability } from "@reachinternational/permissions";
 import type { TodayShiftMonitorRow } from "@reachinternational/types";
 import { dedupeShiftMonitorRows } from "@/lib/utils/shift-monitor";
 import type { User, Machine } from "@/lib/types/database";
@@ -699,8 +700,19 @@ export function TodayShiftMonitorTab({
           }
           setIsExportModalOpen(true);
         },
+        customActions: hasMachineCapability(effectiveRole, MACHINE_CAPABILITIES.LOGS_IMPORT)
+          ? [
+              {
+                id: "import-logsheet",
+                label: "Import Logsheet (Excel)",
+                run: () => {
+                  window.dispatchEvent(new CustomEvent("reach:import-logsheet"));
+                },
+              },
+            ]
+          : [],
       }),
-      [rows.length, toast]
+      [rows.length, toast, effectiveRole]
     )
   );
 

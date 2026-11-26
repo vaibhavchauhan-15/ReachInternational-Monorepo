@@ -314,7 +314,7 @@ export function TodayShiftExportModal({
       >
         <div className="max-w-full">
           {/* Document Preview Box */}
-          <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2 sm:p-4 max-h-[50vh] overflow-y-auto custom-scrollbar">
+          <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2 sm:p-4 max-h-[50vh] overflow-y-auto overscroll-contain">
             <div id={PREVIEW_ID} className="w-full flex justify-center">
               <TodayShiftsReportContent rows={rows} dateStr={dateStr} userName={userName} />
             </div>

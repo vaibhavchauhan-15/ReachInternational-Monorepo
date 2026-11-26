@@ -120,8 +120,8 @@ function PanelEmptyNote({
   text: string;
 }) {
   return (
-    <View style={[styles.dashedEmptyCard, { borderColor: colors.hairline }]}>
-      <FileText size={14} color={colors.mute} />
+    <View style={[styles.compactEmptyNotice, { backgroundColor: colors.canvas, borderColor: colors.hairline }]}>
+      <FileText size={13} color={colors.mute} />
       <Text variant="caption" style={{ color: colors.mute, marginLeft: 6 }}>
         {text}
       </Text>
@@ -129,7 +129,7 @@ function PanelEmptyNote({
   );
 }
 
-/** Single identity fact — muted icon, ink value. */
+/** Single identity fact — robust layout that never collapses on Android */
 function Fact({
   colors,
   icon,
@@ -138,16 +138,17 @@ function Fact({
 }: {
   colors: ThemeColors;
   icon: React.ReactNode;
-  value: string;
+  value?: string | null;
   fullWidth?: boolean;
 }) {
+  if (!value || !value.trim()) return null;
   return (
     <View style={fullWidth ? styles.contactItemFull : styles.contactItem}>
-      {icon}
+      <View style={styles.factIconWrapper}>{icon}</View>
       <Text
         variant="caption"
         numberOfLines={1}
-        style={styles.contactText}
+        style={[styles.contactText, { color: colors.mute }]}
       >
         {value}
       </Text>
@@ -316,34 +317,45 @@ function DocumentStrip({ children }: { children: React.ReactNode }) {
 
 function RegistrationBody({ ctx, colors }: { ctx: CardCtx; colors: ThemeColors }) {
   const docs = ctx.item.documents || [];
+  if (docs.length === 0) {
+    return (
+      <View
+        style={[
+          styles.compactEmptyNotice,
+          { backgroundColor: colors.canvas, borderColor: colors.hairline },
+        ]}
+      >
+        <FileText size={13} color={colors.mute} />
+        <Text variant="caption" style={{ color: colors.mute, marginLeft: 6 }}>
+          No statutory KYC documents attached
+        </Text>
+      </View>
+    );
+  }
   return (
     <SectionPanel
       colors={colors}
       icon={<FileText size={13} color={colors.primary} />}
       title={`Attached Documents (${docs.length})`}
     >
-      {docs.length > 0 ? (
-        <DocumentStrip>
-          {docs.map((doc) => (
-            <DocChip
-              key={doc.id}
-              colors={colors}
-              doc={doc}
-              displayLabel={doc.label}
-              footer="actions"
-              canDecide={ctx.canDecide}
-              isActionLoading={ctx.isActionLoading}
-              isRejectLoading={ctx.isRejectLoading}
-              onDocPress={ctx.onDocPress}
-              onVerifyDocument={ctx.onVerifyDocument}
-              onRejectDocumentPrompt={ctx.onRejectDocumentPrompt}
-              userId={ctx.userId}
-            />
-          ))}
-        </DocumentStrip>
-      ) : (
-        <PanelEmptyNote colors={colors} text="No KYC statutory documents attached yet" />
-      )}
+      <DocumentStrip>
+        {docs.map((doc) => (
+          <DocChip
+            key={doc.id}
+            colors={colors}
+            doc={doc}
+            displayLabel={doc.label}
+            footer="actions"
+            canDecide={ctx.canDecide}
+            isActionLoading={ctx.isActionLoading}
+            isRejectLoading={ctx.isRejectLoading}
+            onDocPress={ctx.onDocPress}
+            onVerifyDocument={ctx.onVerifyDocument}
+            onRejectDocumentPrompt={ctx.onRejectDocumentPrompt}
+            userId={ctx.userId}
+          />
+        ))}
+      </DocumentStrip>
     </SectionPanel>
   );
 }
@@ -841,23 +853,9 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         },
       ]}
     >
-      {/* ── Header: type / status / role / priority chips ── */}
+      {/* ── Header: type / status / role / priority chips + employee ID ── */}
       <View style={styles.headerRow}>
         <View style={styles.badgeGroup}>
-          <Badge variant="outline">
-            <Text variant="micro">{item.type_label}</Text>
-          </Badge>
-          <Badge
-            variant={
-              item.status === "approved"
-                ? "default"
-                : item.status === "rejected"
-                  ? "destructive"
-                  : "secondary"
-            }
-          >
-            <Text variant="micro">{item.status.toUpperCase()}</Text>
-          </Badge>
           {role ? (
             <View
               style={[
@@ -868,10 +866,26 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                 },
               ]}
             >
-              <Text variant="micro" style={{ color: colors.primary }}>
+              <Text variant="micro" weight="medium" style={{ color: colors.primary }}>
                 {role.toUpperCase()}
               </Text>
             </View>
+          ) : null}
+          <Badge variant="outline" style={styles.typeBadge}>
+            <Text variant="micro" weight="medium">{item.type_label}</Text>
+          </Badge>
+          {item.status !== "pending" ? (
+            <Badge
+              variant={
+                item.status === "approved"
+                  ? "default"
+                  : item.status === "rejected"
+                    ? "destructive"
+                    : "secondary"
+              }
+            >
+              <Text variant="micro">{item.status.toUpperCase()}</Text>
+            </Badge>
           ) : null}
           {item.priority >= 8 ? (
             <View
@@ -883,15 +897,30 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
                 },
               ]}
             >
-              <Text variant="micro" style={{ color: colors.error }}>
+              <Text variant="micro" weight="medium" style={{ color: colors.error }}>
                 HIGH
               </Text>
             </View>
           ) : null}
         </View>
+
+        {empId ? (
+          <View
+            style={[
+              styles.empBadge,
+              {
+                backgroundColor: colors.canvas,
+                borderColor: colors.hairline,
+              },
+            ]}
+          >
+            <Hash size={11} color={colors.violet} />
+            <Text variant="mono">{empId}</Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* ── Identity: name + employee chip + per-type user-data facts ── */}
+      {/* ── Identity: name + per-type user-data facts ── */}
       <Pressable
         onPress={handleCardPress}
         style={({ pressed }) => [
@@ -901,25 +930,9 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
         accessibilityRole="button"
         accessibilityLabel={`View ${fullName} approval details`}
       >
-        <View style={styles.nameRow}>
-          <Text variant="heading" numberOfLines={1} style={styles.fullName}>
-            {fullName}
-          </Text>
-          {empId ? (
-            <View
-              style={[
-                styles.empBadge,
-                {
-                  backgroundColor: colors.canvas,
-                  borderColor: colors.hairline,
-                },
-              ]}
-            >
-              <Hash size={11} color={colors.violet} />
-              <Text variant="mono">{empId}</Text>
-            </View>
-          ) : null}
-        </View>
+        <Text variant="heading" numberOfLines={1} style={styles.fullName}>
+          {fullName}
+        </Text>
 
         <View style={styles.contactGrid}>
           {factKeys.includes("email") && item.email ? (
@@ -969,51 +982,62 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
 
         {showDecideActions ? (
           <View style={styles.decideGroup}>
-            {/* Quick Reject Button (Single Spinner) */}
-            <Button
-              variant="outline"
-              size="sm"
+            {/* Quick Reject Button */}
+            <Pressable
+              variant="buttonGhost"
+              hitSlopToMin48
               onPress={handleRejectPress}
               disabled={isActionLoading || isRejectLoading}
-              style={[
+              style={({ pressed }) => [
                 styles.rejectBtn,
                 {
                   borderColor: colors.errorSoft,
-                  backgroundColor: colors.errorSoft,
+                  backgroundColor: pressed ? colors.errorSoft : colors.canvas,
+                  opacity: isActionLoading || isRejectLoading ? 0.6 : 1,
                 },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Reject ${fullName}`}
             >
               {isRejectLoading ? (
                 <ActivityIndicator size="small" color={colors.error} />
               ) : (
                 <>
-                  <XCircle size={14} color={colors.error} />
-                  <Text variant="label" style={{ color: colors.error, marginLeft: 4 }}>
+                  <XCircle size={15} color={colors.error} />
+                  <Text variant="label" weight="medium" style={{ color: colors.error, marginLeft: 5 }}>
                     Reject
                   </Text>
                 </>
               )}
-            </Button>
+            </Pressable>
 
-            {/* Quick Approve Button (Single Spinner) */}
-            <Button
-              variant="default"
-              size="sm"
+            {/* Quick Approve Button */}
+            <Pressable
+              variant="buttonPrimary"
+              hitSlopToMin48
               onPress={handleApprovePress}
               disabled={isActionLoading || isRejectLoading}
-              style={[styles.approveBtn, { backgroundColor: colors.success }]}
+              style={({ pressed }) => [
+                styles.approveBtn,
+                {
+                  backgroundColor: pressed ? colors.successDeep : colors.success,
+                  opacity: isActionLoading || isRejectLoading ? 0.6 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Approve ${fullName}`}
             >
               {isActionLoading ? (
                 <ActivityIndicator size="small" color={colors.onPrimary} />
               ) : (
                 <>
-                  <CheckCircle2 size={14} color={colors.onPrimary} />
-                  <Text variant="label" style={{ color: colors.onPrimary, marginLeft: 4 }}>
+                  <CheckCircle2 size={15} color={colors.onPrimary} />
+                  <Text variant="label" weight="medium" style={{ color: colors.onPrimary, marginLeft: 5 }}>
                     Approve
                   </Text>
                 </>
               )}
-            </Button>
+            </Pressable>
           </View>
         ) : !isPending ? (
           <View style={styles.decidedNotice}>
@@ -1055,16 +1079,16 @@ export const MobileApprovalCard = React.memo(function MobileApprovalCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 8,
     gap: 8,
   },
   badgeGroup: {
@@ -1074,16 +1098,19 @@ const styles = StyleSheet.create({
     gap: 6,
     flex: 1,
   },
+  typeBadge: {
+    borderRadius: 6,
+  },
   roleBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 1,
   },
   priorityBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
   },
   timeRow: {
@@ -1095,15 +1122,8 @@ const styles = StyleSheet.create({
   identityContainer: {
     marginBottom: 10,
   },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 6,
-  },
   fullName: {
-    flex: 1,
+    marginBottom: 6,
   },
   empBadge: {
     flexDirection: "row",
@@ -1115,16 +1135,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   contactGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    flexDirection: "column",
+    gap: 5,
+    marginTop: 2,
   },
   contactItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginRight: 6,
-    maxWidth: "48%",
+    width: "100%",
   },
   contactItemFull: {
     flexDirection: "row",
@@ -1132,8 +1151,22 @@ const styles = StyleSheet.create({
     gap: 6,
     width: "100%",
   },
+  factIconWrapper: {
+    width: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   contactText: {
-    flex: 1,
+    flexShrink: 1,
+  },
+  compactEmptyNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 10,
   },
   reasonText: {
     fontStyle: "italic",
@@ -1298,11 +1331,20 @@ const styles = StyleSheet.create({
   },
   rejectBtn: {
     minHeight: 44,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   approveBtn: {
     minHeight: 44,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   decidedNotice: {
     marginLeft: "auto",

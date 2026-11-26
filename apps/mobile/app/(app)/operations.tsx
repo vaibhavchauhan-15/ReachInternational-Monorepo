@@ -32,6 +32,7 @@ import { MobileOperatorEntryCard } from '../../components/operations/MobileOpera
 import { MobileOperatorHistoryTab } from '../../components/operations/MobileOperatorHistoryTab';
 import { MobileTodayShiftMonitorTab } from '../../components/operations/MobileTodayShiftMonitorTab';
 import { MobileAssignPersonnelModal } from '../../components/operations/MobileAssignPersonnelModal';
+import { LogsheetImportModal } from '../../components/operations/LogsheetImportModal';
 import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric } from '@reachinternational/design-tokens';
@@ -44,8 +45,14 @@ import {
   AlertTriangle,
   Printer,
   UserPlus,
+  FileSpreadsheet,
 } from '../../components/ui/icon';
-import { isManagerOrAbove, isSupervisorOrAbove } from '@reachinternational/permissions';
+import {
+  isManagerOrAbove,
+  isSupervisorOrAbove,
+  MACHINE_CAPABILITIES,
+  hasMachineCapability,
+} from '@reachinternational/permissions';
 
 export type OpsTab = 'entry' | 'history' | 'today';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
@@ -285,6 +292,13 @@ export default function OperationsScreen() {
   const handleOpenAssignModal = useCallback(() => setIsAssignModalOpen(true), []);
   const handleCloseAssignModal = useCallback(() => setIsAssignModalOpen(false), []);
 
+  // Admin-only bulk logsheet import entry (Excel upload runs on the web portal)
+  const canImportLogsheets = hasMachineCapability(
+    (role || userProfile?.role || '').toLowerCase(),
+    MACHINE_CAPABILITIES.LOGS_IMPORT
+  );
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
 
@@ -304,8 +318,17 @@ export default function OperationsScreen() {
       onPress: () => setShowExportModal(true),
     });
 
+    if (canImportLogsheets) {
+      list.push({
+        id: 'import-logsheet',
+        label: 'Import Logsheet (Excel)',
+        icon: <FileSpreadsheet size={16} color={theme.colors.ink} />,
+        onPress: () => setImportModalOpen(true),
+      });
+    }
+
     return list;
-  }, [theme.colors.ink, theme.colors.link, isOperator, handleOpenAssignModal]);
+  }, [theme.colors.ink, theme.colors.link, isOperator, handleOpenAssignModal, canImportLogsheets]);
 
   // Lazy loading state: History tab is only mounted on first user visit, then preserved in memory
   const [hasLoadedHistory, setHasLoadedHistory] = useState(() => activeTab === 'history');
@@ -468,6 +491,14 @@ export default function OperationsScreen() {
           selectedEntityName={isOperator ? (userProfile?.full_name || 'Operator') : 'All Equipment'}
           selectedMonthLabel="All Months"
           supervisorName={userProfile?.full_name || 'Supervisor'}
+        />
+      )}
+
+      {/* Admin-only Bulk Machine Logsheet Import guide (Excel upload runs on the web portal) */}
+      {canImportLogsheets && (
+        <LogsheetImportModal
+          visible={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
         />
       )}
 

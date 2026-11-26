@@ -1132,14 +1132,8 @@ export function OperatorDashboard({
       const bkdStart = isBreakdown && breakdownStats?.isValid ? breakdownStartTime : undefined;
       const bkdEnd = isBreakdown && breakdownStats?.isValid ? breakdownEndTime : undefined;
 
-      // Build breakdown details string
-      let finalRemarks = isBreakdown ? remarks.trim() : "";
-      if (isBreakdown && bkdDurationStr) {
-        const bkdDetails = `[Breakdown Duration: ${bkdDurationStr}]`;
-        if (!finalRemarks.includes("[Breakdown Duration:")) {
-          finalRemarks = finalRemarks ? `${bkdDetails} ${finalRemarks}` : bkdDetails;
-        }
-      }
+      // User remarks remain clean; breakdown timestamps and duration are stored in dedicated columns
+      const finalRemarks = remarks.trim();
 
       const idempotencyKey = typeof window !== "undefined" && window.crypto?.randomUUID ? window.crypto.randomUUID() : undefined;
       const assignedShiftCode = activeShiftCode || (assignedMachine as any)?.shift_code || user?.shift_code || undefined;
@@ -1322,15 +1316,8 @@ export function OperatorDashboard({
     const bkdStart = editBreakdown && editBreakdownStats?.isValid ? editBreakdownStartTime : undefined;
     const bkdEnd = editBreakdown && editBreakdownStats?.isValid ? editBreakdownEndTime : undefined;
 
-    let finalRemarks = editRemarks.trim();
-    if (editBreakdown && bkdDurationStr) {
-      const durationStr = `[Breakdown Duration: ${bkdDurationStr}]`;
-      if (!finalRemarks.includes("[Breakdown Duration:")) {
-        finalRemarks = finalRemarks ? `${durationStr} ${finalRemarks}` : durationStr;
-      }
-    } else if (!editBreakdown) {
-      finalRemarks = finalRemarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
-    }
+    // User remarks remain clean; breakdown timestamps and duration are stored in dedicated columns
+    const finalRemarks = editRemarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
 
     const res = await updateOperatorHourLogAction({
       logId: editingLog.id,
@@ -2419,7 +2406,7 @@ export function OperatorDashboard({
             <form
               id="edit-log-correction-form"
               onSubmit={handleResubmitLogCorrection}
-              className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4 text-xs custom-scrollbar min-h-0"
+              className="flex-1 overflow-y-auto overscroll-contain px-5 sm:px-6 py-4 space-y-4 text-xs min-h-0"
             >
               <div className="grid grid-cols-2 gap-3">
                 <div>

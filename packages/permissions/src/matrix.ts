@@ -8,7 +8,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 
   admin: [
     "machine.view", "machine.fleet_view", "machine.create", "machine.edit", "machine.edit_specs",
-    "machine.import", "machine.delete", "machine.assign", "machine.assign_supervisor",
+    "machine.import", "machine.logs_import", "machine.delete", "machine.assign", "machine.assign_supervisor",
     "machine.status_update", "machine.assign_operator", "machine.assign_client",
     "machine.rental_rates_view", "machine.audit_view", "machine.export",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
@@ -146,6 +146,7 @@ function normalizePermissionKey(perm: string): string {
     "machine:delete": "machine.delete",
     "machine:edit_specs": "machine.edit_specs",
     "machine:import": "machine.import",
+    "machine:logs_import": "machine.logs_import",
     "machine:view_rates": "machine.rental_rates_view",
     "machine:view_audit": "machine.audit_view",
     "service:read": "service.view",

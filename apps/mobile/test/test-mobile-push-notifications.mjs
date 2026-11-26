@@ -75,9 +75,17 @@ console.log('3. Verifying foreground notification handler flags & external OS de
 assert(registerPushContent.includes('setNotificationHandler'), 'Must invoke setNotificationHandler');
 assert(registerPushContent.includes('shouldShowAlert: true'), 'Handler must enable shouldShowAlert');
 assert(registerPushContent.includes('shouldSetBadge: true'), 'Handler must enable shouldSetBadge');
-assert(registerPushContent.includes('shouldShowBanner: true'), 'Handler must enable shouldShowBanner');
 assert(registerPushContent.includes('shouldShowList: true'), 'Handler must enable shouldShowList');
-assert(registerPushContent.includes('shouldPlaySound: true'), 'Handler must enable shouldPlaySound for audible alerts');
+// Foreground policy: critical/high keep the native heads-up banner; normal/low
+// surface as an in-app indicator (badge + inbox) instead of a duplicate banner.
+assert(
+  registerPushContent.includes('shouldShowBanner: isHighPriority'),
+  'Handler must gate the foreground system banner on critical/high priority'
+);
+assert(
+  registerPushContent.includes('shouldPlaySound: isHighPriority'),
+  'Handler must gate foreground sound on critical/high priority'
+);
 
 // Verify eradication of inside-the-app notification banners/toasts in root layout
 const layoutPath = path.resolve(mobileDir, 'app/_layout.tsx');
@@ -95,8 +103,20 @@ console.log('  ✓ Notifications presented strictly outside the app in the nativ
 
 // 4. Route Allowlist & Deep Linking Verification
 console.log('4. Verifying route allowlist & deep link sanitizer...');
-// Simulate isValidDeepLink logic from registerPush.ts
-const ROUTE_ALLOWLIST = ['/dashboard', '/operations', '/fleet', '/users', '/settings', '/reports'];
+// The allowlist is owned by the shared notification registry
+// (packages/types/src/pushNotifications.ts — mirrors the DB route sync trigger).
+const registrySrc = fs.readFileSync(
+  path.resolve(__dirname, '../../../packages/types/src/pushNotifications.ts'),
+  'utf-8'
+);
+const registryBody = registrySrc.slice(registrySrc.indexOf('ROUTE_KEY_REGISTRY'));
+const ROUTE_ALLOWLIST = [
+  ...new Set(
+    [...registryBody.slice(0, registryBody.indexOf('};')).matchAll(/'(\/[A-Za-z0-9/_-]*)'/g)].map((m) => m[1])
+  ),
+];
+assert(ROUTE_ALLOWLIST.includes('/operations'), 'Shared registry must allowlist /operations');
+assert(!ROUTE_ALLOWLIST.includes('/fleet'), 'Shared registry must NOT allowlist non-registry routes like /fleet');
 function isValidDeepLink(link) {
   if (!link || typeof link !== 'string') return false;
   const trimmed = link.trim();

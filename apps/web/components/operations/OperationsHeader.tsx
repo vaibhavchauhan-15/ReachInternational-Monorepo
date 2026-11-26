@@ -2,17 +2,19 @@
 
 import React from "react";
 import { Button } from "@/components/ui";
-import { Download, UserPlus } from "lucide-react";
+import { Download, UserPlus, FileSpreadsheet } from "lucide-react";
 
 export interface OperationsHeaderProps {
   onOpenPrintModal?: () => void;
   onAssignOperator?: () => void;
+  onImportLogsheet?: () => void;
   title?: string;
 }
 
 export const OperationsHeader = React.memo(function OperationsHeader({
   onOpenPrintModal,
   onAssignOperator,
+  onImportLogsheet,
   title = "Fleet Operations",
 }: OperationsHeaderProps) {
   return (
@@ -24,6 +26,19 @@ export const OperationsHeader = React.memo(function OperationsHeader({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {onImportLogsheet && (
+          <Button
+            variant="ghost"
+            onClick={onImportLogsheet}
+            icon={<FileSpreadsheet size={14} className="w-3.5 h-3.5 shrink-0 text-emerald-500" />}
+            className="h-9 px-3.5 font-bold inline-flex flex-row items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap cursor-pointer shadow-xs border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+            title="Import Logsheet (Excel)"
+            aria-label="Import Logsheet (Excel)"
+          >
+            Import Logsheet (Excel)
+          </Button>
+        )}
+
         {onAssignOperator && (
           <Button
             variant="primary"

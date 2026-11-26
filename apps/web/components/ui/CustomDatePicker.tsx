@@ -653,7 +653,7 @@ export function CustomDatePicker({
                 </button>
               </div>
 
-              <div className="overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+              <div className="overflow-y-auto overscroll-contain flex-1 min-h-0">
                 {/* Weekday Column Headers */}
                 <div className="grid grid-cols-7 gap-1 px-2.5 pt-2.5 text-center">
                   {WEEKDAY_NAMES.map((name) => (

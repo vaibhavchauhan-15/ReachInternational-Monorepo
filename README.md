@@ -324,7 +324,14 @@ Native screens live in `apps/mobile/app` with Expo Router. The default shell mod
 
 ### 3.15 Notifications
 
-- `public.notifications` is the source for in-app notifications and the transactional outbox.
+- `public.notifications` is the single source for in-app inbox notifications and the transactional push outbox.
+- **In-App Inbox & Header Bell (100% Web & Native Parity)**: Real-time notification inbox and header bell with unread badge counter (capped at `"99+"`).
+  - **Keyset-Cursor Pagination**: Powered by `notification_list` RPC using `(created_at, id)` keyset pagination (page size 20, zero `OFFSET`).
+  - **O(Index) Unread Count**: Powered by `notification_unread_count` partial count capped at 100 (<0.08 ms execution time, zero lock contention).
+  - **Hardened Security & RLS**: Recipient-only SELECT; direct UPDATE/DELETE revoked. State mutations strictly handled by SECURITY DEFINER RPCs (`notification_mark_read`, `notification_mark_all_read`).
+  - **Zero-PII Payload**: Notification titles and bodies contain zero personal identifiers, salary amounts, or sensitive data.
+  - **Web UI**: Header bell with accessible live aria count; Desktop popover (≥1024px) vs Tablet/Mobile bottom drawer (<1024px); infinite scroll with `IntersectionObserver`; non-shifting "N new alerts" pill.
+  - **Native UI**: Header bell with min 44px touch target & haptics; `(app)/notifications` inbox screen with FlatList, pull-to-refresh, TanStack Query keyset caching, and offline-queue mutation resilience.
 - **Web push** via `web-push`/VAPID and `public/sw.js`; **native push** via `expo-server-sdk`.
 - Fast-path dispatch uses a database trigger + `pg_net`; a `pg_cron` sweeper reclaims abandoned
   batches and retries with backoff. Invalid device tokens are deactivated on receipt errors.

@@ -45,6 +45,24 @@ const SUITES = [
     domain: 'Zod Schemas, Payloads, Passwords & Validation',
   },
   {
+    name: 'Bulk Logsheet Import Engine Suite',
+    cmd: 'node',
+    args: ['--test', '--experimental-strip-types', 'tests/logsheet-import/test-logsheet-import-engine.mjs'],
+    domain: 'XLSX Parsing, Field Validation & Duplicate Detection',
+  },
+  {
+    name: 'Bulk Logsheet Import Security Suite',
+    cmd: 'node',
+    args: ['--test', 'tests/logsheet-import/test-logsheet-import-security.mjs'],
+    domain: 'Admin-Only RBAC, Credential Hygiene & Server Enforcement',
+  },
+  {
+    name: 'Bulk Logsheet Import Database Suite',
+    cmd: 'node',
+    args: ['tests/logsheet-import/test-logsheet-import-db.mjs'],
+    domain: 'Atomic Import RPC, Idempotency, Rollback & Audit (Live Dev DB)',
+  },
+  {
     name: 'Shared Utils Suite',
     cmd: 'pnpm',
     args: ['--filter', '@reachinternational/utils', 'test'],
@@ -189,6 +207,12 @@ const SUITES = [
     domain: 'Web/Mobile Supervisor to Web/Mobile Operator Shift Assignment & Dual Delivery',
   },
   {
+    name: 'Push Notifications Hardening & Negative Security Suite',
+    cmd: 'node',
+    args: ['tests/push/test-push-hardening.mjs'],
+    domain: 'SSRF Guards, Claim Concurrency, Multi-Device Independence, TTL, Quiet Hours & Zero-PII',
+  },
+  {
     name: 'Vercel Cron Hobby Plan Compliance Suite',
     cmd: 'node',
     args: ['scripts/test-vercel-cron-hobby-compliance.mjs'],
@@ -211,6 +235,12 @@ const SUITES = [
     cmd: 'node',
     args: ['tests/operations/test-date-based-assignment.mjs'],
     domain: 'Date Picker (Today..+7), Per-Date Independence, Duplicate Prevention & Web/Native Parity',
+  },
+  {
+    name: 'In-App Notifications RBAC & Keyset Suite',
+    cmd: 'node',
+    args: ['supabase/tests/test_notifications_rbac_negatives.mjs'],
+    domain: 'In-App Inbox RLS, Keyset Cursor, Keyset Tie-Breaker & Unread Count',
   },
 ];
 

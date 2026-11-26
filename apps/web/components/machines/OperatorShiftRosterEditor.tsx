@@ -792,7 +792,7 @@ export function OperatorShiftRosterEditor({
                   </div>
 
                   {/* List of unassigned operators */}
-                  <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                  <div className="max-h-48 overflow-y-auto overscroll-contain p-1">
                     {availableOperators.length === 0 ? (
                       <div className="p-3 text-center text-xs text-[var(--color-mute)] italic">
                         {searchQuery ? "No matching operators found" : "All active operators assigned"}

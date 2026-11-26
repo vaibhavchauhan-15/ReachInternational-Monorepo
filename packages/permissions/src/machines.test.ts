@@ -24,7 +24,9 @@ const ROLES: UserRole[] = [
 
 const ALL_CAPABILITIES = Object.values(MACHINE_CAPABILITIES);
 const FLEET_CAPABILITIES = ALL_CAPABILITIES.filter(
-  (capability) => capability !== MACHINE_CAPABILITIES.OPERATOR_VIEW
+  (capability) =>
+    capability !== MACHINE_CAPABILITIES.OPERATOR_VIEW &&
+    capability !== MACHINE_CAPABILITIES.LOGS_IMPORT
 );
 
 test("super_admin inherits every fleet capability (never the operator-only view)", () => {
@@ -35,29 +37,60 @@ test("super_admin inherits every fleet capability (never the operator-only view)
       `super_admin must have ${capability}`
     );
   }
-  assert.equal(getMachineCapabilities("super_admin").length, FLEET_CAPABILITIES.length);
+  assert.equal(
+    getMachineCapabilities("super_admin").length,
+    FLEET_CAPABILITIES.length + 1
+  );
   assert.equal(
     hasMachineCapability("super_admin", MACHINE_CAPABILITIES.OPERATOR_VIEW),
     false,
     "super_admin must use the fleet view, not the assigned-machine view"
   );
+  assert.equal(
+    hasMachineCapability("super_admin", MACHINE_CAPABILITIES.LOGS_IMPORT),
+    true,
+    "super_admin must be able to bulk import logsheet records"
+  );
 });
 
-test("manager tier (admin, manager) has the full fleet matrix", () => {
-  for (const role of ["admin", "manager"] as const) {
-    for (const capability of FLEET_CAPABILITIES) {
-      assert.equal(
-        hasMachineCapability(role, capability),
-        true,
-        `${role} must have ${capability}`
-      );
-    }
+test("admin has the full fleet matrix plus the admin-only logsheet import", () => {
+  for (const capability of FLEET_CAPABILITIES) {
     assert.equal(
-      hasMachineCapability(role, MACHINE_CAPABILITIES.OPERATOR_VIEW),
-      false,
-      `${role} must not select the operator-only view`
+      hasMachineCapability("admin", capability),
+      true,
+      `admin must have ${capability}`
     );
   }
+  assert.equal(
+    hasMachineCapability("admin", MACHINE_CAPABILITIES.OPERATOR_VIEW),
+    false,
+    `admin must not select the operator-only view`
+  );
+  assert.equal(
+    hasMachineCapability("admin", MACHINE_CAPABILITIES.LOGS_IMPORT),
+    true,
+    "admin must be able to bulk import logsheet records"
+  );
+});
+
+test("manager has the fleet matrix but NOT the admin-only logsheet import", () => {
+  for (const capability of FLEET_CAPABILITIES) {
+    assert.equal(
+      hasMachineCapability("manager", capability),
+      true,
+      `manager must have ${capability}`
+    );
+  }
+  assert.equal(
+    hasMachineCapability("manager", MACHINE_CAPABILITIES.OPERATOR_VIEW),
+    false,
+    `manager must not select the operator-only view`
+  );
+  assert.equal(
+    hasMachineCapability("manager", MACHINE_CAPABILITIES.LOGS_IMPORT),
+    false,
+    "manager must NOT bulk import logsheet records (admin-only)"
+  );
 });
 
 test("supervisor capabilities match the confirmed matrix cells", () => {
@@ -74,6 +107,7 @@ test("supervisor capabilities match the confirmed matrix cells", () => {
     MACHINE_CAPABILITIES.CREATE,
     MACHINE_CAPABILITIES.EDIT_SPECS,
     MACHINE_CAPABILITIES.IMPORT,
+    MACHINE_CAPABILITIES.LOGS_IMPORT,
     MACHINE_CAPABILITIES.DELETE,
     MACHINE_CAPABILITIES.ASSIGN_SUPERVISOR,
     MACHINE_CAPABILITIES.RENTAL_RATES_VIEW,

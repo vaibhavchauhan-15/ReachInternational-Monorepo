@@ -1,4 +1,177 @@
+## Production Supabase Migrations & Push Notifications Hardening (dhbbgfzbyatzvqafnsqp) — COMPLETE & VERIFIED (2026-11-26)
+- **Database Changes Applied**:
+  - `242_in_app_notifications_inbox_and_keyset_rpc.sql`: in-app inbox RPCs (`notification_list`, `notification_unread_count`, `notification_mark_read`, `notification_mark_all_read`), keyset pagination, sync triggers.
+  - `243_push_notifications_reliability_hardening.sql`: `uq_push_tickets_notif_device`, `register_push_device` v2 (8-param + 6-param wrapper), `claim_push_batch` v2, `finish_push_batch` v2, `push_receipts_poller` cron, `push_delivery_health` view.
+  - `244_machine_logsheet_bulk_import.sql`: `machine_log_imports` schema, RLS, suppression guards in `producer_bd1_breakdown` and `trg_assisted_shift_notify_operator`, atomic RPC `import_machine_hour_logs_bulk`.
+  - `245_push_zero_pii_templates_and_user_deactivation.sql`: zero-PII push templates (`producer_reg1_registration`, `producer_enq1_rfq`), user status deactivation trigger `trg_deactivate_push_devices_on_user_status`.
+  - Rollback records tracked in `supabase_migrations.schema_migrations`.
+- **Vault Configuration**:
+  - `notify_url`: `https://dashboard-reachinternational.vercel.app/api/notify/dispatch`
+  - `notify_secret`: `f2543d5600c980a26506b5adf150eff71ba6090d882682c27941a63b4de8baaf`
+- **Verification**:
+  - Verified `push_delivery_health` view: 0 queue depth, 0 in flight, 0 failed.
+  - Live dispatch test: HTTP 200 with `no_active_device` skip reason.
+  - `pg_net` responses: 100% HTTP 200 from Vercel dispatcher.
+
+## Unified Scroll-Activated Scrollbar System (apps/web) — COMPLETE & HARDENED (2026-11-26)
+- **Root Cause of "Scrollbars not visible in any pages and components"**:
+  1. **Page/Viewport Scroller Bug**: In `apps/web/app/globals.css`, `body { overflow-x: hidden; }` is set. In Chromium/WebKit, when `body` has non-visible overflow, the browser anchors the viewport scrollbar to `<body>` (`body::-webkit-scrollbar`). `ScrollActivity.tsx` previously only placed `data-scrolling` on `document.documentElement`, leaving `document.body` without `data-scrolling`. Consequently, `body::-webkit-scrollbar-thumb` remained completely transparent (`background-color: transparent`) during active scrolling on all pages.
+  2. **Selector Specificity & Target Scope**: CSS selectors only matched `:where([data-scrolling])::-webkit-scrollbar-thumb`. Added explicit targeting for `html[data-scrolling]::-webkit-scrollbar-thumb`, `body[data-scrolling]::-webkit-scrollbar-thumb`, `html[data-scrolling] body::-webkit-scrollbar-thumb`, and `[data-scrolling]::-webkit-scrollbar-thumb`.
+  3. **Idle Hover Reveal & Hit-Testing**: At idle, thumbs were completely transparent and could not be seen or hovered to click/drag. Per spec rule 4 comment ("To reveal on idle hover instead, add a :hover rule outside [data-scrolling] using the scrolling alpha"), added `:where(*:hover)::-webkit-scrollbar-thumb` and `:where(*)::-webkit-scrollbar-thumb:hover` so that hovering any scrollable component (table, dropdown, modal, drawer) or the thumb itself reveals the bar at 30% alpha (`--scrollbar-alpha-scrolling`), and hovering directly on the thumb raises to 50% (`--scrollbar-alpha-hover`).
+  4. **Dual Root Propagation in ScrollActivity**: `ScrollActivity.tsx` now applies and clears `data-scrolling` simultaneously on both `document.documentElement` and `document.body` whenever document/window scrolling occurs.
+- **Verification**:
+  - `pnpm --filter web typecheck`: 0 errors (clean exit 0).
+  - `node scripts/check-typography.mjs`: 0 errors.
+  - Live CDP verification on Chromium: idle transparent, active wheel scroll reveals 30% thumb on both `html` and `body`, fades to transparent ~800ms after scroll, hover reveals 30%, thumb hover raises to 50%. Non-overflowing elements show 0 scrollbars. Intentional `.no-scrollbar` strips remain permanently hidden.
+## Logsheet Import Bugfix — False "Operator Ambiguous" on Every Row (Resolver Double-Count)
+- **Root cause**: `resolveOperators` in `apps/web/lib/server/logsheet-import/validate.ts` indexed the SAME `users` record twice into the match lists (both batched queries — by Employee ID and by name — cross-indexed into both maps). Any row carrying both Employee ID and Name (the normal case) saw `matches.length === 2` and was falsely flagged `operator_ambiguous`, blocking the entire file.
+- **Fix**: union of both query results de-duplicated by record id; extracted pure `matchOperatorToRow()` into `@reachinternational/validation` — unique-ID resolution, name-based disambiguation of genuinely shared Employee IDs (warning `operator_disambiguated_by_name`, never a silent guess), and ambiguity errors that LIST the exact candidate records with IDs/status (row-specific and actionable).
+- **Shift identity consistency**: `shiftCodeKey` canonicalizes A<->S1, B<->S2, C<->S3, D<->S4 and bare digits (mirrors existing `OperationsLogsTable.getShiftOrderWeight` UI semantics), so duplicate detection and assignment linkage treat "A" and "S1" as the same shift; migration 244 RPC pre-check aligned via SQL helper `logsheet_shift_key()` (re-applied to Dev).
+- **Verified live** against the user's real 62-row workbook + Dev DB: operators resolve cleanly; the 62 historical rows for M/C-0001 are fully ingested (peer pipeline `imp_MC0001_2026-10-26_2026-11-25_…`, 62/62 completed) and re-upload is correctly blocked row-by-row as duplicates. Suites: validation 87/87 · permissions 38/38 · engine 17/17 · security 16/16 · live-DB 13/13 · production `next build` exit 0.
 # AI State
+
+## Native Mobile Approvals UI/UX Redesign, Optimistic Feedback & Session Expired Root-Cause Fix
+- **Root Cause of "Your session expired. Sign in again to record a decision."**:
+  1. Mutations in `apps/mobile/lib/hooks/useApprovalsData.ts` attempted to call the Web API endpoint `${appUrl}/api/approvals/${requestId}/decide`.
+  2. In `apps/mobile/.env`, `EXPO_PUBLIC_APP_URL` was set to the production web deployment (`https://dashboard-reachinternational.vercel.app`), while the mobile client was connected to the development Supabase project (`vlmxciuogczumumrwyot`).
+  3. The production web server rejected the development Supabase JWT with HTTP 401.
+  4. The client error handling in `useDecideApprovalMutation`, `useVerifyDocumentMutation`, and `useRejectDocumentMutation` re-threw any HTTP status < 500 (`if (err?.status && err.status < 500) throw err`), preventing the fallback to direct Supabase RPCs.
+  5. `mapApprovalDecisionError` formatted the 401 response into `"Your session expired. Sign in again to record a decision."`, causing a false session expiration error toast.
+- **Key Fixes Applied**:
+  1. **Proactive Session Management & Direct Supabase RPC Fallback**:
+     - Added `ensureActiveSession()` in `useApprovalsData.ts` to refresh tokens nearing expiry before decision dispatch.
+     - Web API call now only re-throws 409 conflict errors (authoritative business state). Any non-409 response (cross-environment 401, 404, 500, network error) cleanly falls back to direct Supabase RPCs (`approval_decide`, `approval_approve_all`, `verify_user_document_atomic`, `reject_user_document_atomic`).
+  2. **Card Redesign & Android Zero-Width Layout Bug Fix**:
+     - Fixed `contactItem` layout in `MobileApprovalCard.tsx` where `maxWidth: "48%"` with `flex: 1` text caused Android to collapse text to zero width, leaving empty icons.
+     - Refactored `Fact` with fixed 16px icon wrapper and `flexShrink: 1` text; empty/whitespace facts safely return `null`.
+     - Replaced bloated 100px dashed container (`Attached Documents (0)`) with a clean, compact 32px pill (`compactEmptyNotice`).
+     - Aligned Employee ID badge to card top-right and styled 44px min-height Reject and Approve action buttons.
+  3. **Segmented Filter Tabs & Type Scroll Strip**:
+     - Replaced collapsed, broken dropdown filters in `approvals.tsx` with a native segmented tab bar for status (`Pending`, `Approved`, `Rejected`, `All`) and horizontal request type scroll strip.
+  4. **Optimistic UI Animation**:
+     - Configured FlatList items with `Animated.View` spring physics (`layout={LinearTransition.springify().damping(18).stiffness(180)}` and `exiting={FadeOut.duration(200)}`) for instant, lag-free card dismissals and smooth gap closure.
+- **Verification**:
+  - `pnpm --filter mobile typecheck`: 0 errors.
+  - `pnpm --filter web typecheck`: 0 errors.
+  - `node scripts/check-typography.mjs`: 0 violations.
+  - `pnpm --filter @reachinternational/validation test`: 87/87 passed.
+
+## /running-logs Breakdown Timing Resolution, Single Source of Truth, and Animated Accordion UI
+- **Root Cause of `(Time unrecorded)` & `Duration: 0h` on Bulk-Imported Logs**:
+  1. `MACHINE_LOG_EXACT_PROJECTION` (`operations-machine-logs.ts`), `CLIENT_LOG_EXACT_PROJECTION` (`operations-client-logs.ts`), `OPERATOR_LOG_EXACT_PROJECTION` (`operations-operator-logs.ts`), and `operators.ts` projections omitted dedicated breakdown columns: `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, `breakdown_minutes`, `maintenance_minutes`.
+  2. While the database row in PostgreSQL had all values (`breakdown_start_time: "18:48:00"`, `breakdown_end_time: "19:24:00"`, `breakdown_minutes: 36`), the SQL projection discarded them.
+  3. When logs were entered via manual entry in the web app, an older workaround prepended `[Breakdown Duration: 11:00 AM - 12:00 PM (60min)]` into `remarks`. The frontend fell back to parsing `remarks`, making manual entries visible while bulk-imported entries (which had clean remarks) failed with `(Time unrecorded)`.
+  4. Duration formatting helper `fmtMin` computed `Math.floor(m / 60) + 'h'` which rendered `0h` or `0h 36m` for sub-hour durations instead of `36m`.
+- **Changes Applied**:
+  1. **SQL Projections Updated Across All Operational Data Loaders**:
+     - Added `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours`, `breakdown_minutes`, `maintenance_minutes` to `operations-machine-logs.ts`, `operations-client-logs.ts`, `operations-operator-logs.ts`, `operators.ts`, and `app/actions/operators.ts`.
+  2. **Removed Duplicate Storage in `remarks` (Single Source of Truth)**:
+     - Stopped prepending `[Breakdown Duration: ...]` to `remarks` in `submitOperatorHourLogAction` (`app/actions/operators.ts`), `OperatorDashboard.tsx`, `MeterLogModal.tsx`, and `OperationsEditLogModal.tsx`.
+     - User remarks now remain clean notes. Breakdown timestamps and durations are stored exclusively in dedicated database columns.
+  3. **Resilient Reading of Both Formats**:
+     - Updated `extractBreakdownTiming` and `parseBreakdownDetails` in `packages/utils/src/date.ts` to check dedicated columns first, compute duration from timestamps if minutes are missing, and fall back to legacy bracketed remarks for backward compatibility.
+  4. **Duration Formatting in Minutes & Hours**:
+     - Added `formatBreakdownMinutes(m)`: returns `${m}m` when $< 60$m (e.g. `36m`), `${h}h` when exact (e.g. `1h`), and `${h}h ${m}m` when compound (e.g. `1h 30m`).
+  5. **UI Streamlining & Smooth Framer Motion Animation**:
+     - Removed redundant summary row (`Total stoppage: ... Net Breakdown...`).
+     - Removed redundant text heading `"Stoppage Timestamps & Classification:"`.
+     - Wrapped the expanded breakdown/remarks container in `<AnimatePresence>` and `<motion.div>` with `initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}` for both desktop table and mobile list.
+  6. **100% Web-Mobile Parity**:
+     - Synchronized `OperationsLogsTable.tsx`, `OperationsLogsMobileList.tsx`, `OperationsExportModal.tsx`, and `operator-logs-export.ts`.
+- **Verification**:
+  - `apps/web`: `tsc --noEmit` exit 0 (0 errors).
+  - `apps/mobile`: `tsc --noEmit` exit 0 (0 errors).
+  - `packages/validation`: 87/87 tests passed.
+  - `tests/logsheet-import`: 17/17 tests passed.
+  - `tests/breakdown`: 4/4 tests passed.
+
+## Historical Logsheet Analysis & Bulk Pipeline Ingestion for M/C-0001 (Afcons Infrastructure)
+- **Scope & Context**:
+  - Target equipment: `M/C-0001` (JCB 3DX Super #1, `JCB3DX-2024-001`, `8d0011dd-150e-4f71-b166-a8eb9e460480`) rented to Afcons Infrastructure (`1114121d-71ae-4b51-a2b0-1a1553e2ce9d`, `CLI-0050`).
+  - Corrected machine `customer_name` from `'Larsen & Toubro ECC'` to `'Afcons Infrastructure'`.
+  - Date range: `2026-10-26` to `2026-11-25` (31 days × 2 shifts = 62 shifts).
+  - Operators resolved & verified in `public.users`: Amit Verma (`EMP-0334`, `bd307a42-be98-41b3-a47f-372e79fb2f8e`, Shift A) and Ramesh Kumar (`EMP-0330`, `4c73b810-a00f-40d2-beaa-5bc4fec2d767`, Shift B).
+  - Meter range: 2480.00 ➔ 2903.22 (100% contiguous, 423.22 total running hours, 0 gaps, 0 meter regressions).
+  - Breakdowns: 5 verified incidents (hydraulic issue, mechanical fault, unexpected stoppages, electrical fault) with proper shift duration containment and remarks.
+- **Pipeline Artifacts**:
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.csv`
+  - `data/logsheets/MC-0001_3DX_Super_2026-10-26_to_2026-11-25.xlsx`
+  - `scripts/pipeline-logsheet-import.mjs` (reusable CLI pipeline supporting .csv and .xlsx with validation, meter continuity checks, duplicate detection, and atomic `import_machine_hour_logs_bulk` RPC execution).
+- **Execution & Database Verification**:
+  - Atomic import executed under Admin Dev session (`Admin User Dev`, `cc2b0d0c-e06d-4500-98fe-69354b2bdc16`).
+  - Import Record ID: `a6958417-687c-4cac-b55f-a434c414a925` (status: `completed`).
+  - Committed logs verified: 62/62 in `public.machine_hour_logs`.
+  - Advanced machine hour meter: 2903.22 hrs.
+  - Validation test suite: 81/81 passed in `@reachinternational/validation`.
+  - Logsheet import engine test suite: 17/17 passed in `tests/logsheet-import/test-logsheet-import-engine.mjs`.
+
+## In-App Notification System Realtime Channel Race Fix & Centralized NotificationContext
+- **Root Cause**:
+  `NotificationBell` was mounted concurrently in two locations within `AppShellClient` (`MobilePageHeader.tsx` for mobile viewports and `QuickAccessTrigger.tsx` inside `AppSidebar.tsx` for desktop viewports). Because both components executed their own `useEffect` calling `supabase.channel("notifications:inbox:" + user.id).on(...).subscribe()`, Supabase's browser client returned the existing channel instance while in `'subscribing'` state. Registering `.on("postgres_changes", ...)` on an already-subscribing channel threw:
+  `cannot add postgres_changes callbacks for realtime:notifications:inbox:<id> after subscribe().`
+- **Solution**:
+  1. Created `NotificationContext.tsx` (`NotificationProvider` and `useNotification`) in `apps/web/components/notifications/NotificationContext.tsx`:
+     - Centralizes unread count state and incoming realtime notification buffer into a single React context.
+     - Single WebSocket channel per user session with clean teardown (`supabase.removeChannel`).
+     - Automatic deduplication and stale channel purging prior to subscription.
+     - Centralized window `focus` and `visibilitychange` listeners to refresh unread count without polling storms.
+  2. Refactored `NotificationBell.tsx` to be a pure presentation component that consumes `useNotification()` without independently subscribing to Supabase Realtime.
+  3. Mounted `NotificationProvider` in `AppShellClient.tsx` wrapping all shell children inside `CurrentUserProvider`.
+  4. Both desktop sidebar and mobile header notification bell icons are now 100% synchronized in real-time with zero channel collisions.
+- **Verification**:
+  - `pnpm typecheck`: 7/7 packages clean (0 errors).
+  - `node scripts/run-all-tests.mjs`: 35/35 test suites passed (100%).
+  - `node scripts/check-typography.mjs`: 0 violations.
+  - ESLint: 0 errors, 0 warnings across all modified files.
+
+## In-App Notification System (Inbox & Header Bell) — Keyset Cursor RPCs, Hardened RLS, and 100% Web & Native Parity
+- **Scope**:
+  - `supabase/migrations/242_in_app_notifications_inbox_and_keyset_rpc.sql` (+ rollback)
+  - `supabase/tests/test_notifications_rbac_negatives.mjs`
+  - `packages/types/src/notifications.ts` (+ barrel export)
+  - `packages/validation/src/notifications.ts` (+ tests & barrel export)
+  - `packages/permissions/src/notifications.ts` (+ tests & barrel export)
+  - `packages/utils/src/notifications.ts` (+ tests & barrel export)
+  - `apps/web/lib/cache/tags.ts`
+  - `apps/web/lib/queries/notifications.ts`
+  - `apps/web/app/actions/notifications.ts`
+  - `apps/web/components/notifications/NotificationItemRow.tsx`
+  - `apps/web/components/notifications/NotificationPanel.tsx`
+  - `apps/web/components/notifications/NotificationBell.tsx`
+  - `apps/web/components/layout/MobilePageHeader.tsx`
+  - `apps/web/components/layout/sidebar/QuickAccessTrigger.tsx`
+  - `apps/mobile/lib/hooks/useNotificationsData.ts`
+  - `apps/mobile/components/notifications/MobileNotificationBell.tsx`
+  - `apps/mobile/components/ui/MobileHeader.tsx`
+  - `apps/mobile/app/(app)/notifications.tsx`
+  - `apps/mobile/app/(app)/_layout.tsx`
+  - `apps/mobile/app/_layout.tsx`
+- **Actions Executed**:
+  1. *Sequential Migration 242 Applied to Dev DB (`vlmxciuogczumumrwyot`)*:
+     - Additive columns added to `public.notifications`: `expires_at`, `route_key`, `route_params`.
+     - Partial keyset index: `idx_notifications_user_unread_keyset` on `(user_id, created_at DESC, id DESC) WHERE (read_at IS NULL)` and `idx_notifications_user_all_keyset`.
+     - Hardened RLS: Dropped `notifications_update_own`, revoked direct `UPDATE`/`DELETE` from authenticated and anon. Recipient-only `notifications_select_own` enabled.
+     - Created audited SECURITY DEFINER RPCs: `notification_list`, `notification_unread_count`, `notification_mark_read`, `notification_mark_all_read`, `cleanup_inbox_notifications_retention`. Reloaded schema cache (`NOTIFY pgrst, 'reload schema'`).
+  2. *Security & Negative Test Suite*:
+     - `supabase/tests/test_notifications_rbac_negatives.mjs` (14/14 checks passed live against Dev DB: anon denied, cross-user isolation, forged IDs ignored, >100 array rejected, direct UPDATE/DELETE denied with 42501, keyset pagination stability, unread count parity).
+  3. *Shared Packages Standardized*:
+     - Types, Zod validation, typed route resolution allowlist, and utils (IST relative time, badge capping "99+", category icons).
+  4. *Web Inbox & Viewport-Adaptive Mounting*:
+     - Mobile viewport: Rendered exclusively via `MobilePageHeader.tsx` with `md:hidden` (top-right header strictly for mobile users, completely removed on desktop).
+     - Desktop viewport: Bell icon mounted directly in the desktop sidebar (`QuickAccessTrigger.tsx`) beside Quick Access search (side-by-side in expanded mode, vertically stacked with `SidebarTooltip` in collapsed mode).
+     - 3-tier viewports: Adaptive popover positioning (anchors to the left when inside the left sidebar so it opens cleanly alongside without covering the sidebar; anchors to the right when in a header; renders bottom `Drawer` on mobile).
+     - Keyset cursor infinite scroll (`IntersectionObserver`), "All"/"Unread" tabs, optimistic mark-read, non-shifting "N new alerts" pill.
+     - Per-recipient Realtime channel (`notifications:inbox:<user_id>`) + tab focus/visibility re-sync.
+  5. *Native Inbox Screen & Header Bell*:
+     - Header bell in `MobileHeader.tsx` with min 44px touch target & haptics (`haptics.select()`).
+     - Inbox screen `app/(app)/notifications.tsx` with FlatList, keyset infinite scroll, pull-to-refresh, TanStack Query caching, and offline queue resilience.
+     - Refactored `apps/mobile/app/_layout.tsx` legacy auto-mark-read mutation to non-destructive cache invalidation.
+- **Verification**:
+  - `pnpm typecheck`: 7/7 packages clean (0 errors).
+  - `node scripts/check-typography.mjs`: 0 raw typography property violations across mobile.
+  - `node scripts/run-all-tests.mjs`: 35/35 test suites passed (100%).
+  - Targeted ESLint: 0 errors, 0 warnings.
+
 
 ## Supabase Database Migrations & Rollbacks Synchronization (Production & Development)
 - **Scope**:

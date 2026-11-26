@@ -1,5 +1,7 @@
 import { Expo, type ExpoPushMessage, type ExpoPushTicket } from 'expo-server-sdk';
+import { isAllowedPushDeepLink } from '@reachinternational/types';
 import type { ClaimedPushRow, PushBatchResult } from './types';
+import { COLLAPSIBLE_CATEGORIES } from './types';
 
 // Initialize Expo client with optional access token for enhanced push security
 const expo = new Expo({
@@ -45,6 +47,16 @@ export async function sendExpoBatch(rows: ClaimedPushRow[]): Promise<PushBatchRe
     }
 
     const channelId = resolveAndroidChannel(row.category);
+    // Secure routing: only allowlisted same-origin routes reach the client.
+    const link = isAllowedPushDeepLink(row.deep_link) ? row.deep_link! : '/dashboard';
+
+    // Best-effort duplicate suppression: repeated collapsible reminders (e.g.
+    // shift reminders) replace the queued message instead of stacking.
+    // Correctness never depends on collapse support (verified available on
+    // expo-server-sdk@8.0.0 as `collapseId`).
+    const collapseId = COLLAPSIBLE_CATEGORIES.has(row.category)
+      ? `rem-${row.user_id.slice(0, 8)}-${row.category.slice(0, 24)}`.slice(0, 64)
+      : undefined;
 
     validMessages.push({
       row,
@@ -54,12 +66,15 @@ export async function sendExpoBatch(rows: ClaimedPushRow[]): Promise<PushBatchRe
         body: row.body,
         data: {
           nid: row.notification_id,
-          link: row.deep_link || '/dashboard',
+          link,
+          priority: row.priority,
+          category: row.category,
         },
         channelId,
         priority: row.priority === 'critical' || row.priority === 'high' ? 'high' : 'default',
         ttl: row.ttl_seconds,
         sound: 'default',
+        ...(collapseId ? { collapseId } : {}),
       },
     });
   }
@@ -93,7 +108,7 @@ export async function sendExpoBatch(rows: ClaimedPushRow[]): Promise<PushBatchRe
             ticket_id: ticket.id,
           });
         } else {
-          const errorCode = ticket.details?.error;
+          const errorCode = String(ticket.details?.error ?? '');
           if (errorCode === 'DeviceNotRegistered') {
             results.push({
               notification_id: corresponding.row.notification_id,
@@ -102,10 +117,23 @@ export async function sendExpoBatch(rows: ClaimedPushRow[]): Promise<PushBatchRe
               error: 'DeviceNotRegistered',
             });
           } else if (
-            errorCode === 'MessageRateExceeded' ||
+            // Permanently invalid payloads/credentials must never be retried as
+            // transient failures and must never mutate the device (G-C6/G-C4).
             errorCode === 'MessageTooBig' ||
-            errorCode === 'InvalidCredentials'
+            errorCode === 'InvalidCredentials' ||
+            errorCode === 'InvalidTopic' ||
+            errorCode === 'MessageTooLong' ||
+            errorCode === 'MismatchSenderId' ||
+            errorCode === 'InvalidProvider' ||
+            errorCode === 'NotificationRateExceeded'
           ) {
+            results.push({
+              notification_id: corresponding.row.notification_id,
+              device_id: corresponding.row.device_id,
+              outcome: 'skip',
+              error: errorCode,
+            });
+          } else if (errorCode === 'MessageRateExceeded') {
             results.push({
               notification_id: corresponding.row.notification_id,
               device_id: corresponding.row.device_id,
@@ -122,9 +150,12 @@ export async function sendExpoBatch(rows: ClaimedPushRow[]): Promise<PushBatchRe
           }
         }
       }
-    } catch (chunkError: any) {
-      // Entire chunk failed (e.g. HTTP 5xx / network timeout)
-      const errMessage = chunkError?.message || 'ExpoNetworkError';
+    } catch (chunkError: unknown) {
+      // Chunk failed (HTTP 5xx / network timeout). The provider MAY have accepted
+      // some or all messages before the failure (uncertain acceptance) — at-least-
+      // once semantics: retry the chunk; duplicates are suppressed best-effort via
+      // collapseId where applicable and client-side dedupe via `nid`.
+      const errMessage = chunkError instanceof Error ? chunkError.message : 'ExpoNetworkError';
       for (const item of chunkRows) {
         results.push({
           notification_id: item.row.notification_id,

@@ -457,7 +457,7 @@ export function MachineClientView({
             </div>
 
             {/* Row 2: Status Badges (Full width, side-by-side, no cramped wrapping) */}
-            <div className="flex items-center gap-2 pt-2 border-t border-[var(--color-hairline)] overflow-x-auto flex-nowrap custom-scrollbar">
+            <div className="flex items-center gap-2 pt-2 border-t border-[var(--color-hairline)] overflow-x-auto flex-nowrap">
               <Badge
                 variant={
                   machineData.health_status === "breakdown"

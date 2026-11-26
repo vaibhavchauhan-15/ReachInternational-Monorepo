@@ -61,8 +61,12 @@ const EXPORT_RELATIONAL_PROJECTION = `
   shift_code,
   location,
   remarks,
+  breakdown_start_time,
+  breakdown_end_time,
   breakdown_duration,
   breakdown_hours,
+  breakdown_minutes,
+  maintenance_minutes,
   created_at,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer),
   client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, street, city, district, state, pincode, phone),
@@ -88,8 +92,12 @@ const EXPORT_FLAT_PROJECTION = `
   shift_code,
   location,
   remarks,
+  breakdown_start_time,
+  breakdown_end_time,
   breakdown_duration,
   breakdown_hours,
+  breakdown_minutes,
+  maintenance_minutes,
   created_at
 `;
 

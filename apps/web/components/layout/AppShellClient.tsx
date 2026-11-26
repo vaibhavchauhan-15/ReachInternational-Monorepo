@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/navigation/BottomNav";
 import { MobilePageHeader } from "@/components/layout/MobilePageHeader";
 import { SidebarProvider } from "@/components/ui/Sidebar";
 import { CurrentUserProvider } from "@/components/auth/CurrentUserContext";
+import { NotificationProvider } from "@/components/notifications/NotificationContext";
 import { PageActionProvider } from "@/components/layout/PageActionContext";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,7 @@ export function AppShellClient({
         const isSavedCollapsed = saved === "true";
         document.cookie = `reachinternational_sidebar_collapsed=${isSavedCollapsed}; path=/; max-age=31536000; SameSite=Lax`;
         if (isSavedCollapsed !== collapsed) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCollapsed(isSavedCollapsed);
         }
       } else {
@@ -77,8 +79,9 @@ export function AppShellClient({
 
   return (
     <CurrentUserProvider user={user}>
-      <PageActionProvider>
-        <SidebarProvider
+      <NotificationProvider>
+        <PageActionProvider>
+          <SidebarProvider
           defaultCollapsed={defaultCollapsed}
           collapsed={collapsed}
           onCollapsedChange={setCollapsedState}
@@ -126,8 +129,9 @@ export function AppShellClient({
           </main>
         </div>
       </div>
-        </SidebarProvider>
-      </PageActionProvider>
+          </SidebarProvider>
+        </PageActionProvider>
+      </NotificationProvider>
     </CurrentUserProvider>
   );
 }

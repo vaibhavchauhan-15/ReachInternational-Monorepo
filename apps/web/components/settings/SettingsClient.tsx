@@ -31,6 +31,33 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const NOTIF_PREFS_KEY = "@reach:notification_preferences_v2";
 
+/**
+ * Web Push eligibility (Phase 3 parity):
+ * - iOS/iPadOS Web Push works only for an installed Home Screen web app on
+ *   iOS/iPadOS 16.4+. Detect and show clear install instructions instead of
+ *   failing silently or re-prompting.
+ * - Generic unsupported browsers get explicit guidance.
+ */
+type WebPushEligibility = 'eligible' | 'ios-not-installed' | 'unsupported';
+
+function getWebPushEligibility(): WebPushEligibility {
+  if (typeof window === 'undefined') return 'unsupported';
+  if (typeof (window as any).ReactNativeWebView !== 'undefined') return 'unsupported';
+  const ua = window.navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    const isStandalone =
+      (window.navigator as any).standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches;
+    const iosMajor = Number((ua.match(/OS (\d+)_/) || [])[1] || 0);
+    if (!isStandalone || iosMajor < 16) return 'ios-not-installed';
+  }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return 'unsupported';
+  }
+  return 'eligible';
+}
+
 interface NotificationPreferences {
   pushEnabled: boolean;
   shiftReminders: boolean;
@@ -64,6 +91,8 @@ export function SettingsClient({
 }: SettingsClientProps) {
   const { toast } = useToast();
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [pushPrimerOpen, setPushPrimerOpen] = useState(false);
+  const [pushPendingConfirm, setPushPendingConfirm] = useState(false);
 
   // Notifications State
   const [notifs, setNotifs] = useState<NotificationPreferences>(DEFAULT_NOTIFS);
@@ -120,15 +149,61 @@ export function SettingsClient({
 
   const handleMasterPushToggle = async (checked: boolean) => {
     if (checked) {
-      const ok = await subscribeToWebPush();
-      if (!ok) {
-        toast("warning", "Permission Required", "Browser notifications could not be enabled.");
+      // Permission is requested ONLY after explicit user action plus the
+      // in-app primer below — never on page load.
+      const eligibility = getWebPushEligibility();
+      if (eligibility === 'ios-not-installed') {
+        toast(
+          "warning",
+          "Install the App First",
+          "On iPhone/iPad, web push works only after adding ReachInternational to your Home Screen (Share → Add to Home Screen), then opening it from there."
+        );
         return;
       }
-    } else {
-      await unsubscribeFromWebPush();
+      if (eligibility === 'unsupported') {
+        toast(
+          "warning",
+          "Browser Not Supported",
+          "This browser cannot receive push notifications. Try the latest Chrome, Edge, Firefox, or Safari, or use the mobile app."
+        );
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        toast(
+          "warning",
+          "Notifications Blocked",
+          "Notifications are blocked for this site. Open your browser's site settings (lock icon → Notifications → Allow) and reload."
+        );
+        return;
+      }
+      setPushPrimerOpen(true);
+      return;
     }
-    handleNotifToggle("pushEnabled", checked);
+    await unsubscribeFromWebPush();
+    handleNotifToggle("pushEnabled", false);
+  };
+
+  const confirmEnablePush = async () => {
+    setPushPrimerOpen(false);
+    setPushPendingConfirm(true);
+    try {
+      const ok = await subscribeToWebPush();
+      if (!ok) {
+        if (typeof window !== 'undefined' && Notification.permission === 'denied') {
+          toast(
+            "warning",
+            "Notifications Blocked",
+            "Notifications are blocked for this site. Open your browser's site settings (lock icon → Notifications → Allow) and reload."
+          );
+        } else {
+          toast("warning", "Permission Required", "Browser notifications could not be enabled.");
+        }
+        return;
+      }
+      handleNotifToggle("pushEnabled", true);
+    } finally {
+      setPushPendingConfirm(false);
+    }
   };
 
   const handleNotifToggle = async (key: keyof NotificationPreferences, val: boolean) => {
@@ -563,6 +638,34 @@ export function SettingsClient({
       {/* ========================================================================= */}
       {/* MODALS */}
       {/* ========================================================================= */}
+      {/* 0. Push Permission Primer (in-app explanation before the browser prompt) */}
+      {pushPrimerOpen && (
+        <Modal
+          open={pushPrimerOpen}
+          onClose={() => setPushPrimerOpen(false)}
+          title="Enable Push Notifications"
+          description="Stay on top of shift reminders, breakdown alerts and approvals — even when this tab is closed."
+          size="sm"
+        >
+          <div className="space-y-4 pt-2">
+            <div className="flex items-start gap-2.5 rounded-xl bg-sky-500/5 dark:bg-sky-500/10 p-3">
+              <ShieldCheck size={16} className="text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-[var(--color-mute)] leading-tight">
+                Your browser will ask for permission next. Notification content never includes
+                salary, document or identity details. You can turn this off any time from Settings.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={() => setPushPrimerOpen(false)}>
+                Not Now
+              </Button>
+              <Button type="button" size="sm" onClick={confirmEnablePush} disabled={pushPendingConfirm}>
+                {pushPendingConfirm ? 'Enabling…' : 'Enable Notifications'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {/* 1. Change Password Modal */}
       {passwordModalOpen && (
         <Modal

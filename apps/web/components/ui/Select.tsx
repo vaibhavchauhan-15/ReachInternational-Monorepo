@@ -295,7 +295,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                 )}
 
                 {/* Custom Options List */}
-                <div className="overflow-y-auto p-1.5 max-h-52 space-y-0.5 custom-scrollbar">
+                <div className="overflow-y-auto overscroll-contain p-1.5 max-h-52 space-y-0.5">
                   {filteredOptions.length === 0 ? (
                     <div className="py-4 text-center text-xs text-[var(--color-mute)]">
                       No matching options found

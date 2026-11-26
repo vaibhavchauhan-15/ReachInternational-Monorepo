@@ -371,7 +371,7 @@ export function CommandPalette({
             </div>
 
             {/* Command Results */}
-            <div className="overflow-y-auto p-2 space-y-1 max-h-96 bg-card">
+            <div className="overflow-y-auto overscroll-contain p-2 space-y-1 max-h-96 bg-card">
               {filteredItems.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
                   <AnimatedSparkles size={24} className="text-muted-foreground opacity-50" />

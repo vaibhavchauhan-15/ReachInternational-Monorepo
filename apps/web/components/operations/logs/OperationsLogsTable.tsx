@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { TooltipWrapper } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { ShieldAlert, ChevronUp, ChevronDown, MessageSquare, AlertTriangle, ChevronRight, Clock } from "lucide-react";
@@ -9,6 +10,7 @@ import {
   parseBreakdownDetails,
   formatTo12Hour,
   parseBreakdownString,
+  computeBreakdownDuration,
 } from "@reachinternational/utils";
 import { OperationsLogTableSkeletonRows } from "../skeletons/OperationsSkeletons";
 
@@ -170,12 +172,34 @@ export function calculateShiftWorkingHours(log: MachineHourLog): number {
 }
 
 /**
+ * Formats duration in minutes into a human-readable string:
+ * e.g. 36 -> "36m", 60 -> "1h", 90 -> "1h 30m", 0 -> "0h"
+ */
+export function formatBreakdownMinutes(m: number): string {
+  if (!m || isNaN(m) || m <= 0) return "0h";
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h === 0) return `${rem}m`;
+  if (rem === 0) return `${h}h`;
+  return `${h}h ${rem}m`;
+}
+
+/**
  * Calculates breakdown hours for an individual shift log.
  */
 export function calculateShiftBreakdownHours(log: MachineHourLog): number {
   if (!log.is_breakdown) return 0;
   if (log.breakdown_hours != null && Number(log.breakdown_hours) > 0) {
     return Number(log.breakdown_hours);
+  }
+  if (log.breakdown_minutes != null && Number(log.breakdown_minutes) > 0) {
+    return Number(log.breakdown_minutes) / 60;
+  }
+  if (log.breakdown_start_time && log.breakdown_end_time) {
+    const bkdStats = computeBreakdownDuration(log.breakdown_start_time, log.breakdown_end_time);
+    if (bkdStats.isValid && bkdStats.durationDecimalHours > 0) {
+      return bkdStats.durationDecimalHours;
+    }
   }
   const breakdownInfo = parseBreakdownDetails(log);
   if (breakdownInfo.durationRaw) {
@@ -192,12 +216,14 @@ export function calculateShiftBreakdownHours(log: MachineHourLog): number {
 
 /**
  * Extracts formatted start time, end time, timing range, and duration from a log.
+ * Dedicated database columns take precedence, falling back gracefully to legacy remarks.
  */
 export function extractBreakdownTiming(log: MachineHourLog): {
   startTime: string | null;
   endTime: string | null;
   timeRange: string | null;
   duration: string | null;
+  totalMinutes: number;
 } {
   let start = log.breakdown_start_time ? formatTo12Hour(log.breakdown_start_time) : null;
   let end = log.breakdown_end_time ? formatTo12Hour(log.breakdown_end_time) : null;
@@ -231,15 +257,32 @@ export function extractBreakdownTiming(log: MachineHourLog): {
 
   const timeRange = start && end ? `${start} – ${end}` : (start || end || null);
 
-  const bkdMin = log.breakdown_minutes ?? Math.round((log.breakdown_hours || 0) * 60);
-  const duration =
-    bkdMin > 0
-      ? bkdMin % 60 === 0
-        ? `${Math.floor(bkdMin / 60)}h`
-        : `${Math.floor(bkdMin / 60)}h ${bkdMin % 60}m`
-      : log.breakdown_duration || null;
+  let bkdMin = Number(log.breakdown_minutes || 0);
+  if (bkdMin <= 0 && log.breakdown_hours != null && Number(log.breakdown_hours) > 0) {
+    bkdMin = Math.round(Number(log.breakdown_hours) * 60);
+  }
+  if (bkdMin <= 0 && start && end) {
+    const stats = computeBreakdownDuration(start, end);
+    if (stats.isValid && stats.totalMinutes > 0) {
+      bkdMin = stats.totalMinutes;
+    }
+  }
+  if (bkdMin <= 0) {
+    const parsed = parseBreakdownString(log.breakdown_duration) || parseBreakdownString(log.remarks);
+    if (parsed?.durationText) {
+      const matchH = parsed.durationText.match(/(\d+)\s*h/i);
+      const matchM = parsed.durationText.match(/(\d+)\s*m/i);
+      const h = matchH ? parseInt(matchH[1], 10) : 0;
+      const m = matchM ? parseInt(matchM[1], 10) : 0;
+      if (h > 0 || m > 0) {
+        bkdMin = h * 60 + m;
+      }
+    }
+  }
 
-  return { startTime: start, endTime: end, timeRange, duration };
+  const duration = bkdMin > 0 ? formatBreakdownMinutes(bkdMin) : log.breakdown_duration || null;
+
+  return { startTime: start, endTime: end, timeRange, duration, totalMinutes: bkdMin };
 }
 
 /**
@@ -632,18 +675,13 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
             const totalBdMin = Math.round(group.totalBreakdownHours * 60);
             const maintMin = group.totalMaintenanceMinutes;
             const netBdMin = Math.max(0, totalBdMin - maintMin);
-            const formatMin = (m: number) => {
-              const h = Math.floor(m / 60);
-              const rem = m % 60;
-              return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
-            };
             if (totalBdMin === 0) return <span className="text-[var(--color-mute)]">0h</span>;
             // Fully covered by maintenance allowance -> show MT prefix (print-friendly)
             if (maintMin >= totalBdMin && maintMin > 0) {
               return (
-                <TooltipWrapper content={`Maintenance: ${formatMin(maintMin)} (covered by client allowance)`}>
+                <TooltipWrapper content={`Maintenance: ${formatBreakdownMinutes(maintMin)} (covered by client allowance)`}>
                   <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                    MT {formatMin(maintMin)}
+                    MT {formatBreakdownMinutes(maintMin)}
                   </span>
                 </TooltipWrapper>
               );
@@ -652,14 +690,14 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
             if (maintMin > 0 && netBdMin > 0) {
               return (
                 <div className="flex flex-col items-center gap-0.5">
-                  <TooltipWrapper content={`Maintenance: ${formatMin(maintMin)} (covered by client allowance)`}>
+                  <TooltipWrapper content={`Maintenance: ${formatBreakdownMinutes(maintMin)} (covered by client allowance)`}>
                     <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                      MT {formatMin(maintMin)}
+                      MT {formatBreakdownMinutes(maintMin)}
                     </span>
                   </TooltipWrapper>
-                  <TooltipWrapper content={`Net Breakdown (exceeds allowance): ${formatMin(netBdMin)}`}>
+                  <TooltipWrapper content={`Net Breakdown (exceeds allowance): ${formatBreakdownMinutes(netBdMin)}`}>
                     <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-1.5 py-0 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                      {formatMin(netBdMin)}
+                      {formatBreakdownMinutes(netBdMin)}
                     </span>
                   </TooltipWrapper>
                 </div>
@@ -667,9 +705,9 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
             }
             // No allowance — pure breakdown -> red badge with hours (under B/D column)
             return (
-              <TooltipWrapper content={`Breakdown: ${formatMin(totalBdMin)}`}>
+              <TooltipWrapper content={`Breakdown: ${formatBreakdownMinutes(totalBdMin)}`}>
                 <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                  {formatMin(totalBdMin)}
+                  {formatBreakdownMinutes(totalBdMin)}
                 </span>
               </TooltipWrapper>
             );
@@ -678,142 +716,123 @@ export const OperationsDailyLogRow = React.memo(function OperationsDailyLogRow({
       </tr>
 
       {/* Expandable Breakdown Details: ONLY rendered if there is a breakdown on this day */}
-      {isRowExpanded && canExpand && (
-        <tr className="bg-[var(--color-canvas)]/90 border-b border-[var(--color-hairline)]">
-          <td
-            colSpan={showMachineColumn ? 7 : 6}
-            className="px-4 py-3 text-xs text-[var(--color-ink)] space-y-2.5"
-          >
-            {(() => {
-              const totalBdMin = Math.round(group.totalBreakdownHours * 60);
-              const maintMin = group.totalMaintenanceMinutes;
-              const netBdMin = Math.max(0, totalBdMin - maintMin);
-              const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+      <AnimatePresence initial={false}>
+        {isRowExpanded && canExpand && (
+          <tr className="bg-[var(--color-canvas)]/90 border-b border-[var(--color-hairline)]">
+            <td
+              colSpan={showMachineColumn ? 7 : 6}
+              className="p-0 text-xs text-[var(--color-ink)]"
+            >
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="overflow-hidden px-4 py-3 space-y-2.5"
+              >
+                {(() => {
+                  const stoppageLogs = group.logs.filter(
+                    (l) => Boolean(l.is_breakdown) || Number(l.breakdown_minutes || 0) > 0 || Number(l.breakdown_hours || 0) > 0
+                  );
 
-              return (
-                <div className="flex flex-col gap-2.5 pl-5 pt-0.5">
-                  {/* Summary row */}
-                  <div className="flex items-center gap-3 flex-wrap text-xs">
-                    <div className="flex items-center gap-1.5 font-medium text-[var(--color-mute)]">
-                      <AlertTriangle size={13} className="shrink-0 text-amber-500" />
-                      <span>Total stoppage: <strong className="text-[var(--color-ink)] font-mono">{fmtMin(totalBdMin)}</strong></span>
-                    </div>
-                    {maintMin > 0 && (
-                      <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-300">
-                        <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[9px] font-mono">MT</span>
-                        <span>Maintenance (allowance): <strong className="font-mono">{fmtMin(maintMin)}</strong></span>
-                      </div>
-                    )}
-                    {netBdMin > 0 && (
-                      <div className="flex items-center gap-1.5 font-bold text-rose-700 dark:text-rose-400">
-                        <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/40 px-1.5 py-0.5 text-[9px] font-mono">B/D</span>
-                        <span>Net Breakdown (B/D): <strong className="font-mono">{fmtMin(netBdMin)}</strong></span>
-                      </div>
-                    )}
-                  </div>
+                  return (
+                    <div className="flex flex-col gap-2.5 pl-5 pt-0.5">
+                      {/* Detailed Per-Incident Stoppage Timestamps */}
+                      {stoppageLogs.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                          {stoppageLogs.map((bLog, bIdx) => {
+                            const timing = extractBreakdownTiming(bLog);
+                            const logMaint = Number(bLog.maintenance_minutes || 0);
+                            const logBdMin = timing.totalMinutes || Number(bLog.breakdown_minutes || 0) || Math.round(Number(bLog.breakdown_hours || 0) * 60);
+                            const logNetBd = Math.max(0, logBdMin - logMaint);
+                            const isFullyMaint = logMaint >= logBdMin && logMaint > 0;
+                            const isPartial = logMaint > 0 && logNetBd > 0;
 
-                  {/* Detailed Per-Incident Stoppage Timestamps */}
-                  {stoppageLogs.length > 0 && (
-                    <div className="space-y-1.5 pt-0.5">
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-[var(--color-mute)]">
-                        Stoppage Timestamps & Classification:
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {stoppageLogs.map((bLog, bIdx) => {
-                          const logMaint = Number(bLog.maintenance_minutes || 0);
-                          const logBdMin =
-                            Number(bLog.breakdown_minutes || 0) ||
-                            Math.round(Number(bLog.breakdown_hours || 0) * 60) ||
-                            totalBdMin;
-                          const logNetBd = Math.max(0, logBdMin - logMaint);
-                          const isFullyMaint = logMaint >= logBdMin && logMaint > 0;
-                          const isPartial = logMaint > 0 && logNetBd > 0;
+                            const shiftCode = resolveShiftCode(bLog);
+                            const op =
+                              (bLog.operator as any)?.full_name ||
+                              (bLog as any).operator_name ||
+                              "Operator";
 
-                          const timing = extractBreakdownTiming(bLog);
-                          const shiftCode = resolveShiftCode(bLog);
-                          const op =
-                            (bLog.operator as any)?.full_name ||
-                            (bLog as any).operator_name ||
-                            "Operator";
+                            const note = extractBreakdownRemark(bLog);
 
-                          const note = extractBreakdownRemark(bLog);
-
-                          return (
-                            <div
-                              key={bLog.id || bIdx}
-                              className="flex items-center justify-between gap-3 p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-xs flex-wrap sm:flex-nowrap"
-                            >
-                              <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                <Clock size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                                <span className="font-semibold text-[var(--color-ink)]">
-                                  Shift {shiftCode} ({op})
-                                </span>
-                                {timing.timeRange ? (
-                                  <span className="font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded text-[11px] border border-sky-200/50 dark:border-sky-800/40">
-                                    {timing.timeRange}
+                            return (
+                              <div
+                                key={bLog.id || bIdx}
+                                className="flex items-center justify-between gap-3 p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-xs flex-wrap sm:flex-nowrap"
+                              >
+                                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                  <Clock size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                                  <span className="font-semibold text-[var(--color-ink)]">
+                                    Shift {shiftCode} ({op})
                                   </span>
-                                ) : (
+                                  {timing.timeRange ? (
+                                    <span className="font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded text-[11px] border border-sky-200/50 dark:border-sky-800/40">
+                                      {timing.timeRange}
+                                    </span>
+                                  ) : (
+                                    <span className="font-mono text-[var(--color-mute)] text-[11px]">
+                                      (Time unrecorded)
+                                    </span>
+                                  )}
                                   <span className="font-mono text-[var(--color-mute)] text-[11px]">
-                                    (Time unrecorded)
+                                    Duration: {formatBreakdownMinutes(logBdMin)}
                                   </span>
-                                )}
-                                <span className="font-mono text-[var(--color-mute)] text-[11px]">
-                                  Duration: {fmtMin(logBdMin)}
-                                </span>
-                                {note && (
-                                  <span className="text-[var(--color-ink)] font-medium truncate max-w-[320px]">
-                                    • {note}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {isFullyMaint ? (
-                                  <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10.5px] font-bold text-amber-700 dark:text-amber-300">
-                                    MT {fmtMin(logMaint)} (Maintenance)
-                                  </span>
-                                ) : isPartial ? (
-                                  <div className="flex items-center gap-1">
-                                    <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                                      MT {fmtMin(logMaint)}
+                                  {note && (
+                                    <span className="text-[var(--color-ink)] font-medium truncate max-w-[320px]">
+                                      • {note}
                                     </span>
-                                    <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                                      {fmtMin(logNetBd)} (B/D)
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-2 py-0.5 text-[10.5px] font-bold text-rose-700 dark:text-rose-400">
-                                    {fmtMin(logBdMin)} (Breakdown)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                                  )}
+                                </div>
 
-                  {/* Breakdown remarks from database: only shown if user entered remarks for the breakdown */}
-                  {group.remarksDisplay && (
-                    <div className="flex items-start gap-2 pt-2 border-t border-[var(--color-hairline)]/70 text-xs">
-                      <MessageSquare size={13} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-                      <div className="space-y-0.5 min-w-0 flex-1">
-                        <span className="font-bold text-[10.5px] uppercase tracking-wider text-[var(--color-mute)] mr-2">
-                          Breakdown Remarks:
-                        </span>
-                        <span className="font-sans text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed">
-                          <Highlight text={group.remarksDisplay} query={searchTerm} />
-                        </span>
-                      </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {isFullyMaint ? (
+                                    <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10.5px] font-bold text-amber-700 dark:text-amber-300">
+                                      MT {formatBreakdownMinutes(logMaint)} (Maintenance)
+                                    </span>
+                                  ) : isPartial ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                                        MT {formatBreakdownMinutes(logMaint)}
+                                      </span>
+                                      <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-1.5 py-0 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                                        {formatBreakdownMinutes(logNetBd)} (B/D)
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-full bg-rose-100 dark:bg-rose-900/30 px-2 py-0.5 text-[10.5px] font-bold text-rose-700 dark:text-rose-400">
+                                      {formatBreakdownMinutes(logBdMin)} (Breakdown)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Breakdown remarks from database: only shown if user entered remarks for the breakdown */}
+                      {group.remarksDisplay && (
+                        <div className="flex items-start gap-2 pt-2 border-t border-[var(--color-hairline)]/70 text-xs">
+                          <MessageSquare size={13} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <span className="font-bold text-[10.5px] uppercase tracking-wider text-[var(--color-mute)] mr-2">
+                              Breakdown Remarks:
+                            </span>
+                            <span className="font-sans text-xs text-[var(--color-ink)] whitespace-pre-wrap leading-relaxed">
+                              <Highlight text={group.remarksDisplay} query={searchTerm} />
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })()}
-          </td>
-        </tr>
-      )}
+                  );
+                })()}
+              </motion.div>
+            </td>
+          </tr>
+        )}
+      </AnimatePresence>
     </>
   );
 });
@@ -994,7 +1013,7 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
               </div>
 
               {/* Shift Logs Table for this Machine */}
-              <div className="overflow-x-auto custom-scrollbar">
+              <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs min-w-[750px]">
                   <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase text-[9.5px] font-extrabold border-b border-[var(--color-hairline)] select-none">
                     <tr>
@@ -1091,7 +1110,7 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
             MACHINE & OPERATOR TAB VIEW: UNTOUCHED STANDARD SINGLE TABLE
            ───────────────────────────────────────────────────────────────── */
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-2xs">
-          <div className="overflow-x-auto custom-scrollbar">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[850px]">
               <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase text-[9.5px] font-extrabold border-b border-[var(--color-hairline)] select-none">
                 <tr>

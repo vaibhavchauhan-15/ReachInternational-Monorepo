@@ -684,7 +684,7 @@ export function PrintableAttendanceModal({
         <div className="max-w-full space-y-4">
           <div
             id={PREVIEW_ID}
-            className="max-w-full overflow-x-auto custom-scrollbar flex justify-center py-2"
+            className="max-w-full overflow-x-auto flex justify-center py-2"
           >
             <AttendanceReportContent {...reportContentProps} />
           </div>

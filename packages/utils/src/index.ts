@@ -28,5 +28,6 @@ export * from './brand.ts';
 export * from './documents.ts';
 export * from './machine-categories.ts';
 export * from './approvals-client.ts';
+export * from './notifications.ts';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";

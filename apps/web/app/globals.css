@@ -611,8 +611,17 @@ html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
   overscroll-behavior-y: none;
+}
+
+/* Smooth anchor / scrollIntoView scrolling only when motion is welcome.
+   scroll-padding-top matches the 72px fixed marketing navbar so anchored
+   content never lands underneath it. Native scrolling is never altered. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 72px;
+  }
 }
 
 /* Temporary transition lock during theme switching to guarantee 0ms atomic theme updates across all components (excluding theme toggle switch controls) */
@@ -630,10 +639,10 @@ body {
   overflow-x: hidden;
 }
 
-/* Prevent layout shift from scrollbar appearing/disappearing */
-html {
-  scrollbar-gutter: stable;
-}
+/* scrollbar-gutter removed from html: per the unified scrollbar spec a gutter is
+   reserved only where a layout shift is verified (see docs/scrollbar-audit.md),
+   never globally. The unified thumb keeps a constant 6px size, so the only shift
+   source left is the overflow threshold itself. */
 
 /* ============================================
    Typography Utility Classes
@@ -1437,48 +1446,253 @@ a[aria-disabled="true"] .interactive-icon,
 }
 
 /* ============================================
-   Scrollbar
+   Scrollbar — unified, scroll-activated system
+   (see docs/scrollbar-audit.md for the audit)
+   One source of truth: the tokens below + this
+   layer + components/scroll/ScrollActivity.tsx
+   (the only JS: sets/removes [data-scrolling]).
+
+   Behavior: hidden at idle → 30% while scrolling
+   (either axis, any source) → 50% on thumb hover
+   while scrolling (hard cap 60%, never 100%) →
+   fade out ~800ms after the last scroll event.
+   Thumb stays hit-testable while transparent
+   (colour-only hiding, never display:none).
    ============================================ */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+:root {
+  --scrollbar-size: 6px;
+  --scrollbar-base: var(--color-ink);  /* theme foreground, flips in .dark */
+  --scrollbar-alpha-scrolling: 30%;
+  --scrollbar-alpha-hover: 50%;        /* hard cap 60% — never fully opaque */
+  --scrollbar-track: transparent;
+  --scrollbar-hide-delay: 800ms;       /* mirrored by HIDE_DELAY in ScrollActivity.tsx */
+  --scrollbar-fade-duration: 250ms;
+  /* Pre-mixed rgba fallbacks for engines without color-mix (e.g. Safari 15.x,
+     Firefox <113). Literal colours because CSS minifiers collapse
+     rgb(var(--rgb) / var(--alpha)) fallbacks. Keep alphas in sync with
+     --scrollbar-alpha-* above. */
+  --scrollbar-thumb-scrolling: rgba(23, 23, 23, 0.3);
+  --scrollbar-thumb-hover: rgba(23, 23, 23, 0.5);
+
+  /* Geometric SVG Arrow Limit Indicators (crisp 8x8 viewBox, light mode #171717) */
+  --scrollbar-arrow-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M4 2L6.8 5.8C6.9 6 6.8 6.2 6.5 6.2H1.5C1.2 6.2 1.1 6 1.2 5.8L4 2Z' fill='%23171717'/%3E%3C/svg%3E");
+  --scrollbar-arrow-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M4 6L6.8 2.2C6.9 2 6.8 1.8 6.5 1.8H1.5C1.2 1.8 1.1 2 1.2 2.2L4 6Z' fill='%23171717'/%3E%3C/svg%3E");
+  --scrollbar-arrow-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M2 4L5.8 1.2C6 1.1 6.2 1.2 6.2 1.5V6.5C6.2 6.8 6 6.9 5.8 6.8L2 4Z' fill='%23171717'/%3E%3C/svg%3E");
+  --scrollbar-arrow-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M6 4L2.2 1.2C2 1.1 1.8 1.2 1.8 1.5V6.5C1.8 6.8 2 6.9 2.2 6.8L6 4Z' fill='%23171717'/%3E%3C/svg%3E");
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-canvas);
+.dark {
+  --scrollbar-thumb-scrolling: rgba(250, 250, 250, 0.3);
+  --scrollbar-thumb-hover: rgba(250, 250, 250, 0.5);
+
+  /* Geometric SVG Arrow Limit Indicators (crisp 8x8 viewBox, dark mode #fafafa) */
+  --scrollbar-arrow-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M4 2L6.8 5.8C6.9 6 6.8 6.2 6.5 6.2H1.5C1.2 6.2 1.1 6 1.2 5.8L4 2Z' fill='%23fafafa'/%3E%3C/svg%3E");
+  --scrollbar-arrow-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M4 6L6.8 2.2C6.9 2 6.8 1.8 6.5 1.8H1.5C1.2 1.8 1.1 2 1.2 2.2L4 6Z' fill='%23fafafa'/%3E%3C/svg%3E");
+  --scrollbar-arrow-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M2 4L5.8 1.2C6 1.1 6.2 1.2 6.2 1.5V6.5C6.2 6.8 6 6.9 5.8 6.8L2 4Z' fill='%23fafafa'/%3E%3C/svg%3E");
+  --scrollbar-arrow-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M6 4L2.2 1.2C2 1.1 1.8 1.2 1.8 1.5V6.5C1.8 6.8 2 6.9 2.2 6.8L6 4Z' fill='%23fafafa'/%3E%3C/svg%3E");
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-hairline);
-  border-radius: var(--radius-full);
+/* Accessibility: modestly stronger thumbs for high-contrast users (still <100%) */
+@media (prefers-contrast: more) {
+  :root {
+    --scrollbar-alpha-scrolling: 45%;
+    --scrollbar-alpha-hover: 60%;
+    --scrollbar-thumb-scrolling: rgba(23, 23, 23, 0.45);
+    --scrollbar-thumb-hover: rgba(23, 23, 23, 0.6);
+  }
+  .dark {
+    --scrollbar-thumb-scrolling: rgba(250, 250, 250, 0.45);
+    --scrollbar-thumb-hover: rgba(250, 250, 250, 0.6);
+  }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-mute);
+@layer base {
+  /* Firefox and engines without ::-webkit-scrollbar: standard properties.
+     No hover state is possible on these engines → hover boost is Chromium/
+     Safari only. scrollbar-color does not animate in Firefox, so the hide
+     there is instant (accepted per spec). */
+  @supports not selector(::-webkit-scrollbar) {
+    :where(*) {
+      scrollbar-width: thin;
+      scrollbar-color: transparent transparent;
+    }
+    /* zero-specificity :where() + source order: the [data-scrolling] override
+       must stay AFTER :where(*) so a scrolling parent never reveals a nested
+       child's bar, and portals/third-party containers are covered too. */
+    :where([data-scrolling]),
+    :where(html[data-scrolling]),
+    :where(body[data-scrolling]),
+    :where(*:hover),
+    [data-scrolling] {
+      scrollbar-color: var(--scrollbar-thumb-scrolling) transparent;
+      scrollbar-color: color-mix(in srgb, var(--scrollbar-base) var(--scrollbar-alpha-scrolling), transparent) transparent;
+    }
+  }
+
+  /* Chromium 121+ and Safari: ::-webkit-scrollbar pseudo-elements.
+     The standard props above are intentionally NOT set here: Chromium 121+
+     ignores ::-webkit-scrollbar when scrollbar-color/width are set, which
+     would kill the hover state. Engine split is verified in real browsers. */
+  @supports selector(::-webkit-scrollbar) {
+    :where(*)::-webkit-scrollbar {
+      width: var(--scrollbar-size);
+      height: var(--scrollbar-size);
+      background: var(--scrollbar-track);
+    }
+    :where(*)::-webkit-scrollbar-track,
+    :where(*)::-webkit-scrollbar-corner {
+      background: var(--scrollbar-track);
+    }
+    :where(*)::-webkit-scrollbar-thumb {
+      background-color: transparent;
+      border-radius: var(--radius-full);
+    }
+
+    /* Scrollbar Arrow Buttons: Upper & Lower Limit Indicators */
+    :where(*)::-webkit-scrollbar-button {
+      display: block;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 5px 5px;
+      opacity: 0;
+      transition: opacity var(--scrollbar-fade-duration) ease;
+    }
+    :where(*)::-webkit-scrollbar-button:single-button:vertical:decrement {
+      height: 10px;
+      width: var(--scrollbar-size);
+      background-image: var(--scrollbar-arrow-up);
+    }
+    :where(*)::-webkit-scrollbar-button:single-button:vertical:increment {
+      height: 10px;
+      width: var(--scrollbar-size);
+      background-image: var(--scrollbar-arrow-down);
+    }
+    :where(*)::-webkit-scrollbar-button:single-button:horizontal:decrement {
+      width: 10px;
+      height: var(--scrollbar-size);
+      background-image: var(--scrollbar-arrow-left);
+    }
+    :where(*)::-webkit-scrollbar-button:single-button:horizontal:increment {
+      width: 10px;
+      height: var(--scrollbar-size);
+      background-image: var(--scrollbar-arrow-right);
+    }
+
+    /* Idle hover reveal: per spec rule 4 comment ("To reveal on idle hover instead,
+       add a :hover rule outside [data-scrolling] using the scrolling alpha").
+       Hovering a scrollable container or the thumb reveals it at scrolling alpha (30%)
+       so users can see scrollability and drag the thumb at idle. */
+    :where(*:hover)::-webkit-scrollbar-thumb,
+    :where(*)::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-scrolling);
+      background-color: color-mix(in srgb, var(--scrollbar-base) var(--scrollbar-alpha-scrolling), transparent);
+    }
+    /* Active scroll reveal: applies while scrolling/dragging on any container,
+       including document root (html + body). */
+    :where([data-scrolling])::-webkit-scrollbar-thumb,
+    :where(html[data-scrolling])::-webkit-scrollbar-thumb,
+    :where(body[data-scrolling])::-webkit-scrollbar-thumb,
+    :where(html[data-scrolling]) body::-webkit-scrollbar-thumb,
+    [data-scrolling]::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb-scrolling);
+      background-color: color-mix(in srgb, var(--scrollbar-base) var(--scrollbar-alpha-scrolling), transparent);
+    }
+    /* Hover boost on the thumb itself raises alpha to 50% (hard cap 60%) */
+    :where(*)::-webkit-scrollbar-thumb:hover,
+    :where([data-scrolling])::-webkit-scrollbar-thumb:hover,
+    :where(html[data-scrolling])::-webkit-scrollbar-thumb:hover,
+    :where(body[data-scrolling])::-webkit-scrollbar-thumb:hover,
+    :where(html[data-scrolling]) body::-webkit-scrollbar-thumb:hover,
+    [data-scrolling]::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
+      background-color: color-mix(in srgb, var(--scrollbar-base) var(--scrollbar-alpha-hover), transparent);
+    }
+
+    /* Arrow button visibility states: reveal on container hover, scrollbar hover, or active scroll */
+    :where(*:hover)::-webkit-scrollbar-button,
+    :where(*)::-webkit-scrollbar-button:hover,
+    :where([data-scrolling])::-webkit-scrollbar-button,
+    :where(html[data-scrolling])::-webkit-scrollbar-button,
+    :where(body[data-scrolling])::-webkit-scrollbar-button,
+    :where(html[data-scrolling]) body::-webkit-scrollbar-button,
+    [data-scrolling]::-webkit-scrollbar-button {
+      opacity: 0.45;
+    }
+    :where(*)::-webkit-scrollbar-button:hover,
+    :where([data-scrolling])::-webkit-scrollbar-button:hover,
+    [data-scrolling]::-webkit-scrollbar-button:hover {
+      opacity: 0.85;
+    }
+    :where(*)::-webkit-scrollbar-button:active,
+    :where([data-scrolling])::-webkit-scrollbar-button:active,
+    [data-scrolling]::-webkit-scrollbar-button:active {
+      opacity: 1;
+    }
+
+    /* fade only when motion is welcome; show/hide is instant under
+       prefers-reduced-motion: reduce (rule 8). */
+    @media (prefers-reduced-motion: no-preference) {
+      :where(*)::-webkit-scrollbar-thumb {
+        transition: background-color var(--scrollbar-fade-duration) ease;
+      }
+      :where(*)::-webkit-scrollbar-button {
+        transition: opacity var(--scrollbar-fade-duration) ease;
+      }
+    }
+  }
+
+  /* forced-colors: active → do not override system scrollbars (rule 8).
+     Inverted guard (reset only when active) instead of gating the layer on
+     the "off" keyword: `forced-colors: none` is the valid off value (there
+     is no `no-preference`), and this way engines with quirks in the media
+     feature still get the unified system by default. */
+  @media (forced-colors: active) {
+    :where(*),
+    :where([data-scrolling]),
+    :where(*:hover),
+    [data-scrolling] {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+    :where(*)::-webkit-scrollbar {
+      width: auto;
+      height: auto;
+    }
+    :where(*)::-webkit-scrollbar-track,
+    :where(*)::-webkit-scrollbar-corner,
+    :where(*)::-webkit-scrollbar-thumb,
+    :where(*:hover)::-webkit-scrollbar-thumb,
+    :where(*)::-webkit-scrollbar-thumb:hover,
+    :where([data-scrolling])::-webkit-scrollbar-thumb,
+    :where([data-scrolling])::-webkit-scrollbar-thumb:hover,
+    [data-scrolling]::-webkit-scrollbar-thumb,
+    [data-scrolling]::-webkit-scrollbar-thumb:hover {
+      background-color: initial;
+      border-radius: initial;
+      transition: none;
+    }
+    :where(*)::-webkit-scrollbar-button,
+    :where([data-scrolling])::-webkit-scrollbar-button {
+      opacity: 1;
+      background-image: initial;
+    }
+  }
 }
 
-/* Custom Scrollbar Utility */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-hairline) transparent;
+/* Intentional hidden-bar areas (documented exceptions in docs/scrollbar-audit.md §5):
+   touch-drag strips with their own affordances, marked by .no-scrollbar / .scrollbar-none.
+   Unlayered on purpose so they beat the [data-scrolling] reveal above. */
+.no-scrollbar,
+.scrollbar-none {
+  scrollbar-width: none !important;
 }
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important; /* documented intentional exception to the hit-testable-bar rule */
 }
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: var(--color-hairline);
-  border-radius: var(--radius-full);
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-mute);
+.no-scrollbar::-webkit-scrollbar-button,
+.scrollbar-none::-webkit-scrollbar-button {
+  display: none !important;
 }
 
 /* ============================================

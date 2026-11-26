@@ -26,6 +26,7 @@ import {
 
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ScrollCloud } from "@/components/ui/ScrollCloud";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { recordAppNavigation, popPreviousAppRoute } from "@/lib/navigation";
 import { usePageActions } from "@/components/layout/PageActionContext";
 import { MACHINE_CAPABILITIES, hasMachineCapability } from "@reachinternational/permissions";
@@ -214,7 +215,7 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
 
   return (
     <>
-      {/* Standard Solid Flush Mobile Header with Company Standard ScrollCloud Dissolve */}
+      {/* Standard Solid Flush Mobile Header with Company Standard ScrollCloud Dissolve (Mobile Only - Hidden on Desktop) */}
       <div className="sticky top-0 z-40 md:hidden w-full print:hidden">
         <header className="relative z-10 w-full h-12 bg-[var(--color-canvas)]/90 backdrop-blur-md border-b border-[var(--color-hairline)] shadow-xs flex items-center px-3 gap-1.5 select-none transition-colors">
           {showBack ? (
@@ -241,6 +242,8 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
           >
             <AnimatedSearch size={16} />
           </button>
+
+          <NotificationBell />
 
           {showMoreMenu && (
             <button

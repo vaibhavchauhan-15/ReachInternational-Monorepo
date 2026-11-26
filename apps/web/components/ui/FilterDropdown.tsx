@@ -186,7 +186,7 @@ export function FilterDropdown({
             animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
             exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className={`absolute top-full mt-1.5 min-w-[200px] sm:min-w-[220px] max-w-[calc(100vw-24px)] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xl p-1 max-h-64 overflow-y-auto custom-scrollbar backdrop-blur-md z-50 ${
+            className={`absolute top-full mt-1.5 min-w-[200px] sm:min-w-[220px] max-w-[calc(100vw-24px)] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xl p-1 max-h-64 overflow-y-auto overscroll-contain backdrop-blur-md z-50 ${
               align === "right" ? "right-0 left-auto" : "left-0 right-auto"
             } ${dropdownClassName}`}
             role="listbox"

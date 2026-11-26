@@ -15,7 +15,7 @@ export interface PDFTableWrapperProps {
 
 export function PDFTableWrapper({ children, className = "" }: PDFTableWrapperProps) {
   return (
-    <div className={`w-full overflow-x-auto custom-scrollbar print-table-wrap flex justify-center ${className}`}>
+    <div className={`w-full overflow-x-auto print-table-wrap flex justify-center ${className}`}>
       {children}
     </div>
   );

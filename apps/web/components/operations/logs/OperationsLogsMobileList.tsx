@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button, Badge } from "@/components/ui";
 import { Highlight } from "@/components/ui/Highlight";
 import { ShieldAlert, RotateCcw, Calendar, MessageSquare, Clock, AlertTriangle } from "lucide-react";
@@ -12,6 +13,7 @@ import {
   formatHoursWithUnit,
   extractBreakdownTiming,
   extractBreakdownRemark,
+  formatBreakdownMinutes,
   type DailyLogGroup,
 } from "./OperationsLogsTable";
 
@@ -148,7 +150,7 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
               const totalBdMin = Math.round(group.totalBreakdownHours * 60);
               const maintMin = group.totalMaintenanceMinutes;
               const netBdMin = Math.max(0, totalBdMin - maintMin);
-              const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+              const fmtMin = (m: number) => formatBreakdownMinutes(m);
               if (totalBdMin === 0) {
                 return (
                   <>
@@ -197,117 +199,100 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
                 {isRemarksOpen ? "Hide Breakdown Details" : "View Breakdown Details"}
               </span>
             </button>
-            {isRemarksOpen && (
-              <div className="mt-1.5 space-y-2">
-                {(() => {
-                  const totalBdMin = Math.round(group.totalBreakdownHours * 60);
-                  const maintMin = group.totalMaintenanceMinutes;
-                  const netBdMin = Math.max(0, totalBdMin - maintMin);
-                  const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+            <AnimatePresence initial={false}>
+              {isRemarksOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                  className="overflow-hidden mt-1.5 space-y-2"
+                >
+                  {(() => {
+                    const stoppageLogs = group.logs.filter(
+                      (l) => Boolean(l.is_breakdown) || Number(l.breakdown_minutes || 0) > 0 || Number(l.breakdown_hours || 0) > 0
+                    );
 
-                  const stoppageLogs = group.logs.filter(
-                    (l) => Boolean(l.is_breakdown) || Number(l.breakdown_minutes || 0) > 0 || Number(l.breakdown_hours || 0) > 0
-                  );
+                    return (
+                      <div className="p-2 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2">
+                        {stoppageLogs.length > 0 && (
+                          <div className="space-y-1.5">
+                            {stoppageLogs.map((bLog, bIdx) => {
+                              const timing = extractBreakdownTiming(bLog);
+                              const logMaint = Number(bLog.maintenance_minutes || 0);
+                              const logBdMin = timing.totalMinutes || Number(bLog.breakdown_minutes || 0) || Math.round(Number(bLog.breakdown_hours || 0) * 60);
+                              const logNetBd = Math.max(0, logBdMin - logMaint);
+                              const isFullyMaint = logMaint >= logBdMin && logMaint > 0;
+                              const isPartial = logMaint > 0 && logNetBd > 0;
 
-                  return (
-                    <div className="p-2 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2">
-                      <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-                        <div className="flex items-center gap-1 text-[var(--color-mute)] font-medium">
-                          <AlertTriangle size={12} className="text-amber-500 shrink-0" />
-                          <span>Total Stoppage: <strong className="font-mono text-[var(--color-ink)]">{fmtMin(totalBdMin)}</strong></span>
-                        </div>
-                        {maintMin > 0 && (
-                          <span className="font-bold text-amber-700 dark:text-amber-300 text-[11px]">
-                            MT: <strong className="font-mono">{fmtMin(maintMin)}</strong>
-                          </span>
-                        )}
-                        {netBdMin > 0 && (
-                          <span className="font-bold text-rose-700 dark:text-rose-400 text-[11px]">
-                            B/D: <strong className="font-mono">{fmtMin(netBdMin)}</strong>
-                          </span>
-                        )}
-                      </div>
+                              const shiftCode = resolveShiftCode(bLog);
+                              const op =
+                                (bLog.operator as any)?.full_name ||
+                                (bLog as any).operator_name ||
+                                "Operator";
 
-                      {stoppageLogs.length > 0 && (
-                        <div className="space-y-1.5 pt-1 border-t border-[var(--color-hairline)]">
-                          {stoppageLogs.map((bLog, bIdx) => {
-                            const logMaint = Number(bLog.maintenance_minutes || 0);
-                            const logBdMin =
-                              Number(bLog.breakdown_minutes || 0) ||
-                              Math.round(Number(bLog.breakdown_hours || 0) * 60) ||
-                              totalBdMin;
-                            const logNetBd = Math.max(0, logBdMin - logMaint);
-                            const isFullyMaint = logMaint >= logBdMin && logMaint > 0;
-                            const isPartial = logMaint > 0 && logNetBd > 0;
+                              const note = extractBreakdownRemark(bLog);
 
-                            const timing = extractBreakdownTiming(bLog);
-                            const shiftCode = resolveShiftCode(bLog);
-                            const op =
-                              (bLog.operator as any)?.full_name ||
-                              (bLog as any).operator_name ||
-                              "Operator";
-
-                            const note = extractBreakdownRemark(bLog);
-
-                            return (
-                              <div
-                                key={bLog.id || bIdx}
-                                className="p-1.5 rounded bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-xs space-y-1"
-                              >
-                                <div className="flex items-center justify-between gap-1 flex-wrap">
-                                  <span className="font-semibold text-[11px] text-[var(--color-ink)]">
-                                    Shift {shiftCode} ({op})
-                                  </span>
-                                  {isFullyMaint ? (
-                                    <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                                      MT {fmtMin(logMaint)} (Maintenance)
+                              return (
+                                <div
+                                  key={bLog.id || bIdx}
+                                  className="p-1.5 rounded bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-xs space-y-1"
+                                >
+                                  <div className="flex items-center justify-between gap-1 flex-wrap">
+                                    <span className="font-semibold text-[11px] text-[var(--color-ink)]">
+                                      Shift {shiftCode} ({op})
                                     </span>
-                                  ) : isPartial ? (
-                                    <span className="px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                                      MT {fmtMin(logMaint)} / {fmtMin(logNetBd)} (B/D)
-                                    </span>
-                                  ) : (
-                                    <span className="px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                                      {fmtMin(logBdMin)} (Breakdown)
-                                    </span>
+                                    {isFullyMaint ? (
+                                      <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                                        MT {formatBreakdownMinutes(logMaint)} (Maintenance)
+                                      </span>
+                                    ) : isPartial ? (
+                                      <span className="px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                                        MT {formatBreakdownMinutes(logMaint)} / {formatBreakdownMinutes(logNetBd)} (B/D)
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                                        {formatBreakdownMinutes(logBdMin)} (Breakdown)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--color-mute)]">
+                                    <Clock size={11} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                                    <span>{timing.timeRange || "(Time unrecorded)"}</span>
+                                    <span>•</span>
+                                    <span>Duration: {formatBreakdownMinutes(logBdMin)}</span>
+                                  </div>
+                                  {note && (
+                                    <div className="text-[11px] text-[var(--color-ink)] font-medium pt-0.5 truncate">
+                                      • {note}
+                                    </div>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-[var(--color-mute)]">
-                                  <Clock size={11} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                                  <span>{timing.timeRange || "(Time unrecorded)"}</span>
-                                  <span>•</span>
-                                  <span>Duration: {fmtMin(logBdMin)}</span>
-                                </div>
-                                {note && (
-                                  <div className="text-[11px] text-[var(--color-ink)] font-medium pt-0.5 truncate">
-                                    • {note}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* If user entered breakdown remarks in the database, display them */}
-                      {group.remarksDisplay && (
-                        <div className="pt-2 border-t border-[var(--color-hairline)] text-xs flex items-start gap-1.5">
-                          <MessageSquare size={12} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-                          <div className="space-y-0.5 min-w-0 flex-1">
-                            <span className="font-bold text-[10px] uppercase tracking-wider text-[var(--color-mute)] mr-1">
-                              Breakdown Remarks:
-                            </span>
-                            <span className="text-[var(--color-ink)]">
-                              <Highlight text={group.remarksDisplay} query={searchTerm} />
-                            </span>
+                              );
+                            })}
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
+                        )}
+
+                        {/* If user entered breakdown remarks in the database, display them */}
+                        {group.remarksDisplay && (
+                          <div className="pt-2 border-t border-[var(--color-hairline)] text-xs flex items-start gap-1.5">
+                            <MessageSquare size={12} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              <span className="font-bold text-[10px] uppercase tracking-wider text-[var(--color-mute)] mr-1">
+                                Breakdown Remarks:
+                              </span>
+                              <span className="text-[var(--color-ink)]">
+                                <Highlight text={group.remarksDisplay} query={searchTerm} />
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>

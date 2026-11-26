@@ -44,6 +44,13 @@
 - **Producers & Zero-PII Security**: Triggers on `machine_hour_logs` (`BD1` breakdown, `AS1` assisted entry), `machines` (`EM1` maintenance), `operator_machine_assignments` (`SA1`), `users` (`REG1`), and `quote_requests` (`ENQ1`). Server Actions dispatch `SEC1` (security alerts, always-on) and `PAY1` (payroll statement updates, zero PII).
 - **Role-Aware Preference Sync**: Synchronized across Web and Native Mobile via `public.user_notification_preferences` with quiet-hours deferral (IST) and 5/day non-critical capping.
 
+## Admin Bulk Machine Logsheet (Excel/CSV) Import Architecture & Reusable Pipeline
+- **Dual Pipeline Integration**: Web UI wizard (`apps/web/components/operations/import/LogsheetImportModal.tsx`, 5 steps) and programmatic CLI pipeline (`scripts/pipeline-logsheet-import.mjs`).
+- **Idempotency & Atomic RPC**: Database function `import_machine_hour_logs_bulk(jsonb)` (Migration 244) re-verifies caller role, runs two-pass validation, suppresses notification noise, inserts all rows atomically, advances `machines.hour_meter` non-regressively, verifies commits in-tx, and records audit history in `public.machine_log_imports`.
+- **Physical Invariants**: Strict continuity validation across shifts (warns on meter jumps, rejects meter regressions), running hours bounded <= 24h/shift, breakdown windows contained within shift durations.
+- **Identity Safety**: No trusted DB UUIDs in import files; machine is resolved server-side; operators are matched by `employee_id` or unique full name against `public.users`. Duplicate machine/date/shift or operator/date/shift combinations are strictly rejected.
+
+
 ## Fundamental Architectural Rules
 1. **Memory First**: Always check `AI/PROJECT_MEMORY.md`, `AI/STATE.md`, and `AI/CURRENT_TASK.md` before reading code.
 2. **Selective File Inspection**: Use `AI/FILE_INDEX.md` to locate and read ONLY the relevant files for a task.

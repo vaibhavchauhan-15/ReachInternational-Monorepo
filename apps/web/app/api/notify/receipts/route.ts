@@ -73,19 +73,26 @@ export async function POST(req: Request) {
         if (receipt.status === 'ok') {
           await admin
             .from('push_tickets')
-            .update({ status: 'ok', error: null })
+            .update({ status: 'ok', error: null, outcome: 'accepted' })
             .eq('id', ticketRow.id);
           resolvedOk++;
         } else if (receipt.status === 'error') {
           const errorCode = receipt.details?.error || receipt.message || 'UnknownReceiptError';
+          const isDeadDevice = receipt.details?.error === 'DeviceNotRegistered';
           await admin
             .from('push_tickets')
-            .update({ status: 'error', error: errorCode })
+            .update({
+              status: 'error',
+              error: errorCode,
+              // Terminal receipt semantics: dead device vs permanently failed
+              // delivery. Provider acceptance ≠ device delivery.
+              outcome: isDeadDevice ? 'dead' : 'skipped',
+            })
             .eq('id', ticketRow.id);
 
           resolvedError++;
 
-          if (receipt.details?.error === 'DeviceNotRegistered') {
+          if (isDeadDevice) {
             deadDeviceIds.push(ticketRow.device_id);
           }
         }
