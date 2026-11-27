@@ -237,3 +237,22 @@ These 12 sites carry `.no-scrollbar` / `.scrollbar-none` — explicit author int
 | 113 | `components/clients/ClientsCoordinatorClient.tsx:200` | ClientsCoordinatorClient | Y | dropdown/select/filter | none → legacy 8px | max-h-60 | wide 8px always-visible legacy bar | shared UI — all roles/routes that mount it | MIGRATE — covered by global layer |
 | 114 | `components/machines/MachineListClient.tsx:360` | MachineListClient | Y | dropdown/select/filter | none → legacy 8px | max-h-60 | wide 8px always-visible legacy bar | shared UI — all roles/routes that mount it | MIGRATE — covered by global layer |
 | 115 | `components/ui/FilterDropdown.tsx:189` | FilterDropdown | Y | dropdown/select/filter | `.custom-scrollbar` | max-h-64 | wide 8px always-visible legacy bar; always-visible hairline thumb (violates idle-hidden) | shared UI — all roles/routes that mount it | MIGRATE — covered by global layer |
+
+---
+
+## 7. Arrow Limit Indicators & Viewport Scrollbar Hardening
+
+### Upper & Lower Limit Indicators (Arrow Buttons)
+To clearly communicate boundary limits and upper/lower extents of scrollable surfaces across all 115 scrollable areas:
+- **Architecture**: Implemented through native `::-webkit-scrollbar-button:single-button` (`decrement` = upper/left, `increment` = lower/right).
+- **Design & Tokens**: Sized to width 6px and height 10px with clean 5px vector centering. Built with geometric SVGs (`--scrollbar-arrow-up`, `--scrollbar-arrow-down`, `--scrollbar-arrow-left`, `--scrollbar-arrow-right`) matching `#171717` (light mode ink) and `#fafafa` (dark mode ink).
+- **Interaction Model**:
+  - Idle: Hidden (fade transition 250ms).
+  - Active Scroll / Container Hover: Revealed at subtle 45% opacity (`opacity: 0.45`).
+  - Button Hover: Boosted to 85% opacity (`opacity: 0.85`).
+  - Click / Press: Full 100% opacity (`opacity: 1`), functional native stepped scrolling.
+  - Exceptions: Automatically hidden (`display: none !important`) on `.no-scrollbar` / `.scrollbar-none` strips.
+
+### Viewport Scroller Fix
+- When `body` has non-visible overflow (`overflow-x: hidden`), WebKit/Chromium anchors the window scrollbar to `body::-webkit-scrollbar` rather than `html::-webkit-scrollbar`.
+- `ScrollActivity.tsx` marks `data-scrolling` on both `document.documentElement` and `document.body`, guaranteeing the window viewport scroller activates reliably on all routes and components.

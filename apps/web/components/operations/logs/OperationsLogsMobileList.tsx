@@ -263,28 +263,13 @@ export const OperationsDailyLogMobileCard = React.memo(function OperationsDailyL
                                     <span>Duration: {formatBreakdownMinutes(logBdMin)}</span>
                                   </div>
                                   {note && (
-                                    <div className="text-[11px] text-[var(--color-ink)] font-medium pt-0.5 truncate">
-                                      • {note}
+                                    <div className="text-[11px] text-[var(--color-ink)] font-medium pt-0.5">
+                                      • <Highlight text={note} query={searchTerm} />
                                     </div>
                                   )}
                                 </div>
                               );
                             })}
-                          </div>
-                        )}
-
-                        {/* If user entered breakdown remarks in the database, display them */}
-                        {group.remarksDisplay && (
-                          <div className="pt-2 border-t border-[var(--color-hairline)] text-xs flex items-start gap-1.5">
-                            <MessageSquare size={12} className="text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-                            <div className="space-y-0.5 min-w-0 flex-1">
-                              <span className="font-bold text-[10px] uppercase tracking-wider text-[var(--color-mute)] mr-1">
-                                Breakdown Remarks:
-                              </span>
-                              <span className="text-[var(--color-ink)]">
-                                <Highlight text={group.remarksDisplay} query={searchTerm} />
-                              </span>
-                            </div>
                           </div>
                         )}
                       </div>

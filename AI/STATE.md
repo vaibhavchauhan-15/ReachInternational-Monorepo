@@ -1,3 +1,22 @@
+## /running-logs Unified Breakdown Remark & Duplicate Removal — COMPLETE & VERIFIED (2026-11-27)
+- **Problem**: When clicking to expand a breakdown daily log row on `/running-logs?view=client`, two remarks blocks were rendered: the incident breakdown card (`Shift A (Ramesh Kumar) 11:00 AM - 12:00 PM Duration: 1h • Bucket cylinder seal replacement. 1h (Breakdown)`) and an additional bottom block (`Breakdown Remarks: Bucket cylinder seal replacement.`), creating duplicate information.
+- **Solution**:
+  - Removed duplicate `Breakdown Remarks:` container from both `OperationsLogsTable.tsx` (desktop table) and `OperationsLogsMobileList.tsx` (mobile cards).
+  - Preserved a single, comprehensive incident card that displays all required details:
+    1. Breakdown Shift Name (`Shift {shiftCode}`)
+    2. Operator Name (`({op})`)
+    3. B/D Start and End Time (`{timing.timeRange}`)
+    4. Total Duration (`Duration: {formatBreakdownMinutes(logBdMin)}`)
+    5. Remark text (`• <Highlight text={note} query={searchTerm} />`) with no arbitrary string truncation
+    6. Stoppage classification badge (`{formatBreakdownMinutes(logBdMin)} (Breakdown)` / `MT {maintMin}`)
+- **Verification**:
+  - `pnpm --filter web typecheck`: 0 errors.
+  - `pnpm --filter mobile typecheck`: 0 errors.
+  - `node scripts/check-typography.mjs`: 0 errors.
+  - `node apps/web/scripts/test-running-logs-remarks-and-client-select.mjs`: 7/7 checks passed.
+  - `tests/breakdown/test-breakdown-timing-resolution.ts`: 4/4 checks passed.
+  - `pnpm --filter @reachinternational/validation test`: 87/87 passed.
+
 ## Production Supabase Migrations & Push Notifications Hardening (dhbbgfzbyatzvqafnsqp) — COMPLETE & VERIFIED (2026-11-26)
 - **Database Changes Applied**:
   - `242_in_app_notifications_inbox_and_keyset_rpc.sql`: in-app inbox RPCs (`notification_list`, `notification_unread_count`, `notification_mark_read`, `notification_mark_all_read`), keyset pagination, sync triggers.
@@ -13,7 +32,12 @@
   - Live dispatch test: HTTP 200 with `no_active_device` skip reason.
   - `pg_net` responses: 100% HTTP 200 from Vercel dispatcher.
 
-## Unified Scroll-Activated Scrollbar System (apps/web) — COMPLETE & HARDENED (2026-11-26)
+## Unified Scroll-Activated Scrollbar System with Arrow Limit Indicators (apps/web) — COMPLETE & VERIFIED (2026-11-26)
+- **Upper & Lower Limit Indicators (Arrow Buttons)**:
+  1. Integrated geometric SVG arrows into `:root` and `.dark` (`--scrollbar-arrow-up`, `--scrollbar-arrow-down`, `--scrollbar-arrow-left`, `--scrollbar-arrow-right`) with crisp 8x8 viewBox and rounded tips matching `#171717` (light mode ink) and `#fafafa` (dark mode ink).
+  2. Applied via `::-webkit-scrollbar-button:single-button` for both vertical (decrement=top, increment=bottom) and horizontal (decrement=left, increment=right) orientations with 6px width and 10px height.
+  3. Interactive states: hidden at idle (fade transition 250ms), subtle 45% opacity on active scroll or container hover, 85% opacity on button hover, 100% on active click for stepped navigation.
+  4. Explicitly suppressed on `.no-scrollbar` and `.scrollbar-none` strips with `display: none !important`.
 - **Root Cause of "Scrollbars not visible in any pages and components"**:
   1. **Page/Viewport Scroller Bug**: In `apps/web/app/globals.css`, `body { overflow-x: hidden; }` is set. In Chromium/WebKit, when `body` has non-visible overflow, the browser anchors the viewport scrollbar to `<body>` (`body::-webkit-scrollbar`). `ScrollActivity.tsx` previously only placed `data-scrolling` on `document.documentElement`, leaving `document.body` without `data-scrolling`. Consequently, `body::-webkit-scrollbar-thumb` remained completely transparent (`background-color: transparent`) during active scrolling on all pages.
   2. **Selector Specificity & Target Scope**: CSS selectors only matched `:where([data-scrolling])::-webkit-scrollbar-thumb`. Added explicit targeting for `html[data-scrolling]::-webkit-scrollbar-thumb`, `body[data-scrolling]::-webkit-scrollbar-thumb`, `html[data-scrolling] body::-webkit-scrollbar-thumb`, and `[data-scrolling]::-webkit-scrollbar-thumb`.
@@ -22,7 +46,7 @@
 - **Verification**:
   - `pnpm --filter web typecheck`: 0 errors (clean exit 0).
   - `node scripts/check-typography.mjs`: 0 errors.
-  - Live CDP verification on Chromium: idle transparent, active wheel scroll reveals 30% thumb on both `html` and `body`, fades to transparent ~800ms after scroll, hover reveals 30%, thumb hover raises to 50%. Non-overflowing elements show 0 scrollbars. Intentional `.no-scrollbar` strips remain permanently hidden.
+  - Live CDP verification on Chromium: idle transparent, active wheel scroll reveals 30% thumb + arrow buttons at top and bottom of scrollers, fades to transparent ~800ms after scroll, hover reveals 30%, thumb hover raises to 50%, button hover raises to 85%. Dark mode flips arrow tokens to `#fafafa`. Intentional `.no-scrollbar` strips remain permanently hidden.
 ## Logsheet Import Bugfix — False "Operator Ambiguous" on Every Row (Resolver Double-Count)
 - **Root cause**: `resolveOperators` in `apps/web/lib/server/logsheet-import/validate.ts` indexed the SAME `users` record twice into the match lists (both batched queries — by Employee ID and by name — cross-indexed into both maps). Any row carrying both Employee ID and Name (the normal case) saw `matches.length === 2` and was falsely flagged `operator_ambiguous`, blocking the entire file.
 - **Fix**: union of both query results de-duplicated by record id; extracted pure `matchOperatorToRow()` into `@reachinternational/validation` — unique-ID resolution, name-based disambiguation of genuinely shared Employee IDs (warning `operator_disambiguated_by_name`, never a silent guess), and ambiguity errors that LIST the exact candidate records with IDs/status (row-specific and actionable).

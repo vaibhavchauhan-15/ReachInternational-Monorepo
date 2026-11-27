@@ -73,20 +73,20 @@ check("OperationsLogsTable: 'No special remarks logged for this day' placeholder
   assert.doesNotMatch(content, /Shift Remarks \(\{group\.formattedDate\}\):/);
 });
 
-// 6. OperationsLogsTable: Expandable row only rendered when isRowExpanded && canExpand
-check("OperationsLogsTable: Expandable breakdown details only rendered for breakdown rows", () => {
+// 6. OperationsLogsTable: Expandable row only rendered when isRowExpanded && canExpand and duplicate remarks removed
+check("OperationsLogsTable: Expandable breakdown details only rendered for breakdown rows with unified remark", () => {
   const content = fs.readFileSync(path.join(webRoot, "components/operations/logs/OperationsLogsTable.tsx"), "utf8");
   assert.match(content, /\{isRowExpanded && canExpand && \(/);
-  assert.match(content, /Breakdown Remarks:/);
+  assert.doesNotMatch(content, /Breakdown Remarks:/, "Duplicate 'Breakdown Remarks:' section must be removed");
 });
 
-// 7. OperationsLogsMobileList: Parity check - hasBreakdown check and unwanted remarks removed
-check("OperationsLogsMobileList: 100% parity on mobile cards for breakdown gating and remarks display", () => {
+// 7. OperationsLogsMobileList: Parity check - hasBreakdown check and duplicate remarks removed
+check("OperationsLogsMobileList: 100% parity on mobile cards for breakdown gating and unified remarks", () => {
   const content = fs.readFileSync(path.join(webRoot, "components/operations/logs/OperationsLogsMobileList.tsx"), "utf8");
   assert.match(content, /extractBreakdownRemark/);
   assert.match(content, /hasBreakdown && group\.remarksDisplay/);
   assert.match(content, /\{hasBreakdown && \(/);
-  assert.match(content, /Breakdown Remarks:/);
+  assert.doesNotMatch(content, /Breakdown Remarks:/, "Duplicate 'Breakdown Remarks:' section must be removed from mobile list");
 });
 
 console.log("==================================================================");

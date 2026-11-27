@@ -1,3 +1,28 @@
+## Task: /running-logs Unified Breakdown Remark & Duplicate Removal
+**Status**: 🟢 RESOLVED, VERIFIED & TESTED across Web and Mobile
+**Date**: 2026-11-27
+- **Feedback Addressed**:
+  - In `/running-logs?view=client`, when expanding a breakdown daily row, duplicate remarks were shown: once inside the incident card and once in a separate `Breakdown Remarks:` section at the bottom.
+  - Removed duplicate `Breakdown Remarks:` block from both desktop (`OperationsLogsTable.tsx`) and mobile (`OperationsLogsMobileList.tsx`).
+  - Unified everything into a single, clean breakdown incident card that displays:
+    1. Breakdown Shift Name (`Shift A`)
+    2. Operator Name (`(Ramesh Kumar)`)
+    3. Breakdown Start and End Time (`11:00 AM - 12:00 PM`)
+    4. Total Duration (`Duration: 1h`)
+    5. Clean breakdown remark without artificial truncation (`• Bucket cylinder seal replacement.`) with search term highlighting
+    6. Right-aligned status badge (`1h (Breakdown)` or `MT {time} (Maintenance)`)
+- **Verification & Parity**:
+  - `apps/web/components/operations/logs/OperationsLogsTable.tsx`: Duplicate section removed, remark truncation removed, search term highlighting added.
+  - `apps/web/components/operations/logs/OperationsLogsMobileList.tsx`: 100% parity maintained, duplicate section removed, remark highlighting added.
+  - `apps/web/scripts/test-running-logs-remarks-and-client-select.mjs`: 7/7 checks passed.
+  - `tests/breakdown/test-breakdown-timing-resolution.ts`: 4/4 checks passed.
+  - `pnpm --filter web typecheck`: 0 errors.
+  - `pnpm --filter mobile typecheck`: 0 errors.
+  - `node scripts/check-typography.mjs`: 0 errors.
+  - `pnpm --filter @reachinternational/validation test`: 87/87 passed.
+
+---
+
 ## Task: Production Supabase Migrations & Push Notifications Hardening (dhbbgfzbyatzvqafnsqp)
 **Status**: 🟢 RESOLVED, MIGRATED, TESTED & VERIFIED ON PRODUCTION
 **Date**: 2026-11-26
@@ -24,13 +49,22 @@
 
 ---
 
-## Task: Unified Scroll-Activated Scrollbar System (apps/web)
-**Status**: 🟢 RESOLVED & HARDENED (Root Cause Fixed: Dual Root Scrolling + Hover Reveal)
+## Task: Unified Scroll-Activated Scrollbar System with Upper/Lower Limit Arrow Indicators (apps/web)
+**Status**: 🟢 RESOLVED, ENHANCED & VERIFIED (Dual Root Scrolling + Limit Indicators + Zero Regressions)
 **Date**: 2026-11-26
 - Fixed "Scrollbars not visible in any pages and components":
   1. `body { overflow-x: hidden; }` caused Chromium/WebKit to anchor the viewport scrollbar to `body` rather than `html`. `ScrollActivity.tsx` now marks both `document.documentElement` and `document.body` on root/window scroll events.
   2. CSS in `apps/web/app/globals.css` updated with explicit targets (`html[data-scrolling]`, `body[data-scrolling]`, `[data-scrolling]`) and hover reveal (`:where(*:hover)::-webkit-scrollbar-thumb` and `:where(*)::-webkit-scrollbar-thumb:hover`) per the spec note so idle elements reveal at 30% on hover and 50% on thumb hover, while staying hidden at idle when unhovered.
-- Verification: live CDP testing in real Chromium headless against `http://localhost:3000/`, zero TS errors (`pnpm --filter web typecheck`), zero typography violations.
+- Added Upper & Lower Limit Arrow Indicators:
+  1. Integrated geometric SVG arrows into `:root` and `.dark` (`--scrollbar-arrow-up`, `--scrollbar-arrow-down`, `--scrollbar-arrow-left`, `--scrollbar-arrow-right`) matching `#171717` (light mode ink) and `#fafafa` (dark mode ink).
+  2. Styled `::-webkit-scrollbar-button:single-button` for both vertical (decrement=top, increment=bottom) and horizontal (decrement=left, increment=right) orientations with 6px width and 10px height.
+  3. Interactive states: hidden at idle (fade transition 250ms), subtle 45% opacity on active scroll or container hover, 85% opacity on button hover, 100% on active click for stepped navigation.
+  4. Explicitly suppressed on `.no-scrollbar` and `.scrollbar-none` strips with `display: none !important`.
+- Verification:
+  - Live CDP testing in real Chromium headless against `http://localhost:3000/`.
+  - Zero TypeScript errors (`pnpm --filter web typecheck`).
+  - Zero typography violations (`node scripts/check-typography.mjs`).
+  - Dark mode auto-flip to `#fafafa` verified.
 
 # Current Task
 
